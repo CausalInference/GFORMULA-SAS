@@ -1261,8 +1261,8 @@ options mautosource minoperator ;
     %if &&usevisitp&iii = 1 %then %do;
         retain ts_last_&&cov&iii ;
         if first.newid then do ;
-            ts_last_&&cov&iii.._l1 = &&cov&iii.visitpcount - 1  ; 
-            ts_last_&&cov&iii = &&cov&iii.visitpcount - 1  ;           
+            ts_last_&&cov&iii.._l1 = &&cov&iii.visitpcount   ; /* do not need to subtract 1 since visitpcount is the lagged value already */ 
+            ts_last_&&cov&iii = &&cov&iii.visitpcount   ;           
         end;
         if &&cov&iii.randomvisitp = 1 then ts_last_&&cov&iii = 0; 
         else ts_last_&&cov&iii = ts_last_&&cov&iii + 1 ;
