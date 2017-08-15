@@ -239,8 +239,7 @@ options mautosource minoperator ;
     equalitiessimuldata =,	/*user defined macro that equates pre-baseline simulated vars to observed new change JGY*/
     eventaddvars =, 		/*list of variables to be added to event predictor list new change JGY*/
     compriskaddvars =,
-    censladdvars=,
-     
+    
     usebetadata = 0,
     betadata =,       /* data set to store parameter estimates */
     simuldata =,      /* data set to store simulated data */
