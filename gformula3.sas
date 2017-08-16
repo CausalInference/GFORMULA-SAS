@@ -45,10 +45,10 @@ options mautosource minoperator ;
     timepoints =,    /* number of time points */
     interval = 1,    /* length of time between time points (assumed constant, default=1 time period) */
 
-    outc =,           		/* outcome variable: if dichotomous, then 1=event, 0=no event */
-    outctype = binsurv,		/* outcome type: default=binsurv (binary survival time analysis), 
-                        	   other values: bineofu (binary end of follow-up), conteofu (continuous end of follow-up) */
-    outcinteract =,   		/* interaction terms (between dichotomous covariates) to include in model for outc */
+    outc =,                   /* outcome variable: if dichotomous, then 1=event, 0=no event */
+    outctype = binsurv,        /* outcome type: default=binsurv (binary survival time analysis), 
+                               other values: bineofu (binary end of follow-up), conteofu (continuous end of follow-up) */
+    outcinteract =,           /* interaction terms (between dichotomous covariates) to include in model for outc */
     outcwherem = (1=1),     /* outcome: (optional) condition under which to model outcome */
     outcwherenosim =(1=0),  /* outcome: (optional) condition under which not to simulate the outcome under intervention but assign some fixed value at a 
                                given time*/
@@ -95,149 +95,149 @@ options mautosource minoperator ;
     cov1visitpcount = ,     /* variable to use for initiating the counter for time since last visit in visit process, taken to be lag1 time since last visit at baseline */  
      
     cov2=,cov2otype=1,cov2ptype=,cov2mtype= all ,cov2cumint= ,cov2skip=-1,cov2inc=0,cov2knots=,cov2interact=,cov2wherem=(1=1),cov2wherenosim=(1=0),
-	cov2nosimelsemacro=, cov2class=, cov2classelse=, cov2addvars=,cov2genmacro=,cov2modusermacro =,cov2moddatausermacro =,cov2setblvar =,
-	cov2simusermacro = ,cov2barray = ,cov2sarray =,cov2randomvisitp=,cov2visitpmaxgap=9e10,cov2visitpwherem=(1=1),cov2visitpcount = ,
+    cov2nosimelsemacro=, cov2class=, cov2classelse=, cov2addvars=,cov2genmacro=,cov2modusermacro =,cov2moddatausermacro =,cov2setblvar =,
+    cov2simusermacro = ,cov2barray = ,cov2sarray =,cov2randomvisitp=,cov2visitpmaxgap=9e10,cov2visitpwherem=(1=1),cov2visitpcount = ,
 
     cov3=,cov3otype=1,cov3ptype=,cov3mtype= all,cov3cumint= ,cov3skip=-1,cov3inc=0,cov3knots=,cov3interact=,cov3wherem=(1=1),cov3wherenosim=(1=0),
-	cov3nosimelsemacro=,  cov3class=, cov3classelse=,cov3addvars=,cov3genmacro=,cov3modusermacro =,cov3moddatausermacro =,cov3setblvar =,
-	cov3simusermacro = ,cov3barray = ,cov3sarray =,cov3randomvisitp=,cov3visitpmaxgap=9e10,cov3visitpwherem=(1=1),cov3visitpcount = ,
-	cov3classstart =,
+    cov3nosimelsemacro=,  cov3class=, cov3classelse=,cov3addvars=,cov3genmacro=,cov3modusermacro =,cov3moddatausermacro =,cov3setblvar =,
+    cov3simusermacro = ,cov3barray = ,cov3sarray =,cov3randomvisitp=,cov3visitpmaxgap=9e10,cov3visitpwherem=(1=1),cov3visitpcount = ,
+    cov3classstart =,
 
     cov4=,cov4otype=1,cov4ptype=,cov4mtype= all ,cov4cumint= ,cov4skip=-1,cov4inc=0,cov4knots=,cov4interact=,cov4wherem=(1=1),cov4wherenosim=(1=0),
-	cov4nosimelsemacro=,  cov4class=, cov4classelse=,cov4addvars=,cov4genmacro=,cov4modusermacro =,cov4moddatausermacro =,cov4setblvar =,
-	cov4simusermacro = ,cov4barray = ,cov4sarray = ,cov4randomvisitp=,cov4visitpmaxgap=9e10,cov4visitpwherem=(1=1),cov4visitpcount = ,
+    cov4nosimelsemacro=,  cov4class=, cov4classelse=,cov4addvars=,cov4genmacro=,cov4modusermacro =,cov4moddatausermacro =,cov4setblvar =,
+    cov4simusermacro = ,cov4barray = ,cov4sarray = ,cov4randomvisitp=,cov4visitpmaxgap=9e10,cov4visitpwherem=(1=1),cov4visitpcount = ,
 
     cov5=,cov5otype=1,cov5ptype=,cov5mtype= all ,cov5cumint= ,cov5skip=-1,cov5inc=0,cov5knots=,cov5interact=,cov5wherem=(1=1),cov5wherenosim=(1=0),
-	cov5nosimelsemacro=,  cov5class=, cov5classelse=,cov5addvars=,cov5genmacro=,cov5modusermacro =,cov5moddatausermacro =,cov5setblvar =,
-	cov5simusermacro = ,cov5barray = ,cov5sarray =,cov5randomvisitp=,cov5visitpmaxgap=9e10,cov5visitpwherem=(1=1),cov5visitpcount = ,
+    cov5nosimelsemacro=,  cov5class=, cov5classelse=,cov5addvars=,cov5genmacro=,cov5modusermacro =,cov5moddatausermacro =,cov5setblvar =,
+    cov5simusermacro = ,cov5barray = ,cov5sarray =,cov5randomvisitp=,cov5visitpmaxgap=9e10,cov5visitpwherem=(1=1),cov5visitpcount = ,
 
     cov6=,cov6otype=1,cov6ptype=,cov6mtype= all ,cov6cumint= ,cov6skip=-1,cov6inc=0,cov6knots=,cov6interact=,cov6wherem=(1=1),cov6wherenosim=(1=0),
-	cov6nosimelsemacro=,  cov6class=, cov6classelse=,cov6addvars=,cov6genmacro=,cov6modusermacro =,cov6moddatausermacro =,cov6setblvar =,
-	cov6simusermacro = ,cov6barray = ,cov6sarray =,cov6randomvisitp=,cov6visitpmaxgap=9e10,cov6visitpwherem=(1=1),cov6visitpcount = ,
+    cov6nosimelsemacro=,  cov6class=, cov6classelse=,cov6addvars=,cov6genmacro=,cov6modusermacro =,cov6moddatausermacro =,cov6setblvar =,
+    cov6simusermacro = ,cov6barray = ,cov6sarray =,cov6randomvisitp=,cov6visitpmaxgap=9e10,cov6visitpwherem=(1=1),cov6visitpcount = ,
 
     cov7=,cov7otype=1,cov7ptype=,cov7mtype= all ,cov7cumint= ,cov7skip=-1,cov7inc=0,cov7knots=,cov7interact=,cov7wherem=(1=1),cov7wherenosim=(1=0),
-	cov7nosimelsemacro=,  cov7class=, cov7classelse=,cov7addvars=,cov7genmacro=,cov7modusermacro =,cov7moddatausermacro =,cov7setblvar =,
-	cov7simusermacro = ,cov7barray = ,cov7sarray =,cov7randomvisitp=,cov7visitpmaxgap=9e10,cov7visitpwherem=(1=1),cov7visitpcount = ,
+    cov7nosimelsemacro=,  cov7class=, cov7classelse=,cov7addvars=,cov7genmacro=,cov7modusermacro =,cov7moddatausermacro =,cov7setblvar =,
+    cov7simusermacro = ,cov7barray = ,cov7sarray =,cov7randomvisitp=,cov7visitpmaxgap=9e10,cov7visitpwherem=(1=1),cov7visitpcount = ,
 
     cov8=,cov8otype=1,cov8ptype=,cov8mtype= all ,cov8cumint= ,cov8skip=-1,cov8inc=0,cov8knots=,cov8interact=,cov8wherem=(1=1),cov8wherenosim=(1=0),
-	cov8nosimelsemacro=,  cov8class=, cov8classelse=,cov8addvars=,cov8genmacro=,cov8modusermacro =,cov8moddatausermacro =,cov8setblvar =,
-	cov8simusermacro = ,cov8barray = ,cov8sarray =,cov8randomvisitp=,cov8visitpmaxgap=9e10,cov8visitpwherem=(1=1),cov8visitpcount = ,
+    cov8nosimelsemacro=,  cov8class=, cov8classelse=,cov8addvars=,cov8genmacro=,cov8modusermacro =,cov8moddatausermacro =,cov8setblvar =,
+    cov8simusermacro = ,cov8barray = ,cov8sarray =,cov8randomvisitp=,cov8visitpmaxgap=9e10,cov8visitpwherem=(1=1),cov8visitpcount = ,
 
     cov9=,cov9otype=1,cov9ptype=,cov9mtype= all ,cov9cumint= ,cov9skip=-1,cov9inc=0,cov9knots=,cov9interact=,cov9wherem=(1=1),cov9wherenosim=(1=0),
-	cov9nosimelsemacro=,  cov9class=, cov9classelse=,cov9addvars=,cov9genmacro=,cov9modusermacro =,cov9moddatausermacro =,cov9setblvar =,
-	cov9simusermacro = ,cov9barray = ,cov9sarray =,cov9randomvisitp=,cov9visitpmaxgap=9e10,cov9visitpwherem=(1=1),cov9visitpcount = ,
+    cov9nosimelsemacro=,  cov9class=, cov9classelse=,cov9addvars=,cov9genmacro=,cov9modusermacro =,cov9moddatausermacro =,cov9setblvar =,
+    cov9simusermacro = ,cov9barray = ,cov9sarray =,cov9randomvisitp=,cov9visitpmaxgap=9e10,cov9visitpwherem=(1=1),cov9visitpcount = ,
 
     cov10=,cov10otype=1,cov10ptype=,cov10mtype= all ,cov10cumint= ,cov10skip=-1,cov10inc=0,cov10knots=,cov10interact=,cov10wherem=(1=1), 
-	cov10wherenosim=(1=0),cov10nosimelsemacro=,  cov10class=, cov10classelse=,cov10addvars=,cov10genmacro=,cov10modusermacro =,
-	cov10moddatausermacro =,cov10setblvar =,cov10simusermacro = ,cov10barray = ,cov10sarray =,cov10randomvisitp=,cov10visitpmaxgap=9e10,cov10visitpwherem=(1=1),
-	cov10visitpcount= ,
+    cov10wherenosim=(1=0),cov10nosimelsemacro=,  cov10class=, cov10classelse=,cov10addvars=,cov10genmacro=,cov10modusermacro =,
+    cov10moddatausermacro =,cov10setblvar =,cov10simusermacro = ,cov10barray = ,cov10sarray =,cov10randomvisitp=,cov10visitpmaxgap=9e10,cov10visitpwherem=(1=1),
+    cov10visitpcount= ,
 
     cov11=,cov11otype=1,cov11ptype=,cov11mtype= all ,cov11cumint= ,cov11skip=-1,cov11inc=0,cov11knots=,cov11interact=,cov11wherem=(1=1), 
-	cov11wherenosim=(1=0),cov11nosimelsemacro=,  cov11class=, cov11classelse=,cov11addvars=,cov11genmacro=,cov11modusermacro =,
-	cov11moddatausermacro =,cov11setblvar =,cov11simusermacro = ,cov11barray = ,cov11sarray =,cov11randomvisitp=,cov11visitpmaxgap=9e10,cov11visitpwherem=(1=1),
-	cov11visitpcount= ,
+    cov11wherenosim=(1=0),cov11nosimelsemacro=,  cov11class=, cov11classelse=,cov11addvars=,cov11genmacro=,cov11modusermacro =,
+    cov11moddatausermacro =,cov11setblvar =,cov11simusermacro = ,cov11barray = ,cov11sarray =,cov11randomvisitp=,cov11visitpmaxgap=9e10,cov11visitpwherem=(1=1),
+    cov11visitpcount= ,
 
     cov12=,cov12otype=1,cov12ptype=,cov12mtype= all ,cov12cumint= ,cov12skip=-1,cov12inc=0,cov12knots=,cov12interact=,cov12wherem=(1=1),
-	cov12wherenosim=(1=0),cov12nosimelsemacro=,  cov12class=, cov12classelse=,cov12addvars=,cov12genmacro=,cov12modusermacro =,
-	cov12moddatausermacro =,cov12setblvar =,cov12simusermacro = ,cov12barray = ,cov12sarray =,cov12randomvisitp=,cov12visitpmaxgap=9e10,cov12visitpwherem=(1=1),
-	cov12visitpcount= ,
+    cov12wherenosim=(1=0),cov12nosimelsemacro=,  cov12class=, cov12classelse=,cov12addvars=,cov12genmacro=,cov12modusermacro =,
+    cov12moddatausermacro =,cov12setblvar =,cov12simusermacro = ,cov12barray = ,cov12sarray =,cov12randomvisitp=,cov12visitpmaxgap=9e10,cov12visitpwherem=(1=1),
+    cov12visitpcount= ,
 
     cov13=,cov13otype=1,cov13ptype=,cov13mtype= all ,cov13cumint= ,cov13skip=-1,cov13inc=0,cov13knots=,cov13interact=,cov13wherem=(1=1), 
-	cov13wherenosim=(1=0),cov13nosimelsemacro=,  cov13class=, cov13classelse=,cov13addvars= ,cov13genmacro=,cov13modusermacro =,
-	cov13moddatausermacro =,cov13setblvar =,cov13simusermacro = ,cov13barray = ,cov13sarray =,cov13randomvisitp=,cov13visitpmaxgap=9e10,cov13visitpwherem=(1=1),
-	cov13visitpcount= ,
+    cov13wherenosim=(1=0),cov13nosimelsemacro=,  cov13class=, cov13classelse=,cov13addvars= ,cov13genmacro=,cov13modusermacro =,
+    cov13moddatausermacro =,cov13setblvar =,cov13simusermacro = ,cov13barray = ,cov13sarray =,cov13randomvisitp=,cov13visitpmaxgap=9e10,cov13visitpwherem=(1=1),
+    cov13visitpcount= ,
 
     cov14=,cov14otype=1,cov14ptype=,cov14mtype= all ,cov14cumint= ,cov14skip=-1,cov14inc=0,cov14knots=,cov14interact=,cov14wherem=(1=1), 
-	cov14wherenosim=(1=0),cov14nosimelsemacro=,  cov14class=, cov14classelse=,cov14addvars= ,cov14genmacro=,cov14modusermacro =,
-	cov14moddatausermacro =,cov14setblvar =,cov14simusermacro = ,cov14barray = ,cov14sarray =, cov14randomvisitp=,cov14visitpmaxgap=9e10,cov14visitpwherem=(1=1),
-	cov14visitpcount= ,
+    cov14wherenosim=(1=0),cov14nosimelsemacro=,  cov14class=, cov14classelse=,cov14addvars= ,cov14genmacro=,cov14modusermacro =,
+    cov14moddatausermacro =,cov14setblvar =,cov14simusermacro = ,cov14barray = ,cov14sarray =, cov14randomvisitp=,cov14visitpmaxgap=9e10,cov14visitpwherem=(1=1),
+    cov14visitpcount= ,
 
     cov15=,cov15otype=1,cov15ptype=,cov15mtype= all ,cov15cumint= ,cov15skip=-1,cov15inc=0,cov15knots=,cov15interact=,cov15wherem=(1=1), 
-	cov15wherenosim=(1=0),cov15nosimelsemacro=,  cov15class=, cov15classelse=,cov15addvars= ,cov15genmacro=,cov15modusermacro =,
-	cov15moddatausermacro =,cov15setblvar =,cov15simusermacro = ,cov15barray = ,cov15sarray =, cov15randomvisitp=,cov15visitpmaxgap=9e10,cov15visitpwherem=(1=1),
-	cov15visitpcount= ,
+    cov15wherenosim=(1=0),cov15nosimelsemacro=,  cov15class=, cov15classelse=,cov15addvars= ,cov15genmacro=,cov15modusermacro =,
+    cov15moddatausermacro =,cov15setblvar =,cov15simusermacro = ,cov15barray = ,cov15sarray =, cov15randomvisitp=,cov15visitpmaxgap=9e10,cov15visitpwherem=(1=1),
+    cov15visitpcount= ,
 
     cov16=,cov16otype=1,cov16ptype=,cov16mtype= all ,cov16cumint= ,cov16skip=-1,cov16inc=0,cov16knots=,cov16interact=,cov16wherem=(1=1), 
-	cov16wherenosim=(1=0),cov16nosimelsemacro=,  cov16class=, cov16classelse=,cov16addvars= ,cov16genmacro=,cov16modusermacro =,
-	cov16moddatausermacro =,cov16setblvar =,cov16simusermacro = ,cov16barray = ,cov16sarray =, cov16randomvisitp=,cov16visitpmaxgap=9e10,cov16visitpwherem=(1=1),
-	cov16visitpcount= ,
+    cov16wherenosim=(1=0),cov16nosimelsemacro=,  cov16class=, cov16classelse=,cov16addvars= ,cov16genmacro=,cov16modusermacro =,
+    cov16moddatausermacro =,cov16setblvar =,cov16simusermacro = ,cov16barray = ,cov16sarray =, cov16randomvisitp=,cov16visitpmaxgap=9e10,cov16visitpwherem=(1=1),
+    cov16visitpcount= ,
 
     cov17=,cov17otype=1,cov17ptype=,cov17mtype= all ,cov17cumint= ,cov17skip=-1,cov17inc=0,cov17knots=,cov17interact=,cov17wherem=(1=1), 
-	cov17wherenosim=(1=0),cov17nosimelsemacro=,  cov17class=, cov17classelse=,cov17addvars= ,cov17genmacro=,cov17modusermacro =,
-	cov17moddatausermacro =,cov17setblvar =,cov17simusermacro = ,cov17barray = ,cov17sarray =, cov17randomvisitp=,cov17visitpmaxgap=9e10,cov17visitpwherem=(1=1),
-	cov17visitpcount= , 
+    cov17wherenosim=(1=0),cov17nosimelsemacro=,  cov17class=, cov17classelse=,cov17addvars= ,cov17genmacro=,cov17modusermacro =,
+    cov17moddatausermacro =,cov17setblvar =,cov17simusermacro = ,cov17barray = ,cov17sarray =, cov17randomvisitp=,cov17visitpmaxgap=9e10,cov17visitpwherem=(1=1),
+    cov17visitpcount= , 
 
     cov18=,cov18otype=1,cov18ptype=,cov18mtype= all ,cov18cumint= ,cov18skip=-1,cov18inc=0,cov18knots=,cov18interact=,cov18wherem=(1=1), 
-	cov18wherenosim=(1=0),cov18nosimelsemacro=,  cov18class=, cov18classelse=,cov18addvars= ,cov18genmacro=,cov18modusermacro =,
-	cov18moddatausermacro =,cov18setblvar =,cov18simusermacro = ,cov18barray = ,cov18sarray =, cov18randomvisitp=,cov18visitpmaxgap=9e10,cov18visitpwherem=(1=1),
-	cov18visitpcount= , 
+    cov18wherenosim=(1=0),cov18nosimelsemacro=,  cov18class=, cov18classelse=,cov18addvars= ,cov18genmacro=,cov18modusermacro =,
+    cov18moddatausermacro =,cov18setblvar =,cov18simusermacro = ,cov18barray = ,cov18sarray =, cov18randomvisitp=,cov18visitpmaxgap=9e10,cov18visitpwherem=(1=1),
+    cov18visitpcount= , 
 
     cov19=,cov19otype=1,cov19ptype=,cov19mtype= all ,cov19cumint= ,cov19skip=-1,cov19inc=0,cov19knots=,cov19interact=,cov19wherem=(1=1), 
-	cov19wherenosim=(1=0),cov19nosimelsemacro= all ,  cov19class=, cov19classelse=,cov19addvars= ,cov19genmacro=,cov19modusermacro =,
-	cov19moddatausermacro =,cov19setblvar =,cov19simusermacro = ,cov19barray = ,cov19sarray =, cov19randomvisitp=,cov19visitpmaxgap=9e10,cov19visitpwherem=(1=1),
-	cov19visitpcount= , 
+    cov19wherenosim=(1=0),cov19nosimelsemacro= all ,  cov19class=, cov19classelse=,cov19addvars= ,cov19genmacro=,cov19modusermacro =,
+    cov19moddatausermacro =,cov19setblvar =,cov19simusermacro = ,cov19barray = ,cov19sarray =, cov19randomvisitp=,cov19visitpmaxgap=9e10,cov19visitpwherem=(1=1),
+    cov19visitpcount= , 
 
     cov20=,cov20otype=1,cov20ptype=,cov20mtype= all ,cov20cumint= ,cov20skip=-1,cov20inc=0,cov20knots=,cov20interact=,cov20wherem=(1=1), 
-	cov20wherenosim=(1=0),cov20nosimelsemacro=,  cov20class=, cov20classelse=,cov20addvars= ,cov20genmacro=,cov20modusermacro =,
-	cov20moddatausermacro =,cov20setblvar =,cov20simusermacro = ,cov20barray = ,cov20sarray =, cov20randomvisitp=,cov20visitpmaxgap=9e10,cov20visitpwherem=(1=1),
-	cov20visitpcount= , 
+    cov20wherenosim=(1=0),cov20nosimelsemacro=,  cov20class=, cov20classelse=,cov20addvars= ,cov20genmacro=,cov20modusermacro =,
+    cov20moddatausermacro =,cov20setblvar =,cov20simusermacro = ,cov20barray = ,cov20sarray =, cov20randomvisitp=,cov20visitpmaxgap=9e10,cov20visitpwherem=(1=1),
+    cov20visitpcount= , 
 
     cov21=,cov21otype=1,cov21ptype=,cov21mtype= all ,cov21cumint= ,cov21skip=-1,cov21inc=0,cov21knots=,cov21interact=,cov21wherem=(1=1), 
-	cov21wherenosim=(1=0),cov21nosimelsemacro=,  cov21class=, cov21classelse=,cov21addvars=,cov21genmacro=,cov21modusermacro =,
-	cov21moddatausermacro =,cov21setblvar =,cov21simusermacro = ,cov21barray = ,cov21sarray =, cov21randomvisitp=,cov21visitpmaxgap=9e10,cov21visitpwherem=(1=1),
-	cov21visitpcount= , 
+    cov21wherenosim=(1=0),cov21nosimelsemacro=,  cov21class=, cov21classelse=,cov21addvars=,cov21genmacro=,cov21modusermacro =,
+    cov21moddatausermacro =,cov21setblvar =,cov21simusermacro = ,cov21barray = ,cov21sarray =, cov21randomvisitp=,cov21visitpmaxgap=9e10,cov21visitpwherem=(1=1),
+    cov21visitpcount= , 
 
     cov22=,cov22otype=1,cov22ptype=,cov22mtype= all ,cov22cumint= ,cov22skip=-1,cov22inc=0,cov22knots=,cov22interact=,cov22wherem=(1=1), 
-	cov22wherenosim=(1=0),cov22nosimelsemacro=,  cov22class=, cov22classelse=,cov22addvars=,cov22genmacro=,cov22modusermacro =,
-	cov22moddatausermacro =,cov22setblvar =,cov22simusermacro = ,cov22barray = ,cov22sarray =, cov22randomvisitp=,cov22visitpmaxgap=9e10,cov22visitpwherem=(1=1),
-	cov22visitpcount= , 
+    cov22wherenosim=(1=0),cov22nosimelsemacro=,  cov22class=, cov22classelse=,cov22addvars=,cov22genmacro=,cov22modusermacro =,
+    cov22moddatausermacro =,cov22setblvar =,cov22simusermacro = ,cov22barray = ,cov22sarray =, cov22randomvisitp=,cov22visitpmaxgap=9e10,cov22visitpwherem=(1=1),
+    cov22visitpcount= , 
 
-   	cov23=,cov23otype=1,cov23ptype=,cov23mtype= all ,cov23cumint= ,cov23skip=-1,cov23inc=0,cov23knots=,cov23interact=,cov23wherem=(1=1), 
-	cov23wherenosim=(1=0),cov23nosimelsemacro=,  cov23class=, cov23classelse=,cov23addvars=,cov23genmacro=,cov23modusermacro =,
-	cov23moddatausermacro =,cov23setblvar =,cov23simusermacro = ,cov23barray = ,cov23sarray =, cov23randomvisitp=,cov23visitpmaxgap=9e10,cov23visitpwherem=(1=1),
-	cov23visitpcount= , 
+       cov23=,cov23otype=1,cov23ptype=,cov23mtype= all ,cov23cumint= ,cov23skip=-1,cov23inc=0,cov23knots=,cov23interact=,cov23wherem=(1=1), 
+    cov23wherenosim=(1=0),cov23nosimelsemacro=,  cov23class=, cov23classelse=,cov23addvars=,cov23genmacro=,cov23modusermacro =,
+    cov23moddatausermacro =,cov23setblvar =,cov23simusermacro = ,cov23barray = ,cov23sarray =, cov23randomvisitp=,cov23visitpmaxgap=9e10,cov23visitpwherem=(1=1),
+    cov23visitpcount= , 
 
     cov24=,cov24otype=1,cov24ptype=,cov24mtype= all ,cov24cumint= ,cov24skip=-1,cov24inc=0,cov24knots=,cov24interact=,cov24wherem=(1=1), 
-	cov24wherenosim=(1=0),cov24nosimelsemacro=,  cov24class=, cov24classelse=,cov24addvars=,cov24genmacro=,cov24modusermacro =,
- 	cov24moddatausermacro =,cov24setblvar =,cov24simusermacro = ,cov24barray = ,cov24sarray =, cov24randomvisitp=,cov24visitpmaxgap=9e10,cov24visitpwherem=(1=1),
-	cov24visitpcount= , 
+    cov24wherenosim=(1=0),cov24nosimelsemacro=,  cov24class=, cov24classelse=,cov24addvars=,cov24genmacro=,cov24modusermacro =,
+     cov24moddatausermacro =,cov24setblvar =,cov24simusermacro = ,cov24barray = ,cov24sarray =, cov24randomvisitp=,cov24visitpmaxgap=9e10,cov24visitpwherem=(1=1),
+    cov24visitpcount= , 
 
     cov25=,cov25otype=1,cov25ptype=,cov25mtype= all ,cov25cumint= ,cov25skip=-1,cov25inc=0,cov25knots=,cov25interact=,cov25wherem=(1=1), 
-	cov25wherenosim=(1=0),cov25nosimelsemacro=,  cov25class=, cov25classelse=,cov25addvars=,cov25genmacro=,cov25modusermacro =,
-	cov25moddatausermacro =,cov25setblvar =,cov25simusermacro = ,cov25barray = ,cov25sarray =, cov25randomvisitp=,cov25visitpmaxgap=9e10,cov25visitpwherem=(1=1),
-	cov25visitpcount= , 
+    cov25wherenosim=(1=0),cov25nosimelsemacro=,  cov25class=, cov25classelse=,cov25addvars=,cov25genmacro=,cov25modusermacro =,
+    cov25moddatausermacro =,cov25setblvar =,cov25simusermacro = ,cov25barray = ,cov25sarray =, cov25randomvisitp=,cov25visitpmaxgap=9e10,cov25visitpwherem=(1=1),
+    cov25visitpcount= , 
 
     cov26=,cov26otype=1,cov26ptype=,cov26mtype= all ,cov26cumint= ,cov26skip=-1,cov26inc=0,cov26knots=,cov26interact=,cov26wherem=(1=1), 
-	cov26wherenosim=(1=0),cov26nosimelsemacro=,  cov26class=, cov26classelse=,cov26addvars=,cov26genmacro=,cov26modusermacro =,
-	cov26moddatausermacro =,cov26setblvar =,cov26simusermacro = ,cov26barray = ,cov26sarray =, cov26randomvisitp=,cov26visitpmaxgap=9e10,cov26visitpwherem=(1=1),
-	cov26visitpcount= , 
+    cov26wherenosim=(1=0),cov26nosimelsemacro=,  cov26class=, cov26classelse=,cov26addvars=,cov26genmacro=,cov26modusermacro =,
+    cov26moddatausermacro =,cov26setblvar =,cov26simusermacro = ,cov26barray = ,cov26sarray =, cov26randomvisitp=,cov26visitpmaxgap=9e10,cov26visitpwherem=(1=1),
+    cov26visitpcount= , 
 
     cov27=,cov27otype=1,cov27ptype=,cov27mtype= all ,cov27cumint= ,cov27skip=-1,cov27inc=0,cov27knots=,cov27interact=,cov27wherem=(1=1), 
-	cov27wherenosim=(1=0),cov27nosimelsemacro=,  cov27class=, cov27classelse=,cov27addvars=,cov27genmacro=,cov27modusermacro =,
-	cov27moddatausermacro =,cov27setblvar =,cov27simusermacro = ,cov27barray = ,cov27sarray =, cov27randomvisitp=,cov27visitpmaxgap=9e10,cov27visitpwherem=(1=1),
-	cov27visitpcount= , 
+    cov27wherenosim=(1=0),cov27nosimelsemacro=,  cov27class=, cov27classelse=,cov27addvars=,cov27genmacro=,cov27modusermacro =,
+    cov27moddatausermacro =,cov27setblvar =,cov27simusermacro = ,cov27barray = ,cov27sarray =, cov27randomvisitp=,cov27visitpmaxgap=9e10,cov27visitpwherem=(1=1),
+    cov27visitpcount= , 
 
     cov28=,cov28otype=1,cov28ptype=,cov28mtype= all ,cov28cumint= ,cov28skip=-1,cov28inc=0,cov28knots=,cov28interact=,cov28wherem=(1=1), 
-	cov28wherenosim=(1=0),cov28nosimelsemacro=,  cov28class=, cov28classelse=,cov28addvars=,cov28genmacro=,cov28modusermacro =,
-	cov28moddatausermacro =,cov28setblvar =,cov28simusermacro = ,cov28barray = ,cov28sarray =, cov28randomvisitp=,cov28visitpmaxgap=9e10,cov28visitpwherem=(1=1),
-	cov28visitpcount= , 
+    cov28wherenosim=(1=0),cov28nosimelsemacro=,  cov28class=, cov28classelse=,cov28addvars=,cov28genmacro=,cov28modusermacro =,
+    cov28moddatausermacro =,cov28setblvar =,cov28simusermacro = ,cov28barray = ,cov28sarray =, cov28randomvisitp=,cov28visitpmaxgap=9e10,cov28visitpwherem=(1=1),
+    cov28visitpcount= , 
 
     cov29=,cov29otype=1,cov29ptype=,cov29mtype= all ,cov29cumint= ,cov29skip=-1,cov29inc=0,cov29knots=,cov29interact=,cov29wherem=(1=1), 
-	cov29wherenosim=(1=0),cov29nosimelsemacro=,  cov29class=, cov29classelse=,cov29addvars=,cov29genmacro=,cov29modusermacro =,
-	cov29moddatausermacro =,cov29setblvar =,cov29simusermacro = ,cov29barray = ,cov29sarray =, cov29randomvisitp=,cov29visitpmaxgap=9e10,cov29visitpwherem=(1=1),
-	cov29visitpcount= , 
+    cov29wherenosim=(1=0),cov29nosimelsemacro=,  cov29class=, cov29classelse=,cov29addvars=,cov29genmacro=,cov29modusermacro =,
+    cov29moddatausermacro =,cov29setblvar =,cov29simusermacro = ,cov29barray = ,cov29sarray =, cov29randomvisitp=,cov29visitpmaxgap=9e10,cov29visitpwherem=(1=1),
+    cov29visitpcount= , 
 
     cov30=,cov30otype=1,cov30ptype=,cov30mtype= all ,cov30cumint= ,cov30skip=-1,cov30inc=0,cov30knots=,cov30interact=,cov30wherem=(1=1), 
-	cov30wherenosim=(1=0),cov30nosimelsemacro=,  cov30class=, cov30classelse=,    cov30addvars=,cov30genmacro=,cov30modusermacro =,
- 	cov30moddatausermacro =,cov30setblvar =,cov30simusermacro = ,cov30barray = ,cov30sarray =, cov30randomvisitp=,cov30visitpmaxgap=9e10,cov30visitpwherem=(1=1),
-	cov30visitpcount= ,
+    cov30wherenosim=(1=0),cov30nosimelsemacro=,  cov30class=, cov30classelse=,    cov30addvars=,cov30genmacro=,cov30modusermacro =,
+     cov30moddatausermacro =,cov30setblvar =,cov30simusermacro = ,cov30barray = ,cov30sarray =, cov30randomvisitp=,cov30visitpmaxgap=9e10,cov30visitpwherem=(1=1),
+    cov30visitpcount= ,
  
     /*other override options*/
 
-    wherevars =,        	/* list of variables referenced in any of the cov#wherem conditions, change JGY*/ 
-    keepsimuldata =,    	/*list of variables not created by a given ptype or otype that will be needed in simulated data set new change JGY*/
-    equalitiessimuldata =,	/*user defined macro that equates pre-baseline simulated vars to observed new change JGY*/
-    eventaddvars =, 		/*list of variables to be added to event predictor list new change JGY*/
+    wherevars =,            /* list of variables referenced in any of the cov#wherem conditions, change JGY*/ 
+    keepsimuldata =,        /*list of variables not created by a given ptype or otype that will be needed in simulated data set new change JGY*/
+    equalitiessimuldata =,    /*user defined macro that equates pre-baseline simulated vars to observed new change JGY*/
+    eventaddvars =,         /*list of variables to be added to event predictor list new change JGY*/
     compriskaddvars =,
     
     usebetadata = 0,
@@ -543,7 +543,7 @@ options mautosource minoperator ;
             %if &printlogstats = 1 %then %put  Otype 5?: &&cov&i.otype; 
              
             proc sql noprint ;
-            	select max(&&cov&i) as maxlev into :cov&i.lev from &data ;
+                select max(&&cov&i) as maxlev into :cov&i.lev from &data ;
             quit ;
             %let cov&i.knots=%unquote(%makeknots5(&&cov&i.lev));
             %if &printlogstats = 1 %then %put  Knots defining the categories for &&cov&i : cov&i.knots=&&cov&i.knots;
@@ -554,6 +554,8 @@ options mautosource minoperator ;
     %*Preparing data;    
     %dataprep;
      
+    
+
     %if %bquote(&nparam)= %then %let nparam=&ssize;
     %if %bquote(&nsimul)= %then %let nsimul=&ssize;
 
@@ -716,8 +718,8 @@ options mautosource minoperator ;
                 dataname ssize obsp 
                 ;
                 dataname = "&data";
-	                ssize = &ssize ;
-    	            obsp = &obsp ;
+                    ssize = &ssize ;
+                    obsp = &obsp ;
                 run;             
 
                 %if &outctype = binsurv %then %do;
@@ -732,14 +734,14 @@ options mautosource minoperator ;
                     /* initialize survdata */
 
                     data surv_tmp0 ;
-        	            set survprobs0 ;
-            	        length int2 $70 ;
-                	    int = 0 ;
-                    	int2 = "Natural course";
-                    	_sample_ = 0 ;
-                    	surv0 = 1;
-                    	n = _freq_ ;
-                    	keep  int int2 _sample_ n  surv0
+                        set survprobs0 ;
+                        length int2 $70 ;
+                        int = 0 ;
+                        int2 = "Natural course";
+                        _sample_ = 0 ;
+                        surv0 = 1;
+                        n = _freq_ ;
+                        keep  int int2 _sample_ n  surv0
                         %do n = 1 %to &timepoints;
                             risk&n surv&n comprisk&n  
                         %end;
@@ -751,12 +753,12 @@ options mautosource minoperator ;
                         /* initialize survdata */
 
                     data surv_tmp0 ;
-                    	set interv0 ;
-                    	length int2 $70 ;
-                    	int = 0 ;
-                    	int2 = "Natural course";
-                    	_sample_ = 0 ;                                        
-                    	keep  int int2 _sample_ s&outc  ;
+                        set interv0 ;
+                        length int2 $70 ;
+                        int = 0 ;
+                        int2 = "Natural course";
+                        _sample_ = 0 ;                                        
+                        keep  int int2 _sample_ s&outc  ;
                     run;
                 %end; 
             %end;  /* end of saving simuldata , needed outside of interv and interv_init macros */
@@ -1059,8 +1061,9 @@ options mautosource minoperator ;
        %if &printlogstats = 1 %then %put  Censoring by death predictors are: &compriskpred;
     %end;   
     
-   
-    %do i = 0 %to &ncov;
+
+
+   %do i = 0 %to &ncov;
 
       %if &checkaddvars = 1 %then %addvarcheck;
       %let changemtype = 0 ;
@@ -1080,6 +1083,7 @@ options mautosource minoperator ;
        %if &changemtype = 1 %then %let cov&i.mtype =  some ;
     %end;
    
+    
  
 
     %************ PREPARING DATA;  
@@ -1577,19 +1581,19 @@ options mautosource minoperator ;
       this overrites the value in paramdata where newid and time agree. ;
    
         data _paramsample_ ;
-        	set _idsamples ;
-        	_sample_ = &bsample ;
+            set _idsamples ;
+            _sample_ = &bsample ;
         run; 
 
     * add in the variable numberhits for the number of times a subject is selected into the bootstrap sample ;
     data param ;
-	    merge _paramdata_ (in= p) _paramsample_;
-	    by newid ;
-	    if numberhits > 0 ; *delete those not selected into sample ;
-	    do _i_ = 1 to numberhits ; * make numberhits copies of each remaining subject ;
-	        output ;
-	    end;
-	    drop _i_ numberhits ;
+        merge _paramdata_ (in= p) _paramsample_;
+        by newid ;
+        if numberhits > 0 ; *delete those not selected into sample ;
+        do _i_ = 1 to numberhits ; * make numberhits copies of each remaining subject ;
+            output ;
+        end;
+        drop _i_ numberhits ;
     run;
 
        * reset the outcome and covariate bounds to that models and simulated 
@@ -1668,16 +1672,16 @@ options mautosource minoperator ;
   
     * simuldata has one observation per person for time = 0 ;
         data simul ;
-	        merge _simuldata_  _idsamples;
-	        by newid;         
+            merge _simuldata_  _idsamples;
+            by newid;         
         run;
 
         data simul ;
-	        set simul ;
-	        do _copy0_ = 1 to numberhits ;
-	            output ;
-	        end;
-	        drop numberhits _copy0_ ;
+            set simul ;
+            do _copy0_ = 1 to numberhits ;
+                output ;
+            end;
+            drop numberhits _copy0_ ;
         run;
 
         * now take a random sample of size nsimul ;
@@ -1687,12 +1691,12 @@ options mautosource minoperator ;
         run;
 
         data simul ;
-	        set simul ;
-	        _sample_ = &bsample ;
-	        do _copy_ = 1 to numberhits ;
-	            output ;
-	        end;
-	        drop _copy_ numberhits ;
+            set simul ;
+            _sample_ = &bsample ;
+            do _copy_ = 1 to numberhits ;
+                output ;
+            end;
+            drop _copy_ numberhits ;
         run;
  
    
@@ -1704,7 +1708,7 @@ options mautosource minoperator ;
     %end;
 
     proc datasets library=work nolist ;
-	    delete _idsamples ;
+        delete _idsamples ;
     quit;
     %end;
     
@@ -1763,14 +1767,14 @@ options mautosource minoperator ;
            run;
 
            proc datasets library = work nolist ;
-	            delete _cov_mean_tmp;
+                delete _cov_mean_tmp;
           quit;
 
         %end;  
         %if &chunked = 1 %then %do;
             
             proc copy in = work out = &savelib   ;
-    	        select &covmeanname  ;
+                select &covmeanname  ;
             run;
         %end;
         
@@ -4232,9 +4236,12 @@ intusermacro7=,
 /* listpred is in general called two ways, with main and contemp. contemp is for how variables covX appear in the models 
    for covY with X < Y . for main this will be run for all variables and may change  based on switchind = &i when using main */
  
-/* want to make a change for when the ptype of cov&index = some and check if cov&index is in cov&i.addvars. If so then need to change the value 
+/* want to make a change for when the mtype of cov&index = some and check if cov&index is in cov&i.addvars. If so then need to change the value 
    of covYaddvars to include the correct variables */
-    %local index lev knot ;
+    %local index lev knot mycov ;
+
+ 
+
     %if &main=main %then %do;
         %do index = &start %to &stop;
             %if %upcase(&&cov&index.mtype) = ALL %then %do;
@@ -4538,9 +4545,21 @@ intusermacro7=,
                            %end;
                    %end;
 
-                 
-                  %if &&usevisitp&index = 1 &    (&switchind = &index)   %then %do; /* for visit processes we want to include time since last visit lagged ??? */
-                        &pre.ts_last_&&cov&index..&t2
+                  /**** original code                  
+                  %if &&usevisitp&index = 1  &    ( (&switchind = &index) OR &switchind = )  %then %do;      
+                    &pre.ts_last_&&cov&index..&t2
+                  %end;
+                   *****/
+                    %if &&usevisitp&index = 1   %then %do; 
+                        /* this combines the main and contemp options for including the ts_last portion of the visit 
+                           process into a single call using main = main and the switchind variable */
+
+                        %let mycov = ;
+                        %if &switchind = %then %let mycov= ts_last_&&cov&index ;
+                        %else %if &index >= &switchind  %then %let mycov = ts_last_&&cov&index.._l1 ; 
+                        %else %if &index < &switchind %then %let mycov = ts_last_&&cov&index ;
+                     
+                        &mycov                       
                   %end;
              %end;
           %end ; /* for mtype = all */
@@ -4608,11 +4627,10 @@ intusermacro7=,
                            &pre.&&cov&index..&t3._spl&knot &pre.&&cov&index..&t3._spl&knot._ti  
                      %end; 
                  %end; 
-                 /* ?????? should not have ptype = none */
-                 %if &&usevisitp&index = 1 & %lowcase(&&cov&index.ptype) ne none  %then %do; /* for visit processes we want to include time since last visit lagged ??? */
-                        &pre.ts_last_&&cov&index..&t3
-                  %end;
-                   
+               
+                /** 
+                 %if &&usevisitp&index = 1   %then ts_last_&&cov&index ;
+                **/
                  %if &&cov&index.ptype=cumavg  %then %do;
                          &&cov&index.._cumavg        
                   %end;
@@ -5824,7 +5842,6 @@ not the time-varying covariates, which are handled below in %interactionsb*/
 
 
 
-
     %* Generating time k covariates;
 
     
@@ -6893,7 +6910,6 @@ set _cont  ( where = ( substr(name,1,1)='s'
 
 
     goptions reset = all  /* display */ hsize=8 in vsize = 8 in device=pdf  gsfname=mygraphs  ;
-
     symbol1 line = 1 width = 3 interpol = line  color = red ;
     symbol2 line = 2 width = 3 interpol = line color = blue ;
     symbol3 line = 2 width = 3 interpol = line color = blue ;
