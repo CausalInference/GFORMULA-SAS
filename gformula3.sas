@@ -4436,6 +4436,9 @@ intusermacro7=,
                                   &pre.&&cov&index..&t3 &pre.ts&&cov&index..&t3._inter %if &usespline = 1 %then  &pre.ts&&cov&index..&t3._inter_spl1 &pre.ts&&cov&index..&t3._inter_spl2 ;
                           %end;
                      %end;
+
+
+
                   %end; /*end tsswitch1*/
                   
                    %if &&cov&index.ptype=cumavg  %then %do;
@@ -4838,7 +4841,7 @@ intusermacro7=,
 
                   %if &&cov&index.ptype = cumavgcat %then %do ;
                         %do lev = 1 %to %eval(&&cov&index.lev - 1); 
-                            &&cov&index.._cumavg._&lev 
+                            &&cov&index.._cumavg_&lev 
                         %end; 
                   %end;
 
