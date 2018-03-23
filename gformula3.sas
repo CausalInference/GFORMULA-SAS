@@ -3414,10 +3414,10 @@ intusermacro7=,
                             %if &hazardratio = 1 %then %do;
 
                                 if calchazard = 1 then do;
-                                    if Ucomprisk[&time] <= pcomprisk then censor = 1;
+                                    if Ucomprisk[&time] <= pcomprisk then censor = 2;
                                     else censor = 0;
 
-                                    if censor = 1 then do ;
+                                    if censor = 2 then do ;
                                         newtime = &time ;
                                         &outc = .;
                                         mygood = 0 ;  /* do not want to simulate any further covariate history   */
@@ -6081,7 +6081,6 @@ not the time-varying covariates, which are handled below in %interactionsb*/
    %end;
 
 
-
     %* Generating time k covariates;
 
     
@@ -7372,20 +7371,23 @@ set _cont  ( where = ( substr(name,1,1)='s'
       
 data both ;
 set both ;
- 
-if &outc = 1 then event = 1 ;
-else event = 0 ;
+
+event = &outc ;
+
+*if &outc = 1 then event = 1 ;
+*else event = 0 ;
 if int = &firstint then int = 0;
 else int = 1 ;
 run;
 
  
- ods select none ;
+ *ods select none ;
  proc phreg data = both   ;
  ods output ParameterEstimates=_inthr0_  ; 
- model newtime*event(0) =  int / rl  ;
+ model newtime*event(0) =  int / rl  %if %bquote(&comprisk)^= %then eventcode=1 ; ;
+ %if %bquote(&comprisk)^= %then hazardratio 'Subdistribution Hazards' int ;;
  run;
- ods select all ;
+ *ods select all ;
 
 %if &bsample = 0 %then %do;
     proc sql ;
