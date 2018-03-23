@@ -1,7 +1,6 @@
 /*Example: outctype=binsurv*/
 
-%include '/proj/sas_macros/gformula/GFORMULA-SAS/gformula3.sas';
-*%include '/proj/sas_macros/gformula/August-2017/gformula3.sas';
+%include 'gformula3.sas';
 options linesize=88 pagesize=54;
 
 *options mprint mprintnest;
