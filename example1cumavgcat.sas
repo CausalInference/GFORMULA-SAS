@@ -1,7 +1,7 @@
 /*Example: outctype=binsurv*/
 
-*%include 'gformula3.sas';
-%include '/proj/sas_macros/gformula/hr_fix/GFORMULA-SAS/gformula3.sas';
+%include '/proj/sas_macros/gformula/GFORMULA-SAS/gformula3.sas';
+*%include '/proj/sas_macros/gformula/August-2017/gformula3.sas';
 options linesize=88 pagesize=54;
 
 *options mprint mprintnest;
@@ -103,7 +103,8 @@ run;
 
 **GFORMULA Call;
 title 'GFORMULA SAMPLE';
-options mprint notes ;
+ options notes mprint mprintnest  ;
+ *options nomlogic nomprint nonotes  ;
 %gformula(
 data= sample,
 id=id,
@@ -119,11 +120,8 @@ timeknots = 1 2 3 4 5,
 
 ncov=2,
 cov1  = hbp,    cov1otype  = 2, cov1ptype = tsswitch1,
-cov2  = act,    cov2otype  = 4, cov2ptype = lag2cub,
+cov2  = act,    cov2otype  = 4, cov2ptype = lag1cumavgcat, cov2knots=    1  20 40 60  : 3 25 45 65   ,
 
-hazardratio = 1 ,
-intcomp = 0 1 ,
-seed= 9458, nsamples = 0, numint=1
+seed= 9458, nsamples = 0, numint=0
 );
-
 
