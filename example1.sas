@@ -1,7 +1,7 @@
 /*Example: outctype=binsurv*/
 
-%include 'gformula3.sas';
-
+*%include 'gformula3.sas';
+%include '/proj/sas_macros/gformula/hr_fix/GFORMULA-SAS/gformula3.sas';
 options linesize=88 pagesize=54;
 
 *options mprint mprintnest;
@@ -103,7 +103,7 @@ run;
 
 **GFORMULA Call;
 title 'GFORMULA SAMPLE';
- 
+options mprint notes ;
 %gformula(
 data= sample,
 id=id,
@@ -121,7 +121,9 @@ ncov=2,
 cov1  = hbp,    cov1otype  = 2, cov1ptype = tsswitch1,
 cov2  = act,    cov2otype  = 4, cov2ptype = lag2cub,
 
-seed= 9458, nsamples = 10, numint=1
+hazardratio = 1 ,
+intcomp = 0 1 ,
+seed= 9458, nsamples = 0, numint=1
 );
 
 
