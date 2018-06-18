@@ -11,7 +11,7 @@ of the software. For questions and comments, email rwlogan@hsph.harvard.edu or j
 Copyright (c) 2007, 2017, The President and Fellows of Harvard College
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated 
-documentation files (the "Software"), to deal in the Software without restriction, including without limitation 
+documentation files (the "SoUftware"), to deal in the Software without restriction, including without limitation 
 the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, 
 and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -3162,7 +3162,7 @@ intusermacro7=,
                 
                 %if &hazardratio = 1 %then %do;
                     Uoutc[&time] = rand('uniform');
-                    %if %bquote(&comprisk)^=  %then Ucomprisk[time] = rand('uniform');;
+                    %if %bquote(&comprisk)^=  %then Ucomprisk[&time] = rand('uniform');;
                 %end;
                 /************************************************** 
                 need to re-create all the predictors since we have shifted the variables at the end of the loop and need to recreate any predictors
