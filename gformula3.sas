@@ -360,7 +360,7 @@ options mautosource minoperator ;
              %let cov&i.visitpelse = &tmp._b ;
       %end;
 
-       %if not(%upcase(&&cov&i.mtype)  in (  ALL , SOME, NOCHECK ) )   %then %let cov&i.mtype = all ; 
+       %if not(%upcase(&&cov&i.mtype)  in (  ALL , SOME , NOCHECK ) )   %then %let cov&i.mtype = all ; 
        %if %upcase(&&cov&i.ptype) eq TSSWITCH1   %then %let anytsswitch1 = 1;
        %if %upcase(&&cov&i.ptype) = CUMAVG or %upcase(&&cov&i.ptype) eq LAG1CUMAVG or %upcase(&&cov&i.ptype) eq LAG2CUMAVG  %then %do;
                 %let anylagcumavg = 1;
