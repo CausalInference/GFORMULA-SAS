@@ -1590,7 +1590,7 @@ options mautosource minoperator ;
         
        %let subseed = %eval(2*&seed);
        * _simuldata_ contains baseline variables ;
-       %if &nparam = &ssize %then %do;
+       %if &nsimul = &ssize %then %do;
             data simul;
             set _simuldata_;
             _sample_ = 0;
@@ -1733,7 +1733,8 @@ options mautosource minoperator ;
         /* idsamples containes number of times newid selected into current param data set */
         data simul ;
         merge _simuldata_  _idsamples;
-        by newid;         
+        by newid; 
+        _sample_ = &bsample ; 
         run;
 
         data simul ;
@@ -3867,7 +3868,7 @@ intusermacro7=,
      data finfin;
      set fin;      
 
-     %rescaleround; /* RESCALE AND ROUND OFF THE OUTPUT */
+     *%rescaleround; /* RESCALE AND ROUND OFF THE OUTPUT */
      %labels;       /* LABEL THE OUTPUT */
      run;
 
@@ -3903,7 +3904,7 @@ intusermacro7=,
      %end;
 
      %if &outctype=binsurv or &outctype=bineofu %then %do;
-          title6 "Observed risk= %sysevalf(&obspm) % &additional_text ";
+         ** title6 "Observed risk= %sysevalf(&obspm) % &additional_text ";
      %end;      
      %else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 %then %do;
           title6 "Observed mean= %sysevalf(&obspm) ";
@@ -6350,6 +6351,12 @@ not the time-varying covariates, which are handled below in %interactionsb*/
         cumsurv = cumsurv * surv;
         if _N_ = &timepoints then output; /* this is based on row number and not time value so there is no -1 here */
         run;
+
+proc print data = summed ;
+run;
+
+proc print data = cuminc ;
+run;
 
         proc datasets library=work nolist;
         delete    summed;
