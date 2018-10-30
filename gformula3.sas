@@ -3170,7 +3170,7 @@ intusermacro7=,
                 
                 %if &hazardratio = 1 %then %do;
                     Uoutc[&time] = rand('uniform');
-                    %if %bquote(&comprisk)^=  %then Ucomprisk[time] = rand('uniform');;
+                    %if %bquote(&comprisk)^=  %then Ucomprisk[&time] = rand('uniform');;
                 %end;
                 /************************************************** 
                 need to re-create all the predictors since we have shifted the variables at the end of the loop and need to recreate any predictors
