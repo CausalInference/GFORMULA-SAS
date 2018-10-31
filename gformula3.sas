@@ -12,6 +12,7 @@ Copyright (c) 2007, 2017, The President and Fellows of Harvard College
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated 
 documentation files (the "Software"), to deal in the Software without restriction, including without limitation 
+
 the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, 
 and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -1599,6 +1600,7 @@ options mautosource minoperator ;
         %else %do;
        
          
+
             proc surveyselect data=_simuldata_ out=simul noprint
                 method=urs  sampsize=&nsimul seed=&subseed;
             run;
@@ -1613,6 +1615,7 @@ options mautosource minoperator ;
             drop _copy_ numberhits ;
             run;
         %end;             
+                  
     %end;
 
     %else %do;
@@ -1644,8 +1647,9 @@ options mautosource minoperator ;
         _sample_ = &bsample ;
         run; 
 
+  
     * add in the variable numberhits for the number of times a subject is selected into the bootstrap sample ;
-        data param ;
+    data param ;
         merge _paramdata_ (in= p) _paramsample_;
         by newid ;
         if numberhits > 0 ; *delete those not selected into sample ;
@@ -1654,6 +1658,7 @@ options mautosource minoperator ;
         end;
         drop _i_ numberhits ;
         run;
+
 
        * reset the outcome and covariate bounds to that models and simulated 
         values depend on what would be the observed bounds ;
@@ -1762,6 +1767,7 @@ options mautosource minoperator ;
              drop _copy_ numberhits ;
              run;
          %end;
+
  
    
      %if &hazardratio = 1  AND &bootstrap_hazard = 0  %then %do;     
@@ -3867,8 +3873,7 @@ intusermacro7=,
 
      data finfin;
      set fin;      
-
-     *%rescaleround; /* RESCALE AND ROUND OFF THE OUTPUT */
+     %rescaleround; /* RESCALE AND ROUND OFF THE OUTPUT */
      %labels;       /* LABEL THE OUTPUT */
      run;
 
@@ -3904,7 +3909,7 @@ intusermacro7=,
      %end;
 
      %if &outctype=binsurv or &outctype=bineofu %then %do;
-         ** title6 "Observed risk= %sysevalf(&obspm) % &additional_text ";
+          title6 "Observed risk= %sysevalf(&obspm) % &additional_text ";
      %end;      
      %else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 %then %do;
           title6 "Observed mean= %sysevalf(&obspm) ";
@@ -5070,6 +5075,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
                 %else %if (&&cov&second.ptype=concat or &&cov&second.ptype=lag1cat or
                 &&cov&second.ptype=lag2cat or &&cov&second.ptype=lag3cat or
                 &&cov&second.ptype=skpcat )   %then   %let secondvarcat=1;
+
                 %else %if (&&cov&second.ptype=conspl or &&cov&second.ptype=lag1spl or
                 &&cov&second.ptype=lag2spl or &&cov&second.ptype=lag3spl or
                 &&cov&second.ptype=skpspl )  %then     %let secondvarspl=1;
@@ -6351,12 +6357,6 @@ not the time-varying covariates, which are handled below in %interactionsb*/
         cumsurv = cumsurv * surv;
         if _N_ = &timepoints then output; /* this is based on row number and not time value so there is no -1 here */
         run;
-
-proc print data = summed ;
-run;
-
-proc print data = cuminc ;
-run;
 
         proc datasets library=work nolist;
         delete    summed;

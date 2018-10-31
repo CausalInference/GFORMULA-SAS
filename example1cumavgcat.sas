@@ -1,6 +1,7 @@
 /*Example: outctype=binsurv*/
 
 %include 'gformula3.sas';
+
 options linesize=88 pagesize=54;
 
 *options mprint mprintnest;
