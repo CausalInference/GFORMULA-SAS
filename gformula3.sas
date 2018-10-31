@@ -11,7 +11,8 @@ of the software. For questions and comments, email rwlogan@hsph.harvard.edu or j
 Copyright (c) 2007, 2017, The President and Fellows of Harvard College
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated 
-documentation files (the "SoUftware"), to deal in the Software without restriction, including without limitation 
+documentation files (the "Software"), to deal in the Software without restriction, including without limitation 
+
 the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, 
 and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -1588,14 +1589,18 @@ options mautosource minoperator ;
         _sample_ = 0;
         run;
         
+       %let subseed = %eval(2*&seed);
+       * _simuldata_ contains baseline variables ;
+       %if &nsimul = &ssize %then %do;
+            data simul;
+            set _simuldata_;
+            _sample_ = 0;
+            run;
+        %end;
+        %else %do;
+       
+         
 
-       * data simul;
-       * set _simuldata_;
-       * _sample_ = 0;
-       * run;
-        
-        * _simuldata_ contains baseline variables ;
-         %let subseed = %eval(2*&seed);
             proc surveyselect data=_simuldata_ out=simul noprint
                 method=urs  sampsize=&nsimul seed=&subseed;
             run;
@@ -1609,7 +1614,8 @@ options mautosource minoperator ;
            
             drop _copy_ numberhits ;
             run;
-                    
+        %end;             
+                  
     %end;
 
     %else %do;
@@ -1637,10 +1643,11 @@ options mautosource minoperator ;
       this overrites the value in paramdata where newid and time agree. ;
    
         data _paramsample_ ;
-            set _idsamples ;
-            _sample_ = &bsample ;
+        set _idsamples ;
+        _sample_ = &bsample ;
         run; 
 
+  
     * add in the variable numberhits for the number of times a subject is selected into the bootstrap sample ;
     data param ;
         merge _paramdata_ (in= p) _paramsample_;
@@ -1650,7 +1657,8 @@ options mautosource minoperator ;
             output ;
         end;
         drop _i_ numberhits ;
-    run;
+        run;
+
 
        * reset the outcome and covariate bounds to that models and simulated 
         values depend on what would be the observed bounds ;
@@ -1726,34 +1734,40 @@ options mautosource minoperator ;
 
         * default simul data set is to take all subjects in param data set, number of subjects in nparam ;
   
-    * simuldata has one observation per person for time = 0 ;
+    * _simuldata_ has one observation per person for time = 0 ;
+        /* idsamples containes number of times newid selected into current param data set */
         data simul ;
-            merge _simuldata_  _idsamples;
-            by newid;         
+        merge _simuldata_  _idsamples;
+        by newid; 
+        _sample_ = &bsample ; 
         run;
 
         data simul ;
-            set simul ;
-            do _copy0_ = 1 to numberhits ;
+        set simul ;
+        do _copy0_ = 1 to numberhits ;
                 output ;
-            end;
-            drop numberhits _copy0_ ;
+        end;
+        drop numberhits _copy0_ ;
         run;
 
-        * now take a random sample of size nsimul ;
-        %let subseed = %eval(2*&seed);
-        proc surveyselect data = simul out = simul noprint
-                method=urs  sampsize=&nsimul seed=&subseed;
-        run;
+        /* want to sample when nsimul is different from size of param data set */
+        %if &nsimul ne &nparam %then %do;
+            * now take a random sample of size nsimul  when nsimul ne nparam ;
+            %let subseed = %eval(2*&seed);
+            proc surveyselect data = simul out = simul noprint
+                    method=urs  sampsize=&nsimul seed=&subseed;
+            run;
 
-        data simul ;
+            data simul ;
             set simul ;
             _sample_ = &bsample ;
-            do _copy_ = 1 to numberhits ;
-                output ;
-            end;
-            drop _copy_ numberhits ;
-        run;
+             do _copy_ = 1 to numberhits ;
+                    output ;
+             end;
+             drop _copy_ numberhits ;
+             run;
+         %end;
+
  
    
      %if &hazardratio = 1  AND &bootstrap_hazard = 0  %then %do;     
@@ -3859,7 +3873,6 @@ intusermacro7=,
 
      data finfin;
      set fin;      
-
      %rescaleround; /* RESCALE AND ROUND OFF THE OUTPUT */
      %labels;       /* LABEL THE OUTPUT */
      run;
