@@ -4,11 +4,11 @@ GFORMULA SAS MACRO
 
 Authors: Roger W. Logan, Jessica  G. Young, Sarah L. Taubman, Sally Picciotto, Goodarz Danaei, Miguel A. Hernán
 
-Version July 2017. This version includes options and improvements that are not compatible with previous versions 
+Version January 2019. This version includes options and improvements that are not compatible with previous versions 
 of the software. For questions and comments, email rwlogan@hsph.harvard.edu or jyoung@hsph.harvard.edu
  
 
-Copyright (c) 2007, 2017, The President and Fellows of Harvard College
+Copyright (c) 2007, 2019, The President and Fellows of Harvard College
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated 
 documentation files (the "Software"), to deal in the Software without restriction, including without limitation 
@@ -5075,7 +5075,6 @@ not the time-varying covariates, which are handled below in %interactionsb*/
                 %else %if (&&cov&second.ptype=concat or &&cov&second.ptype=lag1cat or
                 &&cov&second.ptype=lag2cat or &&cov&second.ptype=lag3cat or
                 &&cov&second.ptype=skpcat )   %then   %let secondvarcat=1;
-
                 %else %if (&&cov&second.ptype=conspl or &&cov&second.ptype=lag1spl or
                 &&cov&second.ptype=lag2spl or &&cov&second.ptype=lag3spl or
                 &&cov&second.ptype=skpspl )  %then     %let secondvarspl=1;
@@ -6320,6 +6319,16 @@ not the time-varying covariates, which are handled below in %interactionsb*/
 
             %genpred(sim,lagtype=1);   
         end;
+        else do ;
+            &&cov&i = &&cov&i.._l1 ;
+            s&&cov&i [&time] = &&cov&i ;
+            /* with a skip type variable there is no rndom visit process , so we do not need to update the next line 
+             %if &&usevisitp&i = 1 %then  s&&cov&i.randomvisitp[&time] = &&cov&i.randomvisitp ;; */
+            %*Generating derived variables (categories, etc);
+
+            %genpred(sim,lagtype=1);  
+        end;
+          
     %end; /* i */
 
 %mend simvar;
