@@ -174,7 +174,7 @@ options mautosource minoperator ;
     cov18visitpcount= , 
 
     cov19=,cov19otype=1,cov19ptype=,cov19mtype= all ,cov19cumint= ,cov19skip=-1,cov19inc=0,cov19knots=,cov19interact=,cov19wherem=(1=1), 
-    cov19wherenosim=(1=0),cov19nosimelsemacro= all ,  cov19class=, cov19classelse=,cov19addvars= ,cov19genmacro=,cov19modusermacro =,
+    cov19wherenosim=(1=0),cov19nosimelsemacro=  ,  cov19class=, cov19classelse=,cov19addvars= ,cov19genmacro=,cov19modusermacro =,
     cov19moddatausermacro =,cov19setblvar =,cov19simusermacro = ,cov19barray = ,cov19sarray =, cov19randomvisitp=,cov19visitpmaxgap=9e10,cov19visitpwherem=(1=1),
     cov19visitpcount= , 
 
