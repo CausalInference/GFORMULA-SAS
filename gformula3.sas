@@ -2985,7 +2985,7 @@ intusermacro7=,
      
 
    
-    data simulated&intno   ( keep = 
+    data simulated&intno   ( keep =  &fixedcov 
                                     intervened averinterv 
                                      
                                     %if &minimalistic = no %then %do;
