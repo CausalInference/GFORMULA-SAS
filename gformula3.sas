@@ -4,11 +4,14 @@ GFORMULA SAS MACRO
 
 Authors: Roger W. Logan, Jessica  G. Young, Sarah L. Taubman, Sally Picciotto, Goodarz Danaei, Miguel A. Hernán
 
+Version September 2021. This viersion includes fixes to rcspline macro for using negative knots and listpred for 
+including variabls of ptype cumavg twice in the model lists.
+
 Version January 2019. This version includes options and improvements that are not compatible with previous versions 
 of the software. For questions and comments, email rwlogan@hsph.harvard.edu or jyoung@hsph.harvard.edu
  
 
-Copyright (c) 2007, 2019, The President and Fellows of Harvard College
+Copyright (c) 2007, 2021, The President and Fellows of Harvard College
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated 
 documentation files (the "Software"), to deal in the Software without restriction, including without limitation 
