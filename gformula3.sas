@@ -63,7 +63,12 @@ options mautosource minoperator ;
     compriskwherenosim =(1=0), /* comprisk: (optional) condition under which not to simulate the comprisk under intervention but assign some fixed value at a 
                                 given time*/
     comprisknosimelsemacro =, /* user defined macro to evaluate simulated comprisk when  compriskeadwherenosim holds*/
-  
+    censor = , 
+	censorotype= ,
+	censorinteract= ,
+    censorwherem = (1=1), /* comprisk: (optional) condition under which to model outcome */
+    compevent = ,
+    
     fixedcov =,                /* predictors that are not predicted themselves */
     ncov =,                    /* number of (time-varying) covariates to be parametrically estimated */
 
@@ -243,7 +248,7 @@ options mautosource minoperator ;
     equalitiessimuldata =,    /*user defined macro that equates pre-baseline simulated vars to observed new change JGY*/
     eventaddvars =,         /*list of variables to be added to event predictor list new change JGY*/
     compriskaddvars =,
-    
+    censoraddvars= ,
     usebetadata = 0,
     betadata =,       /* data set to store parameter estimates */
     simuldata =,      /* data set to store simulated data */
@@ -292,8 +297,8 @@ options mautosource minoperator ;
 
     %* Setting some local parameters ;
     %local i j n intnum intstart  int bsample  uselabelo uselabelc ods_logit ods_reg ods_qlib    chunked seed_list seed_holder   ;
-    %local  ssize obsp outcpred compriskpred censlpred dimoutc dimcomprisk dimcensl    
-       outcmin outcmax outcninterx compriskninterx censlninterx covmeanname0  uselabelo uselabelc sample_hazard hazardname0 simulkeeplist;
+    %local  ssize obsp outcpred compriskpred censorpred censlpred dimoutc dimcomprisk dimcensl    
+       outcmin outcmax outcninterx compriskninterx censorninterx censlninterx covmeanname0  uselabelo uselabelc sample_hazard hazardname0 simulkeeplist;
     %local   cov0 cov0otype cov0ptype cov0mtype cov0skip cov0inc cov0knots cov0lev cov0interact cov0wherem cov0cumint
           cov0wherenosim cov0nosimelsemacro cov0class cov0classelse cov0addvars  cov0genmacro  cov0modusermacro 
           cov0moddatausermacro cov0setblvar cov0simusermacro cov0barray cov0sarray cov0randomvisitp cov0visitpmaxgap cov0visitpwherem
@@ -1060,6 +1065,9 @@ options mautosource minoperator ;
    %if %bquote(&comprisk)^= %then %do;
           %interactions(comprisk, ,,createlist);
    %end;
+   %if %bquote(&censor)^= %then %do;
+          %interactions(censor, ,,createlist);
+   %end;
    
    
    %do iii=0 %to &ncov;
@@ -1085,6 +1093,12 @@ options mautosource minoperator ;
        %if &checkaddvars = 1 %then %addvarcheck(vartype = 0, outvar = comprisk );
        %let compriskpred = &fixedcov %listpred(main,,0,&ncov,_l2,_l1)  &compriskaddvars %qcmpres(%interxarrays(main,comprisk))   ;
        %if &printlogstats = 1 %then %put  Censoring by death predictors are: &compriskpred;
+    %end;  
+
+	%if %bquote(&censor)^=  %then %do;
+       %if &checkaddvars = 1 %then %addvarcheck(vartype = 0, outvar = censor );
+       %let censorpred = &fixedcov %listpred(main,,0,&ncov,_l2,_l1)  &censoraddvars %qcmpres(%interxarrays(main,censor))   ;
+       %if &printlogstats = 1 %then %put  Censoring by lost-to-followup predictors are: &censorpred;
     %end;   
     
 
@@ -1494,7 +1508,9 @@ options mautosource minoperator ;
     %*Dataset for basis for parameter estimates;
     data _paramdata_;
         set _inputd_; 
-        keep  _sample_ newid _weight_ &outc &outcpred &comprisk %if %bquote(&comprisk)^=  %then %do; &compriskpred %end;                                             
+        keep  _sample_ newid _weight_ &outc &outcpred &comprisk %if %bquote(&comprisk)^=  %then %do; &compriskpred %end;  
+													   &censor %if %bquote(&censor)^=  %then %do; &censorpred %end; 
+													   &compevent
                                              &time  &wherevars  
             %do i = 0 %to &ncov ;
                  &&cov&i  &&cov&i.array 
@@ -1797,62 +1813,6 @@ options mautosource minoperator ;
     %if &printlogstats = 1 %then %put ;
     %if &printlogstats = 1 %then %put  Estimating parameters from bootstrap sample &bsample;
 
-     %if &check_cov_models = 1 OR &rungraphs = 1  %then %do;
-          
-          proc sql ;
-            create table 
-
-            %if &bsample = &sample_start %then &covmeanname ;  
-            %else _cov_mean_tmp ;  as
-            select &bsample as _sample_ , 
-                &time as _time_ , 
-                %if &outctype = binsurv %then %do;
-                      max(sum(&outc),0) as e,
-                      mean(&outc) as meanoutc ,
-                      %if %bquote(&comprisk)^= %then max(sum(&comprisk),0) as r , ;
-                      %else 0 as r , ;
-                      %if %bquote(&comprisk)^= %then mean(&comprisk) as meancomprisk , ;
-                      %else 0 as meancomprisk , ;                       
-                      count(&time) as n ,
-                %end;
-                %else %do;
-                     mean(&outc * _weight_ ) as &outc , 
-                %end;
-                %do i = 0 %to %eval( &ncov - 1) ;
-                     mean(&&cov&i %if &&cov&i.otype > 0 %then  * _weight_ ; ) as &&cov&i ,
-                     %if &&usevisitp&i = 1 %then mean(&&cov&i.randomvisitp * _weight_ ) as &&cov&i.randomvisitp  ,; 
-                %end;
-                %if &&usevisitp&ncov = 1 %then mean(&&cov&ncov.randomvisitp * _weight_ ) as &&cov&ncov.randomvisitp  ,; 
-                mean(&&cov&ncov %if &&cov&i.otype > 0 %then * _weight_ ; ) as &&cov&ncov 
-              
-           from param(keep = &time  _weight_  %do i = 0 %to &ncov;  &&cov&i &&cov&i.randomvisitp  %end; &outc &comprisk   )
-        
-           group by &time 
-           order by &time 
-           ;
-
-      
-      quit;
-
-        
-        %if &bsample > &sample_start  %then %do;
-           proc append base = &covmeanname data = _cov_mean_tmp  ;
-           run;
-
-           proc datasets library = work nolist ;
-                delete _cov_mean_tmp;
-          quit;
-
-        %end;  
-        %if &chunked = 1 %then %do;
-            
-            proc copy in = work out = &savelib   ;
-                select &covmeanname  ;
-            run;
-        %end;
-        
-     %end;
-
 
    sasfile param open;
 
@@ -2051,6 +2011,7 @@ options mautosource minoperator ;
             &ods_logit ;
              %if %bquote(&compriskwherem )^= %then where  &compriskwherem    ;;
             model &comprisk = &compriskpred %if &uselabelo = 1 %then / parmlabel ;;
+			%if %bquote(&censor) ^= %then output out=_comprisk_ (keep = newid &time &comprisk &censor &outc pCR_d ) pred = pCR_d ;;
             run;
         data comprisk;
             set comprisk;
@@ -2064,6 +2025,78 @@ options mautosource minoperator ;
             keep _sample_ bcomprisk00-bcomprisk&dimcomprisk;
         run;
 
+    %end;
+
+
+	 %if %bquote(&censor)^=  %then %do;
+        proc logistic descending data=param  ;
+            &ods_logit ;
+             %if %bquote(&censorwherem )^= %then where  &censorwherem    ;;
+            model &censor = &censorpred %if &uselabelo = 1 %then / parmlabel ;;
+			output out=_censor_ (keep = newid &time &censor &comprisk  &outc pC_d ) pred = pC_d ;
+            run;
+			%if %bquote(&compevent) ^= %then %do;
+
+			 	proc logistic descending data=param  ;
+            	&ods_logit ;
+             	%if %bquote(&censorwherem )^= %then where  &censorwherem    ;;
+            	model &compevent = &censorpred %if &uselabelo = 1 %then / parmlabel ;;
+				output out=_compevent_ (keep = newid &time &compevent &outc pCE_d ) pred = pCE_d ;
+            	run;
+			%end;
+
+			data _censor_ ;
+			set _censor_ ;
+			by newid ;
+			retain _wtC_ ;
+			if first.newid then _wtC_ = 1 ;
+			if &censor = 0 then _wtC_ = _wtC_ * (1/(1-pC_d));
+			else _wtC_ = _wtC_ * (1/pC_d);
+			%if %bquote(&compevent) = %then rename _wtC_ = _wt_ ;;
+			run;
+
+			%if %bquote(&compevent) ^= %then %do;
+		    	data _compevent_ ;
+				set _compevent_ ;
+				by newid ;
+				retain _wtCE_ ;
+				if first.newid then _wtCE_ = 1 ;
+				if &compevent = 0 then _wtCE_ = _wtCE_ * (1/(1-pCE_d));
+				else _wtCE_ = _wtCE_ * (1/pCE_d);
+				keep  newid &time &compevent _wtCE_ ; 
+				run;
+	
+				data _censor_ ;
+        	    merge _censor_ _compevent_ ;
+				by newid &time ;
+				_wt_ = _wtC_ * _wtCE_ ;
+				keep &time _wt_ &outc ;
+				run;
+			%end;
+
+			%if %bquote(&comprisk) ^= %then %do;
+				data _comprisk_ ;
+				set _comprisk_ ;
+				by newid ;
+				retain _wtCr_ ;
+				if first.newid then _wtCr_ = 1 ;
+				if &comprisk = 0 then _wtCr_ = _wtCr_ * (1/(1-pCR_d));
+				else _wtCr_ = _wtCr_ * (1/pCR_d);
+				keep newid &comprisk _wtCr_ ;	
+				run;
+			%end;
+
+			proc means data = _censor_ ;
+			class &time ;
+			var &outc &comprisk ;
+			types &time ;
+			weight _wt_ ;
+			output out = forwtY (keep = &time meanoutc %if %bquote(&comprisk) ^= %then meancomprisk ;) mean( &outc &comprisk) = meanoutc 
+			 %if %bquote(&comprisk) ^= %then meancomprisk ; ;
+			run;
+
+
+        
     %end;
     
      
@@ -2471,6 +2504,7 @@ options mautosource minoperator ;
     proc sort data=_beta_; by _sample_;
     run;
     
+
     %if &bsample =   &sample_end   %then %do;            
          
         
@@ -2484,6 +2518,79 @@ options mautosource minoperator ;
         %if &printlogstats = 1 %then %put ;
         
         %end;
+
+
+/******** move code for covbetas to end of submacro *****/
+
+
+     %if &check_cov_models = 1 OR &rungraphs = 1  %then %do;
+          %local dataholder ;
+		  %if &bsample = &sample_start %then %let dataholder = &covmeanname ;  
+          %else %let dataholder = _cov_mean_tmp ; 
+
+          proc sql ;
+            create table &dataholder  as
+            select &bsample as _sample_ , 
+                &time as _time_ , 
+                %if &outctype = binsurv %then %do;
+                      max(sum(&outc),0) as e,
+                      mean(&outc) as meanoutc ,
+                      %if %bquote(&comprisk)^= %then max(sum(&comprisk),0) as r , ;
+                      %else 0 as r , ;
+                      %if %bquote(&comprisk)^= %then mean(&comprisk) as meancomprisk , ;
+                      %else 0 as meancomprisk , ;                       
+                      count(&time) as n ,
+                %end;
+                %else %do;
+                     mean(&outc * _weight_ ) as &outc , 
+                %end;
+                %do i = 0 %to %eval( &ncov - 1) ;
+                     mean(&&cov&i %if &&cov&i.otype > 0 %then  * _weight_ ; ) as &&cov&i ,
+                     %if &&usevisitp&i = 1 %then mean(&&cov&i.randomvisitp * _weight_ ) as &&cov&i.randomvisitp  ,; 
+                %end;
+                %if &&usevisitp&ncov = 1 %then mean(&&cov&ncov.randomvisitp * _weight_ ) as &&cov&ncov.randomvisitp  ,; 
+                mean(&&cov&ncov %if &&cov&i.otype > 0 %then * _weight_ ; ) as &&cov&ncov 
+              
+           from param(keep = &time  _weight_  %do i = 0 %to &ncov;  &&cov&i &&cov&i.randomvisitp  %end; &outc &comprisk   )
+        
+           group by &time 
+           order by &time 
+           ;
+
+      
+      quit;
+
+	  %if %bquote(&censor) ^= %then %do;
+			data  &dataholder ;
+ 			merge  &dataholder forwtY (keep = &time meanoutc %if %bquote(&comprisk) ^= %then meancomprisk ; ) ;
+			by &time ;
+            run;
+	  %end;
+        
+        %if &bsample > &sample_start  %then %do;
+           proc append base = &covmeanname data = _cov_mean_tmp  ;
+           run;
+
+           proc datasets library = work nolist ;
+                delete _cov_mean_tmp;
+          quit;
+
+        %end;  
+        %if &chunked = 1 %then %do;
+            
+            proc copy in = work out = &savelib   ;
+                select &covmeanname  ;
+            run;
+        %end;
+        
+     %end;
+
+
+/********************************************************/
+
+
+
+
 
     proc datasets library=work nolist; 
         delete samplebetas outc %if &bsample > 0 %then  _paramsample_ ; 
