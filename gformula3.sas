@@ -2103,7 +2103,7 @@ options mautosource minoperator ;
 
 
 
-			proc means data = _censor_ noprint ;
+			proc means data = _censor_  ;
 			class &time ;
 			var &outc &comprisk ;
 			types &time ;
@@ -2135,7 +2135,7 @@ options mautosource minoperator ;
 					run;
 
 			   %end;
-        
+          %end;
     %end;
     
      
