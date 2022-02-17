@@ -64,7 +64,7 @@ options mautosource minoperator ;
                                 given time*/
     comprisknosimelsemacro =, /* user defined macro to evaluate simulated comprisk when  compriskeadwherenosim holds*/
     censor = , 
-	censorotype= ,
+	maxipw = p99 , /* pX or number for maximum value, calculated using proc means (needs to be valid value ) */
 	censorinteract= ,
     censorwherem = (1=1), /* comprisk: (optional) condition under which to model outcome */
     compevent = ,
@@ -394,7 +394,16 @@ options mautosource minoperator ;
 
     %local label_orig ;
     %let label_orig = %sysfunc(getoption(nolabel));
-    
+    /*************************
+	%if %bquote(&censor)^= %then %do;
+		%let check_cov_models = 1 ; 
+		%if %bquote(&covmeandata)= %then %do;
+	            %if &printlogstats = 1 %then %put  SETTING COVMEAN = _COVMEAN_ ;
+	            %let covmeandata = _covmean_ ;
+	    %end;
+	%end ;
+ *****************************/
+
     %if &rungraphs = 1 %then %do;
          %if %bquote(&covmeandata)= %then %do;
             %if &printlogstats = 1 %then %put  SETTING COVMEAN = _COVMEAN_ ;
@@ -2010,8 +2019,7 @@ options mautosource minoperator ;
         proc logistic descending data=param outest=comprisk ;
             &ods_logit ;
              %if %bquote(&compriskwherem )^= %then where  &compriskwherem    ;;
-            model &comprisk = &compriskpred %if &uselabelo = 1 %then / parmlabel ;;
-			%if %bquote(&censor) ^= %then output out=_comprisk_ (keep = newid &time &comprisk &censor &outc pCR_d ) pred = pCR_d ;;
+            model &comprisk = &compriskpred %if &uselabelo = 1 %then / parmlabel ;;		
             run;
         data comprisk;
             set comprisk;
@@ -2028,7 +2036,7 @@ options mautosource minoperator ;
     %end;
 
 
-	 %if %bquote(&censor)^=  %then %do;
+	 %if %bquote(&censor)^=  AND &check_cov_models = 1  %then %do;
         proc logistic descending data=param  ;
             &ods_logit ;
              %if %bquote(&censorwherem )^= %then where  &censorwherem    ;;
@@ -2074,19 +2082,28 @@ options mautosource minoperator ;
 				run;
 			%end;
 
-			%if %bquote(&comprisk) ^= %then %do;
-				data _comprisk_ ;
-				set _comprisk_ ;
-				by newid ;
-				retain _wtCr_ ;
-				if first.newid then _wtCr_ = 1 ;
-				if &comprisk = 0 then _wtCr_ = _wtCr_ * (1/(1-pCR_d));
-				else _wtCr_ = _wtCr_ * (1/pCR_d);
-				keep newid &comprisk _wtCr_ ;	
+			%if %upcase(%substr(&maxipw ,1,1)) = P %then %do; 
+
+				proc means data = _censor_ &maxipw noprint;
+				var _wt_ ;
+				output out = _p99_ (keep = _maxipw_) &maxipw = _maxipw_ ;
+				run;
+
+				data _null_;
+				set _p99_ ;
+				call symput('maxipw',trim(left(_maxipw_)));
 				run;
 			%end;
 
-			proc means data = _censor_ ;
+			data _censor_;
+			set _censor_ ;
+			if _wt_ > &maxipw then _wt_ = &maxipw;
+			run;
+
+
+
+
+			proc means data = _censor_ noprint ;
 			class &time ;
 			var &outc &comprisk ;
 			types &time ;
@@ -2096,6 +2113,28 @@ options mautosource minoperator ;
 			run;
 
 
+			%if &bsample = 0 %then %do;
+				%if &outctype = binsurv  %then %do;  
+	        		data cuminc;
+	        		set forwtY;
+	        		keep cuminc;
+	        		by &time;
+	        		retain cumsurv 1 cuminc 0;   
+					%if %bquote(&comprisk) = %then meancomprisk = 0 ;;
+	        		inc = cumsurv * meanoutc * (1.0 - meancomprisk) ;         
+	        		cuminc = cuminc + inc;
+	        		surv = (1.0 - meanoutc) * (1.0 - meancomprisk) ;         
+	        		cumsurv = cumsurv * surv;
+	        		if _N_ = &timepoints then call symput('obsp',trim(left(cuminc))); /* this is based on row number and not time value so there is no -1 here */
+	        		run;
+			   %end ;
+			   %else %do;
+					data cuminc ;
+					set forwtY ;
+					if _N_ = &timepoints then call symput('obsp',trim(left(meanoutc)));
+					run;
+
+			   %end;
         
     %end;
     
@@ -2523,7 +2562,7 @@ options mautosource minoperator ;
 /******** move code for covbetas to end of submacro *****/
 
 
-     %if &check_cov_models = 1 OR &rungraphs = 1  %then %do;
+     %if &check_cov_models = 1 OR &rungraphs = 1   %then %do;
           %local dataholder ;
 		  %if &bsample = &sample_start %then %let dataholder = &covmeanname ;  
           %else %let dataholder = _cov_mean_tmp ; 
@@ -3639,7 +3678,7 @@ intusermacro7=,
      %************ SUMMARIZING AND OUTPUTTING RESULTS; 
      %local i j k useboot prec ;
 
-     %if (&check_cov_models = 1 OR &rungraphs ) AND &runnc = 1 %then %do;
+     %if (&check_cov_models = 1 OR &rungraphs  ) AND &runnc = 1 %then %do;
 
 
           %if &save_raw_covmean = 1  %then %do;
@@ -5105,7 +5144,6 @@ not the time-varying covariates, which are handled below in %interactionsb*/
                 %else  %if( &&cov&first.ptype=conspl or &&cov&first.ptype=lag1spl or
                 &&cov&first.ptype=lag2spl or &&cov&first.ptype=lag3spl or
                 &&cov&first.ptype=skpspl)    %then   %let firstvarspl=1;
-
                 %else %if  &&cov&first.ptype=conqdc or &&cov&first.ptype=lag1qdc or
                 &&cov&first.ptype=lag2qdc or &&cov&first.ptype=lag3qdc or
                 &&cov&first.ptype=skpqdc    %then  %let firstvarqdc=1;
@@ -5126,7 +5164,6 @@ not the time-varying covariates, which are handled below in %interactionsb*/
                 %else %if &&cov&first.ptype = lag1cumavg  %then %let firstvarcum1 = 1 ;
 
                 %else %if &&cov&first.ptype = lag2cumavg    %then %let firstvarcum2 = 1;
-
 
                 %else %if &&cov&first.ptype = rcumavg    %then %let firstvarcum3 = 1;
             %end;            
@@ -5797,7 +5834,6 @@ not the time-varying covariates, which are handled below in %interactionsb*/
         %end;
             
         %if &&cov&i.ptype = skpcat   %then %do;
-
             %if &current = 1 %then  %makecat(&&cov&i, &&cov&i.knots, &&cov&i.lev);
             %if &lagged = 1 %then  %makecat(&&cov&i.._l1, &&cov&i.knots, &&cov&i.lev);
             

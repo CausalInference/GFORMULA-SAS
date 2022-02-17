@@ -102,9 +102,11 @@ run;
 
 **GFORMULA Call;
 title 'GFORMULA SAMPLE';
-options mprint notes nomlogic nosymbolgen;
+options mprint notes mlogic nosymbolgen;
 
-
+proc datasets library = work nolist ;
+save surv4_mar_d surv3_mar_d sample ;
+quit;
 
 proc sort data = surv4_mar_d out = test (drop = f1) ;
 by id t0 ;
@@ -158,7 +160,7 @@ cov2  = A,    cov2otype  = 3, cov2ptype = lag2bin, cov2mtype=nocheck, cov2addvar
 hazardratio = 0 ,
 intcomp = 0 1 ,
 seed= 9458, nsamples = 0, numint=0 , 
-check_cov_models = 1 ,
+check_cov_models = 0 ,
 rungraphs = 0 ,
 checkaddvars = 0 
 );
