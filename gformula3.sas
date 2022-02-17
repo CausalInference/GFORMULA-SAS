@@ -2108,8 +2108,14 @@ options mautosource minoperator ;
 			var &outc &comprisk ;
 			types &time ;
 			weight _wt_ ;
-			output out = forwtY (keep = &time meanoutc %if %bquote(&comprisk) ^= %then meancomprisk ;) mean( &outc &comprisk) = meanoutc 
-			 %if %bquote(&comprisk) ^= %then meancomprisk ; ;
+			%if &outctype=binsurv %then %do ;
+				output out = forwtY (keep = &time meanoutc %if %bquote(&comprisk) ^= %then meancomprisk ;) mean( &outc &comprisk) = meanoutc 
+			 	%if %bquote(&comprisk) ^= %then meancomprisk ; ;
+			%end;
+			%else %do ;
+				output out = forwtY (keep = &time &outc %if %bquote(&comprisk) ^= %then meancomprisk ;) mean( &outc &comprisk) = &outc 
+			 	%if %bquote(&comprisk) ^= %then meancomprisk ; ;
+			%end;
 			run;
 
 
@@ -2131,7 +2137,7 @@ options mautosource minoperator ;
 			   %else %do;
 					data cuminc ;
 					set forwtY ;
-					if _N_ = &timepoints then call symput('obsp',trim(left(meanoutc)));
+					if _N_ = &timepoints then call symput('obsp',trim(left(&outc)));
 					run;
 
 			   %end;
@@ -2601,7 +2607,12 @@ options mautosource minoperator ;
 
 	  %if %bquote(&censor) ^= %then %do;
 			data  &dataholder ;
- 			merge  &dataholder forwtY (keep = &time meanoutc %if %bquote(&comprisk) ^= %then meancomprisk ; ) ;
+			%if &outctype = binsurv %then %do;
+ 				merge  &dataholder forwtY (keep = &time meanoutc %if %bquote(&comprisk) ^= %then meancomprisk ; ) ;
+			%end;
+			%else %do;
+				merge  &dataholder forwtY (keep = &time &outc %if %bquote(&comprisk) ^= %then meancomprisk ; ) ;
+			%end;
 			by &time ;
             run;
 	  %end;
@@ -5144,6 +5155,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
                 %else  %if( &&cov&first.ptype=conspl or &&cov&first.ptype=lag1spl or
                 &&cov&first.ptype=lag2spl or &&cov&first.ptype=lag3spl or
                 &&cov&first.ptype=skpspl)    %then   %let firstvarspl=1;
+
                 %else %if  &&cov&first.ptype=conqdc or &&cov&first.ptype=lag1qdc or
                 &&cov&first.ptype=lag2qdc or &&cov&first.ptype=lag3qdc or
                 &&cov&first.ptype=skpqdc    %then  %let firstvarqdc=1;
@@ -5834,6 +5846,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
         %end;
             
         %if &&cov&i.ptype = skpcat   %then %do;
+
             %if &current = 1 %then  %makecat(&&cov&i, &&cov&i.knots, &&cov&i.lev);
             %if &lagged = 1 %then  %makecat(&&cov&i.._l1, &&cov&i.knots, &&cov&i.lev);
             
