@@ -2059,7 +2059,7 @@ options mautosource minoperator ;
 			retain _wtC_ ;
 			if first.newid then _wtC_ = 1 ;
 			if &censor = 0 then _wtC_ = _wtC_ * (1/(1-pC_d));
-			else _wtC_ = _wtC_ * (1/pC_d);
+			if _wtC_ = _wtC_ * 0;
 			%if %bquote(&compevent) = %then rename _wtC_ = _wt_ ;;
 			run;
 
@@ -2070,7 +2070,7 @@ options mautosource minoperator ;
 				retain _wtCE_ ;
 				if first.newid then _wtCE_ = 1 ;
 				if &compevent = 0 then _wtCE_ = _wtCE_ * (1/(1-pCE_d));
-				else _wtCE_ = _wtCE_ * (1/pCE_d);
+				else _wtCE_ = _wtCE_ * 0;
 				keep  newid &time &compevent _wtCE_ ; 
 				run;
 	
