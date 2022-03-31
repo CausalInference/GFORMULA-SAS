@@ -117,7 +117,7 @@ proc datasets library = work nolist ;
 save surv4_mar_d surv3_mar_d sample ;
 quit;
 
-proc sort data = surv3_mar_d out = fortesting (drop = f1) ;
+proc sort data = surv4_mar_d out = fortesting (drop = f1) ;
 by id t0 ;
 run;
 
@@ -146,7 +146,7 @@ run;
  
 %let todaysDate = %sysfunc(today(), date9.);
 
-*options notes mprint mprintnest ;
+options notes mprint mprintnest ;
 
 %gformula(
 data= fortesting,
@@ -158,13 +158,14 @@ outc=y,
 outctype=binsurv,
 eventaddvars = L L_l1 A A_l1 ,
 
-comprisk =  ,
-compriskaddvars = L L_l1 A A_l1 ,
+compevent = d ,
+compeventaddvars = L L_l1 A A_l1 ,
 
-censor =   c ,
+censor =    ,
 censoraddvars = L L_l1 A A_l1 ,
 maxipw = 1000 ,
-censorcomp =  ,
+/* cesnor = c ::: scenario 1 -> compevent_cens = 1 , scenario 2 -> compevent_cens = 0 , scenario 3 compevent = blank and compevent_cens = 0 ****/
+compevent_cens  = 0   , /* = 0 then compevent is a competing risk , = 1 then compevent is a censoring event */
 
 fixedcov = ,
 timeptype= conbin, 
@@ -176,13 +177,13 @@ cov2  = A,    cov2otype  = 3, cov2ptype = lag2bin, cov2mtype=nocheck, cov2addvar
 
 hazardratio = 0 ,
 intcomp = 0 1 ,
-seed= 9458, nsamples = 10, numint=0 , 
-check_cov_models = 1 ,
-save_raw_covmean = 1,
-print_cov_means = 1,
-rungraphs = 1 ,
-
- graphfile= /proj/sas_macros/gformula/master_branch/new_censoring/GFORMULA-SAS/scenario0_&todaysDate..pdf,
+seed= 9458, nsamples = 0, numint=0 , 
+check_cov_models = 0 ,
+save_raw_covmean = 0,
+print_cov_means = 0,
+rungraphs = 0 ,
+graphfile=/tmp/g.pdf ,
+/* graphfile= /proj/sas_macros/gformula/master_branch/new_censoring/GFORMULA-SAS/scenario0_&todaysDate..pdf, */
 checkaddvars = 0 
 );
 

@@ -701,7 +701,7 @@ options mautosource minoperator ;
                             %do j = 1 %to %eval(&timepoints);
                                 %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ;
                                 s&&cov&i..&j
-								%if &intno = 0 AND %bquote(&censor)^= %then %do ;
+								%if &intno = 0 /* AND %bquote(&censor)^= ****/ %then %do ;
 									ncs&&cov&i..&j %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j ;
 								%end;
                             %end;
@@ -727,7 +727,7 @@ options mautosource minoperator ;
                                 %do j = 1 %to %eval(&timepoints);
                                     %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ;
                                     s&&cov&i..&j
-									%if &intno = 0 AND %bquote(&censor)^= %then  %do;
+									%if &intno = 0 /** AND %bquote(&censor)^=  **/ %then  %do;
 										ncs&&cov&i..&j %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j ;
 									 %end ;
                                 %end;
@@ -764,7 +764,7 @@ options mautosource minoperator ;
                         %do i = 1 %to &ncov;
                             %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ;
                             s&&cov&i..&j
-							%if &intno = 0 AND %bquote(&censor)^= %then  %do;
+							%if &intno = 0 /*** AND %bquote(&censor)^=  ***/ %then  %do;
 								ncs&&cov&i..&j %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j ;
 							 %end;
                         %end;
@@ -2878,7 +2878,7 @@ options mautosource minoperator ;
                            %do j = 1 %to %eval(&timepoints );
                               %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ;
                               s&&cov&i..&j 
-							  %if &intno = 0 AND %bquote(&censor)^= %then  %do;
+							  %if &intno = 0 /*** AND %bquote(&censor)^=  ****/ %then  %do;
 									ncs&&cov&i..&j %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j ;
 							   %end;
                           %end;
@@ -2898,7 +2898,7 @@ options mautosource minoperator ;
                                %do j = 1 %to %eval(&timepoints);
                                   %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ;
                                   s&&cov&i..&j
-								  %if &intno = 0 AND %bquote(&censor)^= %then %do;
+								  %if &intno = 0 /*** AND %bquote(&censor)^= ***/ %then %do;
 										ncs&&cov&i..&j %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j ;
 								   %end;
                                %end;
@@ -2922,7 +2922,7 @@ options mautosource minoperator ;
                            %do j = 1 %to %eval(&timepoints);
                               %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ; 
                               s&&cov&i..&j
-							  %if &intno = 0 AND %bquote(&censor)^= %then %do;
+							  %if &intno = 0 /*** AND %bquote(&censor)^=  ***/  %then %do;
 									ncs&&cov&i..&j %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j ;
 							   %end;
                           %end;
@@ -2941,7 +2941,7 @@ options mautosource minoperator ;
                                    %do j = 1 %to %eval(&timepoints);
                                       %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j._min ; 
                                       s&&cov&i..&j._min
-									  %if &intno = 0 AND %bquote(&censor)^= %then  %do ;
+									  %if &intno = 0 /**** AND %bquote(&censor)^= ****/ %then  %do ;
 											ncs&&cov&i..&j._min %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j._min ;
 										%end;
                                    %end;
@@ -2962,7 +2962,7 @@ options mautosource minoperator ;
                            %do j = 1 %to %eval(&timepoints);
                               %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ; 
                               s&&cov&i..&j
-							  %if &intno = 0 AND %bquote(&censor)^= %then %do;
+							  %if &intno = 0 /*** AND %bquote(&censor)^= ***/ %then %do;
 									ncs&&cov&i..&j %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j ;
 							   %end;
                           %end;
@@ -2981,7 +2981,7 @@ options mautosource minoperator ;
                                     %do j = 1 %to %eval(&timepoints);
                                         %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j._max ; 
                                         s&&cov&i..&j._max
-										%if &intno = 0 AND %bquote(&censor)^= %then %do;
+										%if &intno = 0 /*** AND %bquote(&censor)^=  ****/ %then %do;
 											ncs&&cov&i..&j._max %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j._max ;
 										 %end;
                                     %end;
@@ -3026,7 +3026,7 @@ options mautosource minoperator ;
                         %do i = 1 %to &ncov;
                              %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ; 
                             s&&cov&i..&j
-							%if &intno = 0 AND %bquote(&censor)^= %then  %do; 
+							%if &intno = 0 /***  AND %bquote(&censor)^=  ***/ %then  %do; 
 								ncs&&cov&i..&j %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j ;
 							 %end;
                         %end;
@@ -3071,7 +3071,7 @@ options mautosource minoperator ;
 
 
 /*** temp code for censoring ****/
-%if &intno = 0 AND %bquote(&censor) ^= %then %do;
+%if &intno = 0 /*** AND %bquote(&censor) ^= ****/ %then %do;
 	data interv&intno ;
 	merge interv&intno surv_tmp&intno (keep = surv1 - surv&timepoints );
 	array surv{&timepoints } ;
@@ -3115,7 +3115,7 @@ options mautosource minoperator ;
                      %do j = 1 %to %eval(&timepoints);
                            %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ; 
                           s&&cov&i..&j
-						  %if &intno = 0 AND %bquote(&censor)^= %then  %do;
+						  %if &intno = 0 /*** AND %bquote(&censor)^= ***/ %then  %do;
 								ncs&&cov&i..&j %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j ;
 						   %end;
                       %end;
@@ -3139,7 +3139,7 @@ options mautosource minoperator ;
                      %do j = 1 %to %eval(&timepoints);
                           %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j._max ;
                          s&&cov&i..&j._max
-						 %if &intno = 0 AND %bquote(&censor)^= %then %do;
+						 %if &intno = 0 /**** AND %bquote(&censor)^= ***/ %then %do;
 								ncs&&cov&i..&j._max %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j._max ;
 						 %end;
                       %end;
@@ -3166,7 +3166,7 @@ options mautosource minoperator ;
                      %do j = 1 %to %eval(&timepoints);
                          %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j._min ;
                          s&&cov&i..&j._min
-						 %if &intno = 0 AND %bquote(&censor)^= %then %do;
+						 %if &intno = 0 /****  AND %bquote(&censor)^= ***/ %then %do;
 								ncs&&cov&i..&j._min %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j._min ;
 						  %end;
                       %end;
@@ -3279,7 +3279,7 @@ intusermacro7=,
                                             %do j = 1 %to &timepoints;
                                                s&&cov&i..&j
                                                %if &&usevisitp&i = 1 %then   s&&cov&i.randomvisitp.&j ;
-											   %if (&intno = 0 AND %bquote(&censor) ^= ) %then  %do;
+											   %if (&intno = 0 /* AND %bquote(&censor) ^= */ ) %then  %do;
                                                         ncs&&cov&i..&j  
 														%if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j ;
 											   %end;
@@ -3414,7 +3414,7 @@ intusermacro7=,
                 array s&&cov&n {0:%eval(&timepoints - 1) }   ;
                 s&&cov&n [0] = &&cov&n ;
 
-				%if &intno = 0 AND %bquote(&censor) ^= %then %do;
+				%if &intno = 0 /** AND %bquote(&censor) ^= ***/ %then %do;
 					array ncs&&cov&n {0:%eval(&timepoints - 1) } ;
 					%if &&usevisitp&n = 1 %then array ncs&&cov&n.randomvisitp{0:%eval(&timepoints - 1)};;
 				%end;
@@ -3913,7 +3913,6 @@ intusermacro7=,
           by _sample_ ;
           run;
 
-
           data _diff_mean ;
           merge &covmeanname  (keep = _sample_ 
                %do i = 1 %to &ncov ;
@@ -3925,24 +3924,23 @@ intusermacro7=,
                interv0_all(keep = _sample_ 
                %do i = 1 %to &ncov ;
                     %do k = 1 %to %eval(&timepoints);
-                         %if %bquote(&censor) = %then s&&cov&i..&k ;
-						 %if %bquote(&censor)^= %then  ncs&&cov&i..&k ; 
+                       /***  s&&cov&i..&k ***/
+					      ncs&&cov&i..&k 
                          %if &&usevisitp&i = 1 %then %do ;
-						    %if %bquote(&censor) =  %then 	s&&cov&i.randomvisitp.&k ;
-                            %if %bquote(&censor)^=  %then ncs&&cov&i.randomvisitp.&k ;
+						    /***	s&&cov&i.randomvisitp.&k  ***/
+						     ncs&&cov&i..randomvisitp.&k
                          %end;     
                     %end;
                %end; 
-			   %if %bquote(&censor) ^= %then %do;
+			
 				  rename = (
 					%do i = 1 %to &ncov ;
 	                    %do k = 1 %to %eval(&timepoints);	                          
 						   ncs&&cov&i..&k = s&&cov&i..&k 
-						 %if &&usevisitp&i = 1 %then  ncs&&cov&i.randomvisitp.&k = s&&cov&i.randomvisitp.&k ;  
-	                    %end;
-               %end; 
-				  )
-			   %end;
+						   %if &&usevisitp&i = 1 %then  ncs&&cov&i.randomvisitp.&k = s&&cov&i.randomvisitp.&k ;  
+	                    %end;               				  
+			   		%end; 
+					 )
 			);
 
            %do i = 1 %to &ncov ;
@@ -6747,7 +6745,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
 		    /* when placing this code at the top before cumsurv has been updated has the same
 		       effect as using time - 1 in the array for cumsurvr or uses the previous value of 
 		       cumsurv */
-         	%if &intno = 0 AND %bquote(&censor) ^= %then %do;
+         	%if &intno = 0 /**** AND %bquote(&censor) ^= ****/ %then %do;
 				%do myi = 1 %to &ncov ;				   
 					ncs&&cov&myi [ time] = s&&cov&myi [ time] * cumsurv ;
 					%if &&usevisitp&myi = 1 %then ncs&&cov&myi.randomvisitp [ time ] = s&&cov&myi.randomvisitp [ time] * cumsurv  ;;
@@ -7649,6 +7647,7 @@ set _cont  ( where = ( substr(name,1,1)='s'
        treplay &graphlist ;
        run;
        quit;
+
        %do mypair = 1 %to &mycount ;
  
             %if &sixgraphs = 0 %then %do ;
