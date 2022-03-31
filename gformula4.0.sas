@@ -63,11 +63,12 @@ options mautosource minoperator ;
     compriskwherenosim =(1=0), /* comprisk: (optional) condition under which not to simulate the comprisk under intervention but assign some fixed value at a 
                                 given time*/
     comprisknosimelsemacro =, /* user defined macro to evaluate simulated comprisk when  compriskeadwherenosim holds*/
+
     censor = , 
 	maxipw = p99 , /* pX or number for maximum value, calculated using proc means (needs to be valid value ) */
 	censorinteract= ,
     censorwherem = (1=1), /* comprisk: (optional) condition under which to model outcome */
-    compevent = ,
+    censorcomp = ,
     
     fixedcov =,                /* predictors that are not predicted themselves */
     ncov =,                    /* number of (time-varying) covariates to be parametrically estimated */
@@ -313,6 +314,8 @@ options mautosource minoperator ;
     %let covlist = ;
     %if %symexist(enforcegap) = 0 %then %let enforcegap = 0 ; 
 
+	%if &minimalistic = 1 %then %let minimalistic = yes ;
+	%else %if &minimalistic = 0 %then %let minimalistic = no ;
     %let minimalistic = %lowcase(&minimalistic);
     %let testing = %lowcase(&testing);
     %if &testing = yes %then %do;
@@ -695,6 +698,7 @@ options mautosource minoperator ;
                             %do j = 1 %to %eval(&timepoints);
                                 %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ;
                                 s&&cov&i..&j
+								%if &intno = 0 AND %bquote(&censor)^= %then  ncs&&cov&i..&j ; 
                             %end;
                         %end; 
                     %end;
@@ -718,6 +722,7 @@ options mautosource minoperator ;
                                 %do j = 1 %to %eval(&timepoints);
                                     %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ;
                                     s&&cov&i..&j
+									%if &intno = 0 AND %bquote(&censor)^= %then  ncs&&cov&i..&j ; 
                                 %end;
                             %end;  
                         %end;
@@ -752,6 +757,7 @@ options mautosource minoperator ;
                         %do i = 1 %to &ncov;
                             %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ;
                             s&&cov&i..&j
+							%if &intno = 0 AND %bquote(&censor)^= %then  ncs&&cov&i..&j ; 
                         %end;
                     %end;  
                 %end;
@@ -1519,7 +1525,7 @@ options mautosource minoperator ;
         set _inputd_; 
         keep  _sample_ newid _weight_ &outc &outcpred &comprisk %if %bquote(&comprisk)^=  %then %do; &compriskpred %end;  
 													   &censor %if %bquote(&censor)^=  %then %do; &censorpred %end; 
-													   &compevent
+													   &censorcomp
                                              &time  &wherevars  
             %do i = 0 %to &ncov ;
                  &&cov&i  &&cov&i.array 
@@ -1681,11 +1687,26 @@ options mautosource minoperator ;
         merge _paramdata_ (in= p) _paramsample_;
         by newid ;
         if numberhits > 0 ; *delete those not selected into sample ;
-        do _i_ = 1 to numberhits ; * make numberhits copies of each remaining subject ;
+        do _copy_ = 1 to numberhits ; * make numberhits copies of each remaining subject ;
             output ;
         end;
-        drop _i_ numberhits ;
+        drop numberhits 
+             %if %bquote(&censor) = %then _copy_ ; ;
         run;
+
+
+	%if %bquote(&censor) ^= %then %do;
+		proc sort data = param ;
+		by newid _copy_ &time ;
+		run;
+
+		data param ;
+		set param (drop = newid _copy_ );
+		retain newid ;
+		if _n_ = 1 then newid = 0 ;
+		if &time = 0 then newid = newid + 1 ;
+	    run;
+	%end;
 
 
        * reset the outcome and covariate bounds to that models and simulated 
@@ -2037,19 +2058,26 @@ options mautosource minoperator ;
 
 
 	 %if %bquote(&censor)^=  AND &check_cov_models = 1  %then %do;
+
+		%local covlisttmp ;
+		%do i = 1 %to &ncov ;
+			%let covlisttmp = &covlisttmp &&cov&i ;
+		 %end;
+
+
         proc logistic descending data=param  ;
             &ods_logit ;
              %if %bquote(&censorwherem )^= %then where  &censorwherem    ;;
             model &censor = &censorpred %if &uselabelo = 1 %then / parmlabel ;;
-			output out=_censor_ (keep = newid &time &censor &comprisk  &outc pC_d ) pred = pC_d ;
+			output out=_censor_ (keep = newid &time &censor &comprisk  &outc pC_d  &covlisttmp ) pred = pC_d ;
             run;
-			%if %bquote(&compevent) ^= %then %do;
+			%if %bquote(&censorcomp) ^= %then %do;
 
 			 	proc logistic descending data=param  ;
             	&ods_logit ;
              	%if %bquote(&censorwherem )^= %then where  &censorwherem    ;;
-            	model &compevent = &censorpred %if &uselabelo = 1 %then / parmlabel ;;
-				output out=_compevent_ (keep = newid &time &compevent &outc pCE_d ) pred = pCE_d ;
+            	model &censorcomp = &censorpred %if &uselabelo = 1 %then / parmlabel ;;
+				output out=_censorcomp_ (keep = newid &time &censorcomp &outc pCE_d ) pred = pCE_d ;
             	run;
 			%end;
 
@@ -2058,52 +2086,61 @@ options mautosource minoperator ;
 			by newid ;
 			retain _wtC_ ;
 			if first.newid then _wtC_ = 1 ;
+			_wtCl1_ = _wtC_ ; * the retain statement is the lagged value before it is updated below ;
 			if &censor = 0 then _wtC_ = _wtC_ * (1/(1-pC_d));
 			else _wtC_ = _wtC_ * 0; /* censor = 1 or missing */
-			%if %bquote(&compevent) = %then rename _wtC_ = _wt_ ;;
+			%if %bquote(&censorcomp) = %then rename _wtC_ = _wt_  _wtCl1_ = _wtl1_ ;;
 			run;
 
-			%if %bquote(&compevent) ^= %then %do;
-		    	data _compevent_ ;
-				set _compevent_ ;
+			%if %bquote(&censorcomp) ^= %then %do;
+		    	data _censorcomp_ ;
+				set _censorcomp_ ;
 				by newid ;
 				retain _wtCE_ ;
 				if first.newid then _wtCE_ = 1 ;
-				if &compevent = 0 then _wtCE_ = _wtCE_ * (1/(1-pCE_d));
-				else _wtCE_ = _wtCE_ * 0; /* compevent = 1 or missing */
-				keep  newid &time &compevent _wtCE_ ; 
+				_wtCEl1_ = _wtCE_;
+				
+				if &censorcomp = 0 then _wtCE_ = _wtCE_ * (1/(1-pCE_d));
+				else _wtCE_ = _wtCE_ * 0; /* censorcomp = 1 or missing */
+				keep  newid &time &censorcomp _wtCE_ _wtCEl1_ ; 
 				run;
 	
 				data _censor_ ;
-        	    merge _censor_ _compevent_ ;
+        	    merge _censor_ _censorcomp_ ;
 				by newid &time ;
 				_wt_ = _wtC_ * _wtCE_ ;
-				keep &time _wt_ &outc ;
+				_wtl1_ = _wtCl1_ * _wtCEl1_ ;
+				keep &time _wt_ _wtl1_ &covlisttmp &outc &comprisk ;
 				run;
 			%end;
 
 			%if %upcase(%substr(&maxipw ,1,1)) = P %then %do; 
 
-				proc means data = _censor_ &maxipw noprint;
-				var _wt_ ;
-				output out = _p99_ (keep = _maxipw_) &maxipw = _maxipw_ ;
+				proc means data = _censor_ &maxipw ;
+				var _wt_ _wtl1_;
+				output out = _p99_ (keep = _maxipw_ _maxipwl1_) &maxipw (_wt_ _wtl1_ ) = _maxipw_ _maxipwl1_   ;
 				run;
 
 				data _null_;
 				set _p99_ ;
 				call symput('maxipw',trim(left(_maxipw_)));
+				call symput('maxipwl1',trim(left(_maxipwl1_)));
 				run;
+			%end;
+			%else %do;
+				%let maxipwl1 = &maxipw ;
 			%end;
 
 			data _censor_;
 			set _censor_ ;
 			if _wt_ > &maxipw then _wt_ = &maxipw;
+			if _wtl1_ > &maxipwl1 then _wtl1_ = &maxipwl1 ;
 			run;
 
 
 
 
-			proc means data = _censor_  ;
+			proc means data = _censor_   ;
 			class &time ;
 			var &outc &comprisk ;
 			types &time ;
@@ -2115,6 +2152,20 @@ options mautosource minoperator ;
 			%else %do ;
 				output out = forwtY (keep = &time &outc %if %bquote(&comprisk) ^= %then meancomprisk ;) mean( &outc &comprisk) = &outc 
 			 	%if %bquote(&comprisk) ^= %then meancomprisk ; ;
+			%end;
+			run;
+			*calculate E[L_k * (1-Y_k) &W_{k-1} ] / E[(1-Y_k)*W_{k-1}]
+			 If there is a L_k then it must be that Y_k = 0 , Same as E[L_k * W_{k-1}]/E[W_{k-1}] ;
+			proc means data = _censor_    ;
+			class &time ;
+			var &covlisttmp ;
+			types &time ;
+			weight _wtl1_ ;
+			%if &outctype=binsurv %then %do ;
+				output out = forwtCov (keep = &time &covlisttmp) mean( &covlisttmp) = &covlisttmp ;
+			%end;
+			%else %do ;
+				output out = forwtCov (keep = &time &covlisttmp) mean( &covlisttmp) = &covlisttmp ;
 			%end;
 			run;
 
@@ -2608,13 +2659,18 @@ options mautosource minoperator ;
 	  %if %bquote(&censor) ^= %then %do;
 			data  &dataholder ;
 			%if &outctype = binsurv %then %do;
- 				merge  &dataholder forwtY (keep = &time meanoutc %if %bquote(&comprisk) ^= %then meancomprisk ; ) ;
+ 				merge  &dataholder forwtY (keep = &time meanoutc %if %bquote(&comprisk) ^= %then meancomprisk ; ) forwtCov (keep = &time &covlisttmp ) ;
 			%end;
 			%else %do;
-				merge  &dataholder forwtY (keep = &time &outc %if %bquote(&comprisk) ^= %then meancomprisk ; ) ;
+				merge  &dataholder forwtY (keep = &time &outc %if %bquote(&comprisk) ^= %then meancomprisk ;)  forwtCov (keep = &time &covlisttmp )  ;
 			%end;
 			by &time ;
             run;
+
+
+			proc datasets library = work nolist ;
+			delete _censor_ forwtY forwtCov;
+			quit;
 	  %end;
         
         %if &bsample > &sample_start  %then %do;
@@ -2809,13 +2865,15 @@ options mautosource minoperator ;
                         %do i = 1 %to &ncov;
                            %do j = 1 %to %eval(&timepoints );
                               %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ;
-                              s&&cov&i..&j                          
+                              s&&cov&i..&j 
+							  %if &intno = 0 AND %bquote(&censor)^= %then  ncs&&cov&i..&j ; 
                           %end;
                        %end; 
                    %end;)  = %if &outctype=binsurv %then %do;
                                 pd  
                                 %do j = 1 %to %eval(&timepoints);
                                     s&outc.&j
+
                                 %end;
                              %end;
                              %else s&outc ;
@@ -2826,6 +2884,7 @@ options mautosource minoperator ;
                                %do j = 1 %to %eval(&timepoints);
                                   %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ;
                                   s&&cov&i..&j
+								  %if &intno = 0 AND %bquote(&censor)^= %then  ncs&&cov&i..&j ; 
                                %end;
                            %end;  
                        %end;
@@ -2847,6 +2906,7 @@ options mautosource minoperator ;
                            %do j = 1 %to %eval(&timepoints);
                               %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ; 
                               s&&cov&i..&j
+							  %if &intno = 0 AND %bquote(&censor)^= %then  ncs&&cov&i..&j ; 
                           %end;
                        %end; 
                     %end;) = %if &outctype=binsurv %then %do;
@@ -2863,6 +2923,7 @@ options mautosource minoperator ;
                                    %do j = 1 %to %eval(&timepoints);
                                       %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j._min ; 
                                       s&&cov&i..&j._min
+									  %if &intno = 0 AND %bquote(&censor)^= %then  ncs&&cov&i..&j._min ; 
                                    %end;
                                %end;
                            %end;                               
@@ -2881,6 +2942,7 @@ options mautosource minoperator ;
                            %do j = 1 %to %eval(&timepoints);
                               %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ; 
                               s&&cov&i..&j
+							  %if &intno = 0 AND %bquote(&censor)^= %then  ncs&&cov&i..&j ; 
                           %end;
                        %end; 
                     %end; ) =%if &outctype=binsurv %then %do;
@@ -2897,6 +2959,7 @@ options mautosource minoperator ;
                                     %do j = 1 %to %eval(&timepoints);
                                         %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j._max ; 
                                         s&&cov&i..&j._max
+										%if &intno = 0 AND %bquote(&censor)^= %then  ncs&&cov&i..&j._max ; 
                                     %end;
                                 %end; 
                              %end;
@@ -2927,8 +2990,9 @@ options mautosource minoperator ;
             keep int int2 _sample_ n %if &outctype=binsurv %then %do;
                                         pd 
                                         %do j = 1 %to %eval(&timepoints);
-                                            s&outc.&j
+                                            s&outc.&j 										
                                         %end;
+									
                                      %end;
                                     %else s&outc ;
                                     intervened averinterv 
@@ -2938,6 +3002,7 @@ options mautosource minoperator ;
                         %do i = 1 %to &ncov;
                              %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ; 
                             s&&cov&i..&j
+							%if &intno = 0 AND %bquote(&censor)^= %then  ncs&&cov&i..&j ; 
                         %end;
                     %end; 
                 %end;
@@ -2977,6 +3042,31 @@ options mautosource minoperator ;
               run;
           %end; 
 
+
+
+/*** temp code for censoring ****/
+%if &intno = 0 AND %bquote(&censor) ^= %then %do;
+	data interv&intno ;
+	merge interv&intno surv_tmp&intno (keep = surv1 - surv&timepoints );
+	array surv{&timepoints } ;
+	%do myi = 1 %to &ncov ;
+		array ncs&&cov&myi {&timepoints } ;
+	%end;
+
+    do j = 2 to &timepoints ; 
+	    %do myi = 1 %to &ncov ;
+			ncs&&cov&myi [j ] = ncs&&cov&myi [ j ] / surv[j - 1 ] ; * should this be j or j-1;
+		%end;
+     end;
+	 drop j ;
+     run;
+%end;
+
+
+/**** end of temp code ********/
+
+
+
        
           %if &bsample = 0 & &print_stats = 1 %then %do;
 
@@ -2997,6 +3087,7 @@ options mautosource minoperator ;
                      %do j = 1 %to %eval(&timepoints);
                            %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ; 
                           s&&cov&i..&j
+						  %if &intno = 0 AND %bquote(&censor)^= %then  ncs&&cov&i..&j ; 
                       %end;
                   %end;      
                %end; 
@@ -3018,6 +3109,7 @@ options mautosource minoperator ;
                      %do j = 1 %to %eval(&timepoints);
                           %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j._max ;
                          s&&cov&i..&j._max
+						 %if &intno = 0 AND %bquote(&censor)^= %then  ncs&&cov&i..&j._max ; 
                       %end;
                  %end;
               %end;
@@ -3042,6 +3134,7 @@ options mautosource minoperator ;
                      %do j = 1 %to %eval(&timepoints);
                          %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j._min ;
                          s&&cov&i..&j._min
+						 %if &intno = 0 AND %bquote(&censor)^= %then  ncs&&cov&i..&j._min ; 
                       %end;
                  %end;
             %end;
@@ -3072,7 +3165,6 @@ options mautosource minoperator ;
           var variable mean min max ;
           run;
           title ;
-
           proc datasets library = work nolist ;
           delete stats test stats_min stats_max  max_holder min_holder mean_holder;
           quit;
@@ -3153,6 +3245,7 @@ intusermacro7=,
                                             %do j = 1 %to &timepoints;
                                                s&&cov&i..&j
                                                %if &&usevisitp&i = 1 %then   s&&cov&i.randomvisitp.&j ;
+											   %if (&intno = 0 AND %bquote(&censor) ^= ) %then  ncs&&cov&i..&j  ;
                                             %end;
                                         %end; 
                                     %end;
@@ -3283,6 +3376,10 @@ intusermacro7=,
 
                 array s&&cov&n {0:%eval(&timepoints - 1) }   ;
                 s&&cov&n [0] = &&cov&n ;
+
+				%if &intno = 0 AND %bquote(&censor) ^= %then %do;
+					array ncs&&cov&n {0:%eval(&timepoints - 1) } ;
+				%end;
 
           %end;  /* n */
 
@@ -3647,7 +3744,8 @@ intusermacro7=,
             
              if (&intno ne 0 & elig_persontime ne 0) then averinterv = suminterv / elig_persontime; 
              else averinterv = 0;           
-            %if  &outctype=binsurv    %then %do ;                   
+            %if  &outctype=binsurv    %then %do ; 
+				 
                    %simcuminc ;                 
             %end;
             
@@ -3739,7 +3837,6 @@ intusermacro7=,
                drop _NAME_ ;
                run;
 
-
                proc datasets library = work nolist ;
                delete rr _stmp_ _itmp_ ;
                quit;
@@ -3790,10 +3887,21 @@ intusermacro7=,
                interv0_all(keep = _sample_ 
                %do i = 1 %to &ncov ;
                     %do k = 1 %to %eval(&timepoints);
-                         s&&cov&i..&k 
+                         %if %bquote(&censor) = %then s&&cov&i..&k ;
+						 %if %bquote(&censor)^= %then  ncs&&cov&i..&k ; 
                          %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&k ;
                     %end;
-               %end;);
+               %end; 
+			   %if %bquote(&censor) ^= %then %do;
+				  rename = (
+					%do i = 1 %to &ncov ;
+	                    %do k = 1 %to %eval(&timepoints);	                          
+						   ncs&&cov&i..&k = s&&cov&i..&k 	                       
+	                    %end;
+               %end; 
+				  )
+			   %end;
+			);
 
            %do i = 1 %to &ncov ;
                     %do k = 1 %to &timepoints ;
@@ -3828,6 +3936,7 @@ intusermacro7=,
                pctlname = _pct025 _pct975 
                pctlpts = 2.5 97.5 ;
           run;
+
 
 
 
@@ -5066,7 +5175,6 @@ FOR COUNTING THE NUMBER OF SPACE-SEPARATED WORDS IN A STRING*/
    %eval(&n-1) /* there is no ; here since it will be used as %let a = %numargs(&b) ;
           and the ; is included at the end of this line  */
 %mend numargs;
-
 /*THIS MACRO GOES THROUGH THE LIST OF INTERACTION TERMS PROVIDED BY 
 USER AND CREATES THE INTERACTION TERM VARIABLES.
 --but only for predictors of outc, comprisk and censl, 
@@ -6593,7 +6701,15 @@ not the time-varying covariates, which are handled below in %interactionsb*/
     array cumcompriskr{0:%eval(&timepoints - 1)}  ;
     if calchazard = 0 then do;
          do time = 0 to %eval(&timepoints - 1) ;
-         
+		    /* when placing this code at the top before cumsurv has been updated has the same
+		       effect as using time - 1 in the array for cumsurvr or uses the previous value of 
+		       cumsurv */
+         	%if &intno = 0 AND %bquote(&censor) ^= %then %do;
+				%do myi = 1 %to &ncov ;				   
+					ncs&&cov&myi [ time] = s&&cov&myi [ time] * cumsurv ;
+				%end;
+			%end;
+
              inc = cumsurv*s&outc[time]*(1-scomprisk[time]);  
              incdead = cumsurv * scomprisk[time];
                  
@@ -6605,7 +6721,10 @@ not the time-varying covariates, which are handled below in %interactionsb*/
 
              surv = (1-s&outc[time])*(1-scomprisk[time]);
              cumsurv = cumsurv*surv;
-             cumsurvr[time] = cumsurv ;                                   
+             cumsurvr[time] = cumsurv ; 
+
+		
+ 
          end;
      end; 
      drop time inc surv  ;    
@@ -7381,8 +7500,11 @@ set _cont  ( where = ( substr(name,1,1)='s'
     symbol3 line = 2 width = 3 interpol = line color = blue ;
 
     axis1 order = 0 to &nperiods by 1 minor = none label=none value=(h=2) ;
-    axis2 minor = none value=(h=2) label = (h = 3  justify=center angle=90 "Cummulative &outcome incidence" ) ;
+    axis2 minor = none value=(h=2) label = (h = 3  justify=center angle=90 "Cummulative incidence %upcase(&outcome) " ) ;
     axis3 minor = none value=(h=2) label= none  ;
+	%if %bquote(&censor ) ^= %then %do;
+		axis3 order = -0.05 to 0.05 by 0.01 minor = none value=(h=2) label= none  ;
+	%end;
 
    
     %if &outctype = binsurv   %then %do;
@@ -7395,7 +7517,7 @@ set _cont  ( where = ( substr(name,1,1)='s'
  
     %end;
      %if %bquote(&comprisk)^=  %then %do;
-        axis2 minor = none value=(h=2) label = (h = 3 justify=center angle=90 'Cummulative competing risk incidence' ) ;
+        axis2 minor = none value=(h=2) label = (h = 3 justify=center angle=90 'Cummulative incidence for competing risk' ) ;
         proc gplot data = _graph3   ;
         plot   obs * &time sim * &time / overlay    vaxis = axis2 haxis = axis1 name='crisk' noframe nolegend;
         plot  riskdiff * &time  %if &frombootstrap = 1 %then ub * &time lb * &time ; / overlay  haxis = axis1 vaxis=axis3 name = 'criskd' noframe nolegend ;
