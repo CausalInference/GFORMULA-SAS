@@ -1,6 +1,6 @@
 /*Example: outctype=binsurv*/
 
-%include '/proj/sas_macros/gformula/master_branch/new_censoring/GFORMULA-SAS/gformula4.1.sas';
+%include '/proj/sas_macros/gformula/master_branch/new_censoring/GFORMULA-SAS/gformula4.0.sas';
 options linesize=88 pagesize=54;
 
 *options mprint mprintnest;
@@ -161,10 +161,10 @@ eventaddvars = L L_l1 A A_l1 ,
 comprisk =  ,
 compriskaddvars = L L_l1 A A_l1 ,
 
-censor =    ,
+censor =   c ,
 censoraddvars = L L_l1 A A_l1 ,
 maxipw = 1000 ,
-compevent =  ,
+censorcomp =  ,
 
 fixedcov = ,
 timeptype= conbin, 
