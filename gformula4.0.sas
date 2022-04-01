@@ -701,9 +701,9 @@ options mautosource minoperator ;
                             %do j = 1 %to %eval(&timepoints);
                                 %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ;
                                 s&&cov&i..&j
-								%if &intno = 0 /* AND %bquote(&censor)^= ****/ %then %do ;
+								/**  %if &intno = 0  AND %bquote(&censor)^= %then %do ; ***/
 									ncs&&cov&i..&j %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j ;
-								%end;
+								/** %end;  ****/
                             %end;
                         %end; 
                     %end;
@@ -727,9 +727,9 @@ options mautosource minoperator ;
                                 %do j = 1 %to %eval(&timepoints);
                                     %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ;
                                     s&&cov&i..&j
-									%if &intno = 0 /** AND %bquote(&censor)^=  **/ %then  %do;
+									/** %if &intno = 0  AND %bquote(&censor)^=   %then  %do;  ***/
 										ncs&&cov&i..&j %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j ;
-									 %end ;
+									/** %end ;  **/
                                 %end;
                             %end;  
                         %end;
@@ -764,9 +764,9 @@ options mautosource minoperator ;
                         %do i = 1 %to &ncov;
                             %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ;
                             s&&cov&i..&j
-							%if &intno = 0 /*** AND %bquote(&censor)^=  ***/ %then  %do;
+							/*** %if &intno = 0  AND %bquote(&censor)^=   %then  %do; ***/
 								ncs&&cov&i..&j %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j ;
-							 %end;
+							/*** %end; ****/
                         %end;
                     %end;  
                 %end;
@@ -802,6 +802,24 @@ options mautosource minoperator ;
                         %end;
                     ;
                     run;
+
+
+					data interv0 ;
+					merge interv0 surv_tmp0 (keep = surv1 - surv&timepoints );
+					array surv{&timepoints } ;
+					%do myi = 1 %to &ncov ;
+						array ncs&&cov&myi {&timepoints } ;
+						%if &&usevisitp&myi = 1 %then array ncs&&cov&myi.randomvisitp { &timepoints } ; ;
+					%end;
+
+    				do j = 2 to &timepoints ; 
+	    				%do myi = 1 %to &ncov ;
+							ncs&&cov&myi [j ] = ncs&&cov&myi [ j ] / surv[j - 1 ] ; * should this be j or j-1;
+							%if &&usevisitp&myi = 1 %then ncs&&cov&myi.randomvisitp [ j ] = ncs&&cov&myi.randomvisitp [ j ] / surv[j - 1] ;;
+						%end;
+     				end;
+	 				drop j ;
+     				run;
                 %end;   
                 %else %do;
 
@@ -1371,7 +1389,6 @@ options mautosource minoperator ;
                     proc sql  noprint ;
                     select col1 into : cov&i.knots separated by ' ' from ttsscov_pct ;
                     quit ;
-
                     %put knots for &&cov&i.._inter  = &&cov&i.knots ;
                     proc datasets library = work nolist ;
                     delete tsscov_pct ttsscov_pct ;
@@ -2072,6 +2089,7 @@ options mautosource minoperator ;
 		%local covlisttmp ;
 		%do i = 1 %to &ncov ;
 			%let covlisttmp = &covlisttmp &&cov&i ;
+			%if &&usevisitp&i = 1 %then %let covlisttmp = &covlisttmp &&cov&i.randomvisitp ;
 		 %end;
 
 
@@ -2256,7 +2274,6 @@ options mautosource minoperator ;
                 weight _weight_ ;
             run;
         %end;
-
         %else %if &&cov&i.otype=2 %then %do;
             proc logistic descending
                 data=param(keep = _weight_ &outc &compevent   &time &&cov&i  &&cov&i.randomvisitp &&cov&i.array &&cov&i.._l1 &wherevars )
@@ -3702,7 +3719,7 @@ intusermacro7=,
 
 
                         %*Censoring at time k;
-                        %if %bquote(&compevent) =  %then %do;                         
+                        %if %bquote(&compevent) = OR &compevent_cens = 1 %then %do;                         
                             scompevent[&time] = 0 ;
                         %end;                   
                         %else %if %bquote(&compevent)^= AND &compevent_cens = 0  %then %do;
@@ -3928,7 +3945,7 @@ intusermacro7=,
 					      ncs&&cov&i..&k 
                          %if &&usevisitp&i = 1 %then %do ;
 						    /***	s&&cov&i.randomvisitp.&k  ***/
-						     ncs&&cov&i..randomvisitp.&k
+						     ncs&&cov&i.randomvisitp.&k
                          %end;     
                     %end;
                %end; 
@@ -7616,7 +7633,6 @@ set _cont  ( where = ( substr(name,1,1)='s'
 
       %let mycount = %eval(&nvar / 2) ;
      
-
       %if %eval(&mycount * 2) = &nvar %then %let myextra = 0 ;
       %else %let myextra = 1 ;
 
