@@ -2143,6 +2143,10 @@ options mautosource minoperator ;
 				run;
 			%end;
 
+			proc univariate data = _censor_ ;
+			var _wt_ ;
+			run;
+
 			%if %upcase(%substr(&maxipw ,1,1)) = P %then %do; 
 
 				proc means data = _censor_ &maxipw ;
