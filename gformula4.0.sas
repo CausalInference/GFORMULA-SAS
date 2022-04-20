@@ -2,7 +2,10 @@
   
 GFORMULA SAS MACRO
 
-Authors: Roger W. Logan, Jessica  G. Young, Sarah L. Taubman, Sally Picciotto, Goodarz Danaei, Miguel A. Hernán
+Authors: Roger W. Logan, Jessica  G. Young, Sarah L. Taubman, Yu-Han Chiu, Sally Picciotto, Goodarz Danaei, Miguel A. Hernán
+
+Version April 2022. This version includes additions and fixes for the inclusion of censoring in the calculation of the natural 
+course risks and means of covariates under the simulation of the natural course.
 
 Version September 2021. This viersion includes fixes to rcspline macro for using negative knots and listpred for 
 including variabls of ptype cumavg twice in the model lists.
