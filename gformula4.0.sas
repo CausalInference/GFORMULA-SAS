@@ -4242,7 +4242,12 @@ intusermacro7=,
      %end;
 
      %if &outctype=binsurv or &outctype=bineofu %then %do;
-          title6 "Observed risk= %sysevalf(&obspm) % &additional_text ";
+	     %if %bquote(&censor) ^= %then %do ;
+		     title6 "IP-weighted natural course risk= %sysevalf(&obspm) % &additional_text "; 	
+		 %end;
+		 %else %do;
+             title6 "Observed risk= %sysevalf(&obspm) % &additional_text ";
+		 %end;
      %end;      
      %else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 %then %do;
           title6 "Observed mean= %sysevalf(&obspm) ";
@@ -7174,8 +7179,15 @@ tdef newtemp3 des="my six panel template"
 
   %let period = ;
   %if &frombootstrap = 0 %then %let period= . ;
-        title1 height= &tsize  'Left column: observed (solid line), natural course (dotted line) estimates by follow-up period.';
-        title2 height= &tsize   "Right column: differences between observed and natural course estimates (solid lines)&period  ";
+  	    %if %bquote(&censor) ^= %then %do;
+    		title1 height= &tsize  'Left column: IP-weighted natrual course estimates (solid line), parameteric g-formula estimated natural 
+                                      course estimates (dotted line) by follow-up period';
+        	title2 height= &tsize   "Right column: differences between IP-weighted and parametric g-formula natural course estimates (solid lines) ";
+		%end;
+		%else %do;
+        	title1 height= &tsize  'Left column: observed (solid line), natural course (dotted line) estimates by follow-up period.';
+        	title2 height= &tsize   "Right column: differences between observed and natural course estimates (solid lines)&period  ";
+		%end;
         %if &frombootstrap = 1 %then title3 height=&tsize  'and 95% pointwise confidence intervals (dotted lines).';;
 %end;
 %else %do;
