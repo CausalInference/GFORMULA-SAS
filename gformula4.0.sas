@@ -1388,7 +1388,6 @@ options mautosource minoperator ;
 
                     proc transpose data = tsscov_pct out = ttsscov_pct  (keep = col1);
                     run;
-
                     proc sql  noprint ;
                     select col1 into : cov&i.knots separated by ' ' from ttsscov_pct ;
                     quit ;
@@ -3251,36 +3250,38 @@ options mautosource minoperator ;
           intvalue1 = ,
           intmin1 =. ,
           intmax1 =. ,
-          intchg1 = ,          
+          intchg1 = ,  	
+		  intcond1= 1=1 ,
+          intgrace1= ,		  
 
 intusermacro1=,  
 
       intvar2 = , inttype2 = , inttimes2 = (-1), intpr2 = 1, intcov2 = ,
-          intmean2 = , intsd2 = , intvalue2 = , intmin2 =. , intmax2 =. , intchg2 = ,
+          intmean2 = , intsd2 = , intvalue2 = , intmin2 =. , intmax2 =. , intchg2 = ,intcond2= 1=1 , intgrace2= ,
 intusermacro2=,
  
           intvar3 = , inttype3 = , inttimes3 = (-1), intpr3 = 1, intcov3 = ,
-                intmean3 = , intsd3 = , intvalue3 = , intmin3 =. , intmax3 =. , intchg3 = ,
+                intmean3 = , intsd3 = , intvalue3 = , intmin3 =. , intmax3 =. , intchg3 = , intcond3= 1=1 , intgrace3= ,
 intusermacro3=,
  
                 intvar4 = , inttype4 = , inttimes4 = (-1), intpr4 = 1, intcov4 = ,
-                intmean4 = , intsd4 = , intvalue4 = , intmin4 =. , intmax4 =. , intchg4 = ,
+                intmean4 = , intsd4 = , intvalue4 = , intmin4 =. , intmax4 =. , intchg4 = , intcond4= 1=1 , intgrace4= ,
 intusermacro4=,
  
           intvar5 = , inttype5 = , inttimes5 = (-1), intpr5 = 1, intcov5 = ,
-                intmean5 = , intsd5 = , intvalue5 = , intmin5 =. , intmax5 =. , intchg5 = ,
+                intmean5 = , intsd5 = , intvalue5 = , intmin5 =. , intmax5 =. , intchg5 = , intcond5= 1=1 , intgrace5= ,
 intusermacro5=,
  
           intvar6 = , inttype6 = , inttimes6 = (-1), intpr6 = 1, intcov6 = ,
-                intmean6 = , intsd6 = , intvalue6 = , intmin6 =. , intmax6 =. , intchg6 = ,
+                intmean6 = , intsd6 = , intvalue6 = , intmin6 =. , intmax6 =. , intchg6 = , intcond6= 1=1 , intgrace6= ,
 intusermacro6=,
  
           intvar7 = , inttype7 = , inttimes7 = (-1), intpr7 = 1, intcov7 = ,
-                intmean7 = , intsd7 = , intvalue7 = , intmin7 =. , intmax7 =. , intchg7 = ,
+                intmean7 = , intsd7 = , intvalue7 = , intmin7 =. , intmax7 =. , intchg7 = , intcond7= 1=1 , intgrace7= ,
 intusermacro7=,
  
           intvar8 = , inttype8 = , inttimes8 = (-1), intpr8 = 1, intcov8 = ,
-                intmean8 = , intsd8 = , intvalue8 = , intmin8 =. , intmax8 =. , intchg8 = ,
+                intmean8 = , intsd8 = , intvalue8 = , intmin8 =. , intmax8 =. , intchg8 = , intcond8= 1=1 , intgrace8= ,
       intusermacro8 = ,
       
       timesnotelig = -1 
@@ -3586,9 +3587,107 @@ intusermacro7=,
                                         totinterv = totinterv + 1;
                                     end;      
                                 %end;
+							
+								%else %if &&inttype&i = 5 %then %do; /* want to mimic the cutgrace macro */
+                                   
+                                   if &time = 0 then do ;
+                                        _thresh&i = 0 ;
+                                        _ts_thresh&i = 0 ;                                        
+                                    end;
+                                           
+                                   * call streaminit(123);
+                                    _testp_ = rand('uniform');
+                                                                                           
+                                    _tgrace&i = &time - &&intgrace&i;
 
-                                %*Intervention Type 5: Randomly Assign for Observed Dist;
-                                %else %if &&inttype&i = 5 %then %do;
+                                    if _thresh&i = 0 and ( &&intcond&i ) then _thresh&i = 1;
+                     
+                                    if _thresh&i = 0 then &&intvar&i = 0 ;
+										
+
+									/* change this so that for grace period = 6, the _p_ are 1/6 then 1/ 5 ... 1/2 and then 1/1 for last period */
+                                    if _thresh&i = 1 then do ;
+                                       *** _p_ = (_ts_thresh&i+1) / &&intgrace&i ;
+                                        /* 1/grace ,1/(grace - 1) ,...,1/(grace - 4), 1/(grace - 5) */
+                                        _p_ = 1/(&&intgrace&i - _ts_trhesh&i) ;
+                                        if  &&intvar&i.._l1 = 1 then &&intvar&i = 1 ;
+											
+                                        if _ts_thresh&i < &&intgrace&i and &&intvar&i = 0 then do ;                       
+                                            if _testp_ < _p_ then	&&intvar&i = 1 ; 											
+                                        end;
+                                        else &&intvar&i = 1 ;
+											
+
+                                        _ts_thresh&i = _ts_thresh&i + 1; 
+                                    end;
+                
+
+                                %end;      
+								%else %if &&inttype&i = 6 %then %do; /* want to mimic the cutgrace macro */
+                                                                      
+                                   if &time = 0 then do ;
+                                        _thresh&i = 0 ;
+                                        _ts_thresh&i = 0 ;                                        
+                                    end;
+                                           
+                                    *call streaminit(123);
+                                    _testp_ = rand('uniform');
+                                                                                           
+                                    _tgrace&i = &time - &&intgrace&i;
+
+                                    if _thresh&i = 0 and ( &&intcond&i ) then _thresh&i = 1;
+                     
+                                    if _thresh&i = 0 then do;
+									    if &&intvar&i = 1 then do;
+											&&intvar&i = 0 ;
+											intervened = 1;
+                                        	intervenedk[&time] = 1;
+                                        	intervenedk[&time] = 1; 
+                                        	totinterv = totinterv + 1;
+										 end;
+									 end;
+
+									/* change this so that for grace period = 6, the _p_ are 1/6 then 1/ 5 ... 1/2 and then 1/1 for last period */
+                                    if _thresh&i = 1 then do ;
+                                       *** _p_ = (_ts_thresh&i+1) / &&intgrace&i ;
+                                        /* 1/grace ,1/(grace - 1) ,...,1/(grace - 4), 1/(grace - 5) */
+                                        _p_ = 1/(&&intgrace&i - _ts_trhesh&i) ;
+                                        if  &&intvar&i.._l1 = 1 then do;
+ 											if &&intvar&i = 0 then do;
+												&&intvar&i = 1 ;
+												intervened = 1;
+                                        		intervenedk[&time] = 1;
+                                        		intervenedk[&time] = 1; 
+                                        		totinterv = totinterv + 1;
+											 end;
+										 end;
+                                        if _ts_thresh&i < &&intgrace&i and &&intvar&i = 0 then do ;                       
+                                            if _testp_ < _p_ then do;
+												&&intvar&i = 1 ; 
+												intervened = 1;
+                                        		intervenedk[&time] = 1;
+                                        		intervenedk[&time] = 1; 
+                                        		totinterv = totinterv + 1;
+											 end;
+                                        end;
+                                        else  do;
+											if &&intvar&i = 0 then  do ;
+												&&intvar&i = 1 ;
+												intervened = 1;
+                                        		intervenedk[&time] = 1;
+                                        		intervenedk[&time] = 1; 
+                                        		totinterv = totinterv + 1;
+                                             end;
+										 end;
+
+                                        _ts_thresh&i = _ts_thresh&i + 1; 
+                                    end;
+                
+
+                                %end;                    
+/*********/
+                                %*Intervention Type 7: Randomly Assign for Observed Dist;
+                                %else %if &&inttype&i = 7 %then %do;
                                     if (rand('uniform')<=&&intpr&i) then do;
                                         &&intvar&i = r_&&intvar&i.._&i;
                                         s&&intvar&i [ &time] = &&intvar&i ;
@@ -3600,8 +3699,8 @@ intusermacro7=,
                                     end;      
                                 %end; 
 
-                                %*Intervention Type 6: Randomly Assign for Observed Dist, Conditional;
-                                %else %if &&inttype&i = 6 %then %do;
+                                %*Intervention Type 8: Randomly Assign for Observed Dist, Conditional;
+                                %else %if &&inttype&i = 8 %then %do;
                                     if %bquote(&&intmax&i)^=. then do;
                                         if &&intvar&i >&&intmax&i and (rand('uniform')<=&&intpr&i) then do;
                                             &&intvar&i..&k = r_&&intvar&i.._&i;
@@ -3622,7 +3721,8 @@ intusermacro7=,
                                             totinterv = totinterv + 1;
                                         end;
                                     end;
-                                %end;                            
+                                %end;   
+/*********/	                                    								
                                 %*Intervention Type -1: User defined intervention  ;
                                 %else %if &&inttype&i = -1 %then %do;                                               
                                     %&&intusermacro&i ;                                                                 
