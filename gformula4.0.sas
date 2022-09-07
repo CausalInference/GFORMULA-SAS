@@ -3651,22 +3651,24 @@ intusermacro7=,
 
 
                             end;  /* intcond */ 
-%if &includefix = 1 %then %do; 
-if _n_ = 0 then mycount = 0 ;
-retain mycount ;
-							if &time in ( &&&&cov&&intcovmap&intvar..skip ) then do ;
-								if intervenedk_&&intvar&i [&time - 1 ] = 1 then do ;
 
-								    if intervenedk[&time] = 0 and mycount < 100 then do;
-											put "act changed at skip time" mycount= ;
-											mycount = mycount + 1  ;
-									 end;
- 									intervenedk[&time] = 1;
+							%if &&&&usevisitp&&intcovmap&intvar  = 1 %then %do;
+								if &&&&cov&&intcovmap&intvar..randomvisitp  = 0 then do; * no current visit on intvar ;
+									if intervenedk_&&intvar&i [&time - 1 ] = 1 then do ;								   
+ 										intervenedk[&time] = 1;
+										intervenedk_&&intvar&i [ &time ] = 1 ;
+                                    	totinterv = totinterv + 1;
+									end;
+								end;
+
+							%end;
+							if &time in ( &&&&cov&&intcovmap&intvar..skip ) then do ;
+								if intervenedk_&&intvar&i [&time - 1 ] = 1 then do ;								    
+ 									intervenedk[&time] = 1 ;
 									intervenedk_&&intvar&i [ &time ] = 1 ;
                                     totinterv = totinterv + 1;
 								end;
  							end;
-%end;
                         end; /* inttimes */  
 					 
                     %end;  /* nintvar */                    
@@ -5871,7 +5873,6 @@ not the time-varying covariates, which are handled below in %interactionsb*/
             %end; 
   
 %mend remove_created_global;
-
 /**********************************************************************************************************************************/
 /**************************************************************/
 /**************************************************************/
@@ -6557,7 +6558,6 @@ not the time-varying covariates, which are handled below in %interactionsb*/
                         p&&cov&i.randomvisitp.=1/(1+exp(-m&&cov&i.randomvisitp));
                         if U&&cov&i.randomvisitp <= p&&cov&i.randomvisitp    then &&cov&i.randomvisitp=1;
                         if U&&cov&i.randomvisitp >  p&&cov&i.randomvisitp >. then &&cov&i.randomvisitp=0;
-
 
 
                         if ts_last_&&cov&i.._l1  = &&cov&i.visitpmaxgap   then do;
