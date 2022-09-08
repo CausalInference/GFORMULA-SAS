@@ -3652,7 +3652,7 @@ intusermacro7=,
 
                             end;  /* intcond */ 
 
-							%if &&&&usevisitp&&intcovmap&intvar  = 1 %then %do;
+							%if &&&&usevisitp&&intcovmap&i  = 1 %then %do;
 								if &&&&cov&&intcovmap&intvar..randomvisitp  = 0 then do; * no current visit on intvar ;
 									if intervenedk_&&intvar&i [&time - 1 ] = 1 then do ;								   
  										intervenedk[&time] = 1;
@@ -3662,13 +3662,15 @@ intusermacro7=,
 								end;
 
 							%end;
-							if &time in ( &&&&cov&&intcovmap&intvar..skip ) then do ;
+							/**/
+							if &time in ( &&&&cov&&intcovmap&i..skip ) then do ;
 								if intervenedk_&&intvar&i [&time - 1 ] = 1 then do ;								    
  									intervenedk[&time] = 1 ;
 									intervenedk_&&intvar&i [ &time ] = 1 ;
                                     totinterv = totinterv + 1;
 								end;
  							end;
+							/***/
                         end; /* inttimes */  
 					 
                     %end;  /* nintvar */                    
@@ -6558,7 +6560,6 @@ not the time-varying covariates, which are handled below in %interactionsb*/
                         p&&cov&i.randomvisitp.=1/(1+exp(-m&&cov&i.randomvisitp));
                         if U&&cov&i.randomvisitp <= p&&cov&i.randomvisitp    then &&cov&i.randomvisitp=1;
                         if U&&cov&i.randomvisitp >  p&&cov&i.randomvisitp >. then &&cov&i.randomvisitp=0;
-
 
                         if ts_last_&&cov&i.._l1  = &&cov&i.visitpmaxgap   then do;
                             &&cov&i.randomvisitp=1;                 
