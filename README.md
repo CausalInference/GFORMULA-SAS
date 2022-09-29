@@ -7,5 +7,4 @@ Version 3.1 July 2021. This version includes options and improvements that are n
 
 Version 3.2 Sept 2021. This version includes fixes for negative knots in splines and corrects the issue of cumavg ptypes being includd twice in some model lists. For questions and comments, email rwlogan@hsph.harvard.edu or jessica_young@hphc.org
 
-Version 4.0 April 2022. This version includes changes for the use of a censoring variable in estimation of the natural course. For 
-questions and comments, email rwlogan@hsph.harvard.edu or jessica_young@hphc.org.
+Version 4.0 April 2022. This version includes changes for the use of a censoring variable in estimation of the natural course and calculations of the average intervened on. For questions and comments, email rwlogan@hsph.harvard.edu or jessica_young@hphc.org.
