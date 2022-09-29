@@ -1,7 +1,7 @@
 
 options linesize=88 pagesize=54;
 options nonotes;
-%include "gformula3.sas ";
+%include "gformula4.sas ";
 
   
 
@@ -286,7 +286,7 @@ quit;
       %bootstrap_results(
               bootlib =  work ,
               outc = cont_e,
-              comprisk = ,
+              compevent = ,
               outctype = conteofu ,
               bootname = myinterv ,
               check_cov_models = 1,
