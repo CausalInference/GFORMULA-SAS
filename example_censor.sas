@@ -2,7 +2,7 @@
 
 
 
-%include '/udd/n2yhc/sasautos/gformula4.0.sas';
+%include 'gformula4.0.sas';
 
 
 options linesize=88 pagesize=54;
@@ -16,7 +16,7 @@ options mprint;
 options notes;
 
 
-proc import datafile="/udd/n2yhc/CVD/simulation/data/surv4_MAR_D.csv"
+proc import datafile="surv4_MAR_D.csv"
         out=want
         dbms=csv
         replace;
