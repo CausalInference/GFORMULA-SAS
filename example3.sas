@@ -1,7 +1,7 @@
 
 options linesize=88 pagesize=54;
 options nonotes;
-%include "gformula3.sas";
+%include "gformula4.0.sas";
  
 %macro create_sample(event = dia) ;
 %let condition = ;
