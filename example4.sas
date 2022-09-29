@@ -1,7 +1,7 @@
 
 options linesize=88 pagesize=54;
 options nonotes;
-%include "gformula4.sas ";
+%include "gformula4.0.sas ";
 
   
 
