@@ -1,6 +1,6 @@
 /*Example: outctype=binsurv*/
 
-%include 'gformula3.sas';
+%include 'gformula4.sas';
 
 options linesize=88 pagesize=54;
 
@@ -112,7 +112,9 @@ time=time,
 timepoints = 6,
 outc=dia,
 outctype=binsurv,
-comprisk =  dead  ,
+compevent =  dead  ,
+compevent_cens = 0 ,
+censor =  ,
 
 fixedcov = baseage,
 timeptype= concat, 
