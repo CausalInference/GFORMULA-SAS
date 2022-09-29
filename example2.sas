@@ -160,7 +160,9 @@ ods graphics off ;
     outc=dia ,
     outctype= binsurv   ,
     outcinteract = 0*1  ,
-    comprisk =   dead  ,        
+    compevent=dead,
+    compevent_cens = 0,
+    censor = censlost   ,        
     fixedcov = hbp bmi baseage ,
 
     ncov=2,
@@ -221,7 +223,8 @@ quit;
     outc= cont_e ,
     outctype=  conteofu   ,
     outcinteract =    ,
-    comprisk =   ,         
+    compevent=,
+    censor  =  censlost  ,           
     fixedcov = hbp bmi baseage,
  
     ncov = 2 ,
@@ -278,7 +281,7 @@ run;
  %construct_graphs( 
                    time=time ,
                    outcome=cont_e ,
-                   comprisk =  ,
+                   compevent =  ,
                    outctype = conteofu,
                    covmean=  mycovmean ,
                    obssurv = myobssurv ,
@@ -321,7 +324,9 @@ quit;
     outc=dia ,
     outctype= binsurv   ,
     outcinteract = 0*1  ,
-    comprisk =   dead  ,   
+    censor=dead,
+    compevent_cens  = 0   , 
+    censor = censlost ,
     fixedcov = hbp  bmi baseage,
 
     ncov=2,   
@@ -368,7 +373,9 @@ quit;
     outc=dia ,
     outctype= binsurv   ,
     outcinteract = 0*1  ,
-    comprisk =   dead  ,    
+    compevent=dead,
+    compevent_cens  = 0   ,
+    censor = censlost ,
     fixedcov = hbp  bmi baseage,
 
     ncov=2,   
@@ -409,7 +416,7 @@ quit;
       %bootstrap_results(
               bootlib = work ,
               outc = dia,
-              comprisk = dead ,
+              compevent = dead ,
               outctype = binsurv ,
               bootname = myinterv ,
               check_cov_models = 1,
@@ -448,7 +455,7 @@ run;
  %construct_graphs( 
                    time=time ,
                    outcome=dia ,
-                   comprisk = dead ,
+                   compevent = dead ,
                    outctype = binsurv,
                    covmean=  work.mycovmean ,
                    obssurv = work.myobssurv ,
