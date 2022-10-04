@@ -158,7 +158,8 @@ quit;
 
     outc= cont_e ,
     outctype= conteofu   ,
-    outcinteract = 0*1  ,              
+    outcinteract = 0*1  , 
+    censor = censlost ,
     fixedcov =  hbp bmi  baseage  , /* using hbp and bmi for fixedcov forces the corresponding baseline variables into each model */
     ncov=2,
     timeptype=concat, 
@@ -207,6 +208,7 @@ quit;
     outctype= conteofu   ,
     outcinteract = 0*1  ,       
     fixedcov =  hbp bmi  baseage ,
+    censor = censlost ,
     ncov=2,
     timeptype=concat, timeknots= 1 2 3 4 5 6 7 8 9 ,
     cov1 = hbp,    cov1otype = 2, cov1ptype = lag1bin,
@@ -245,7 +247,8 @@ quit;
     timepoints = 10, 
     outc=cont_e ,
     outctype= conteofu   ,
-    outcinteract = 0*1  ,          
+    outcinteract = 0*1  ,
+    censor = censlost ,
     fixedcov =   hbp bmi  baseage ,
     ncov=2,
     timeptype=concat, timeknots= 1 2 3 4 5 6 7 8 9 ,
