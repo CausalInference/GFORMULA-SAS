@@ -1,27 +1,15 @@
-
-
-
-
 %include 'gformula4.0.sas';
 
 
 options linesize=88 pagesize=54;
 
-*options mprint mprintnest;
-*options mlogic mlogicnest;
-*options fullstimer notes;
-*options threads;
 
-options mprint;
-options notes;
-
+options notes mprint;
 
 proc import datafile="surv4_MAR_D.csv"
         out=want
         dbms=csv
         replace;
-    
-
      getnames=yes;
 run;
 
