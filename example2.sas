@@ -324,7 +324,7 @@ quit;
     outc=dia ,
     outctype= binsurv   ,
     outcinteract = 0*1  ,
-    censor=dead,
+    compevent = dead,
     compevent_cens  = 0   , 
     censor = censlost ,
     fixedcov = hbp  bmi baseage,
