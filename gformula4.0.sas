@@ -907,14 +907,20 @@ options mautosource minoperator ;
                   %end;
                    
                   %do int = %eval(&intstart +1) %to &numint ;
-                      proc append base = &intervdata    data = interv&int ;
-                      run;
+                      *proc append base = &intervdata    data = interv&int ;
+                      *run;
+		      data &intervdata ;
+		      set &intervdata interv&int ;
+		      run;
                   %end;  
              %end;
              %else %do;
                   %do int = &intstart %to &numint ;
-                      proc append base = &intervdata    data = interv&int  ;
-                      run;
+                      *proc append base = &intervdata    data = interv&int  ;
+                      *run;
+		      data &intervdata ;
+		      set &intervdata interv&int ;
+		      run;
                   %end; 
              %end;
         %end;
@@ -950,6 +956,8 @@ options mautosource minoperator ;
                bootname = &intervname ,
                outc = &outc ,
                outctype = &outctype,
+               compevent = &compevent ,
+               censor = &censor ,
                check_cov_models = &check_cov_models,
                covmeandata = &covmeanname0 ,
                ncov = &ncov,
@@ -4434,6 +4442,7 @@ intusermacro7=,
        survdata= ,
        outc = ,
        compevent= ,
+       censor = , 
        outctype = binsurv,
        combine_survdata = 0 ,
        check_cov_models = 0,
