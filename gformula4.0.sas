@@ -3657,25 +3657,25 @@ intusermacro7=,
                                     %&&intusermacro&i ;  								 
                                 %end; 
 
-				/* move following code into intcond block so that it is only used at valie intervention times */
-				%if &&&&usevisitp&&intcovmap&i  = 1 %then %do;
-					if &&&&cov&&intcovmap&intvar..randomvisitp  = 0 then do; * no current visit on intvar ;
-						if intervenedk_&&intvar&i [&time - 1 ] = 1 then do ;								   
- 							intervenedk[&time] = 1;
-							intervenedk_&&intvar&i [ &time ] = 1 ;
-                                    	                totinterv = totinterv + 1;
-						end;
-					end;
-				%end;
-				/**/
-				if &time in ( &&&&cov&&intcovmap&i..skip ) then do ;
-					if intervenedk_&&intvar&i [&time - 1 ] = 1 then do ;								    
- 						intervenedk[&time] = 1 ;
-						intervenedk_&&intvar&i [ &time ] = 1 ;
-                                                totinterv = totinterv + 1;
-					end;
- 				end;
-				/***/
+								/* move following code into intcond block so that it is only used at valie intervention times */
+								%if &&&&usevisitp&&intcovmap&i  = 1 %then %do;
+									if &&&&cov&&intcovmap&intvar..randomvisitp  = 0 then do; * no current visit on intvar ;
+										if intervenedk_&&intvar&i [&time - 1 ] = 1 then do ;								   
+											intervenedk[&time] = 1;
+											intervenedk_&&intvar&i [ &time ] = 1 ;
+																		totinterv = totinterv + 1;
+										end;
+									end;
+								%end;
+								/**/
+								if &time in ( &&&&cov&&intcovmap&i..skip ) then do ;
+									if intervenedk_&&intvar&i [&time - 1 ] = 1 then do ;								    
+										intervenedk[&time] = 1 ;
+										intervenedk_&&intvar&i [ &time ] = 1 ;
+																totinterv = totinterv + 1;
+									end;
+								end;
+								/***/
                             end;  /* intcond */ 
                         end; /* inttimes */  					 
                     %end;  /* nintvar */                    
