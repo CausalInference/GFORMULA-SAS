@@ -655,7 +655,7 @@ options mautosource minoperator ;
              /* initialize data views for interventions */
 
              %if &runnc = 1 %then %do;
-                 %interv_init(intno=0, intlabel='Natural course');
+                 %interv_init(intno=0, intlabel='Natural course' ); 
              %end;   
         
 
@@ -2772,7 +2772,7 @@ options mautosource minoperator ;
 %mend;
 
 
-%macro interv (intno= , intlabel=, nintvar= 0, intcond = 1=1, intsetup= mynull ,
+%macro interv (intno= , intlabel=, nintvar= 0, intvisittype=1, intcond = 1=1, intsetup= mynull ,
           intvar1= ,
           inttype1 =, 
                 inttimes1 = (-1),
@@ -3101,6 +3101,7 @@ options mautosource minoperator ;
           %end; 
 
 
+
 /*** temp code for censoring ****/
 %if &intno = 0 /*** AND %bquote(&censor) ^= ****/ %then %do;
 	data interv&intno ;
@@ -3248,7 +3249,7 @@ options mautosource minoperator ;
 
 %mend interv;
 
-%macro interv_init (intno= , intlabel=, nintvar= 0, intcond = 1=1, intsetup = mynull ,
+%macro interv_init (intno= , intlabel=, nintvar= 0, intvisittype = 1 ,intcond = 1=1, intsetup = mynull ,
           intvar1= ,
           inttype1 =, 
           inttimes1 = (-1),
@@ -3552,6 +3553,8 @@ intusermacro7=,
                             if &intcond then do;                                          
                                 if &time in (&timesnotelig) then x = x ; 
                                 else x = x + 1;
+				
+								
                                 %*Intervention Type 1: Static deterministic intervention; 
                                 %if &&inttype&i = 1 %then %do;                    
                                     if  &&intvar&i ^=&&intvalue&i and (rand('uniform')<=&&intpr&i) then do;
@@ -3560,7 +3563,7 @@ intusermacro7=,
                                         s&&intvar&i [ &time] = &&intvar&i ;
                                         intervened = 1;
                                         intervenedk[&time] = 1;
-										intervenedk_&&intvar&i [ &time ] = 1 ;
+									*	intervenedk_&&intvar&i [ &time ] = 1 ;
                                         totinterv = totinterv + 1;
                                     end;
                                 %end;                            
@@ -3573,7 +3576,7 @@ intusermacro7=,
                                             &&intvar&i.._totinterv = &&intvar&i.._totinterv + 1;
                                             intervened = 1;
                                             intervenedk[&time] = 1;
-											intervenedk_&&intvar&i [ &time ] = 1 ;
+										*	intervenedk_&&intvar&i [ &time ] = 1 ;
                                             totinterv = totinterv + 1;
                                         end;
                                     end;
@@ -3584,7 +3587,7 @@ intusermacro7=,
                                             &&intvar&i.._totinterv = &&intvar&i.._totinterv + 1;
                                             intervened = 1;
                                             intervenedk[&time] = 1; 
-											intervenedk_&&intvar&i [ &time ] = 1 ;
+										*	intervenedk_&&intvar&i [ &time ] = 1 ;
                                             totinterv = totinterv + 1;
                                         end;
                                     end;
@@ -3597,7 +3600,7 @@ intusermacro7=,
                                         &&intvar&i.._totinterv = &&intvar&i.._totinterv + 1;
                                         intervened = 1;
                                         intervenedk[&time] = 1; 
-										intervenedk_&&intvar&i [ &time ] = 1 ;
+									*	intervenedk_&&intvar&i [ &time ] = 1 ;
                                         totinterv = totinterv + 1;
                                     end;      
                                 %end; 
@@ -3610,7 +3613,7 @@ intusermacro7=,
                                         &&intvar&i.._totinterv = &&intvar&i.._totinterv + 1;
                                         intervened = 1;
                                         intervenedk[&time] = 1;
-										intervenedk_&&intvar&i [ &time ] = 1 ;
+									*	intervenedk_&&intvar&i [ &time ] = 1 ;
                                         totinterv = totinterv + 1;
                                     end;      
                                 %end;
@@ -3623,7 +3626,7 @@ intusermacro7=,
                                         &&intvar&i.._totinterv = &&intvar&i.._totinterv + 1;
                                         intervened = 1;
                                         intervenedk[&time] = 1;                                       
-										intervenedk_&&intvar&i [ &time ] = 1 ;
+									*	intervenedk_&&intvar&i [ &time ] = 1 ;
                                         totinterv = totinterv + 1;
                                     end;      
                                 %end; 
@@ -3637,7 +3640,7 @@ intusermacro7=,
                                             &&intvar&i.._totinterv = &&intvar&i.._totinterv + 1;
                                             intervened = 1;
                                             intervenedk[&time] = 1;
-											intervenedk_&&intvar&i [ &time ] = 1 ;
+										*	intervenedk_&&intvar&i [ &time ] = 1 ;
                                             totinterv = totinterv + 1;
                                         end;
                                     end;
@@ -3648,7 +3651,7 @@ intusermacro7=,
                                             &&intvar&i.._totinterv = &&intvar&i.._totinterv + 1;
                                             intervened = 1;
                                             intervenedk[&time] = 1;
-											intervenedk_&&intvar&i [ &time ] = 1 ;
+										*	intervenedk_&&intvar&i [ &time ] = 1 ;
                                             totinterv = totinterv + 1;
                                         end;
                                     end;
@@ -3657,26 +3660,9 @@ intusermacro7=,
                                 %else %if &&inttype&i = -1 %then %do;                                               
                                     %&&intusermacro&i ;  								 
                                 %end; 
-								/* move following code into intcond block so that it is only used at valie intervention times */
-								%if &&&&usevisitp&&intcovmap&i  = 1 %then %do;
-									if &&&&cov&&intcovmap&intvar..randomvisitp  = 0 then do; * no current visit on intvar ;
-										if intervenedk_&&intvar&i [&time - 1 ] = 1 then do ;								   
-											intervenedk[&time] = 1;
-											intervenedk_&&intvar&i [ &time ] = 1 ;
-											totinterv = totinterv + 1;
-										end;
-									end;
-								%end;
-								/**/
-								if &time in ( &&&&cov&&intcovmap&i..skip ) then do ;
-									if intervenedk_&&intvar&i [&time - 1 ] = 1 then do ;								    
-										intervenedk[&time] = 1 ;
-										intervenedk_&&intvar&i [ &time ] = 1 ;
-										totinterv = totinterv + 1;
-									end;
-								end;
-								/***/
-                            end;  /* intcond */ 													
+
+
+                            end;  /* intcond */ 							
                         end; /* inttimes */  
 					 
                     %end;  /* nintvar */                    
@@ -4119,6 +4105,7 @@ intusermacro7=,
                     output ;
             %end;
             run;
+
 
 
             %if &print_cov_means = 1 %then %do ;
@@ -6552,7 +6539,9 @@ not the time-varying covariates, which are handled below in %interactionsb*/
         if   not( &time  in (&&cov&i.skip) ) then do;                                                             
             if &&cov&i.simstart > &time  then do; /* assign fixed value if simulation should start after time k*/                      
                 &&cov&i = &&cov&i.else + 0;
-
+                %if &intvisittype = 2 %then %do ;
+					&&&cov&i.._holder = &&cov&i ; * will hold the most recent simulated value. will always be in a non-skip time ;
+				%end;
                 %if &&usevisitp&i = 1 %then %do;
                     &&cov&i.randomvisitp = &&cov&i.visitpelse ;
                     if &&cov&i.randomvisitp = 1 then ts_last_&&cov&i = 0 ;
@@ -6754,13 +6743,21 @@ not the time-varying covariates, which are handled below in %interactionsb*/
             end;   
 
             s&&cov&i [ &time] = &&cov&i ;
+			%if &intvisittype = 2 %then %do ;
+				&&&cov&i.._holder = &&cov&i ; * will hold the most recent simulated value. will always be in a non-skip time ;
+			%end;
             %if &&usevisitp&i = 1 %then  s&&cov&i.randomvisitp[&time] = &&cov&i.randomvisitp ;;
             %*Generating derived variables (categories, etc);
 
             %genpred(sim,lagtype=1);   
         end;
         else do ;
-            &&cov&i = &&cov&i.._l1 ;
+		    %if &intvisittype=1 %then %do;
+            	&&cov&i = &&cov&i.._l1 ; *original method to carry forward during skip time. This will use the intervened on value ;
+			%end;
+			%else %if &intvisittype = 2 %then %do;
+				&&cov&i = &&cov&i.._holder ; * this uses the previous simulated value need to keep track of this value even when changed due to intervention ;
+			%end;
             s&&cov&i [&time] = &&cov&i ;
             /* with a skip type variable there is no rndom visit process , so we do not need to update the next line 
              %if &&usevisitp&i = 1 %then  s&&cov&i.randomvisitp[&time] = &&cov&i.randomvisitp ;; */
