@@ -2,7 +2,7 @@
   
 GFORMULA SAS MACRO
 
-Authors: Roger W. Logan, Jessica  G. Young, Sarah L. Taubman, Yu-Han Chiu, Sally Picciotto, Goodarz Danaei, Miguel A. HernÃ¡n
+Authors: Roger W. Logan, Jessica  G. Young, Sarah L. Taubman, Yu-Han Chiu, Sally Picciotto, Goodarz Danaei, Miguel A. Hernán
 
 Version April 2022. This version includes additions and fixes for the inclusion of censoring in the calculation of the natural 
 course risks and means of covariates under the simulation of the natural course.
@@ -805,6 +805,7 @@ options mautosource minoperator ;
                         %end;
                     ;
                     run;
+
 
 
 					data interv0 ;
@@ -3100,11 +3101,10 @@ options mautosource minoperator ;
           %end; 
 
 
-
 /*** temp code for censoring ****/
 %if &intno = 0 /*** AND %bquote(&censor) ^= ****/ %then %do;
 	data interv&intno ;
-	merge interv&intno surv_tmp&intno (keep = surv1 - surv&timepoints );
+	merge interv&intno surv_tmp&intno  %if &outctype = binsurv %then (keep = surv1 - surv&timepoints );;
 	array surv{&timepoints } ;
 	%do myi = 1 %to &ncov ;
 		array ncs&&cov&myi {&timepoints } ;
@@ -3112,6 +3112,7 @@ options mautosource minoperator ;
 	%end;
 
     do j = 2 to &timepoints ; 
+	    %if &outctype ne binsurv %then surv[j-1] = 1 ;;
 	    %do myi = 1 %to &ncov ;
 			ncs&&cov&myi [j ] = ncs&&cov&myi [ j ] / surv[j - 1 ] ; * should this be j or j-1;
 			%if &&usevisitp&myi = 1 %then ncs&&cov&myi.randomvisitp [ j ] = ncs&&cov&myi.randomvisitp [ j ] / surv[j - 1] ;;
@@ -3656,14 +3657,13 @@ intusermacro7=,
                                 %else %if &&inttype&i = -1 %then %do;                                               
                                     %&&intusermacro&i ;  								 
                                 %end; 
-
 								/* move following code into intcond block so that it is only used at valie intervention times */
 								%if &&&&usevisitp&&intcovmap&i  = 1 %then %do;
 									if &&&&cov&&intcovmap&intvar..randomvisitp  = 0 then do; * no current visit on intvar ;
 										if intervenedk_&&intvar&i [&time - 1 ] = 1 then do ;								   
 											intervenedk[&time] = 1;
 											intervenedk_&&intvar&i [ &time ] = 1 ;
-																		totinterv = totinterv + 1;
+											totinterv = totinterv + 1;
 										end;
 									end;
 								%end;
@@ -3672,12 +3672,13 @@ intusermacro7=,
 									if intervenedk_&&intvar&i [&time - 1 ] = 1 then do ;								    
 										intervenedk[&time] = 1 ;
 										intervenedk_&&intvar&i [ &time ] = 1 ;
-																totinterv = totinterv + 1;
+										totinterv = totinterv + 1;
 									end;
 								end;
 								/***/
-                            end;  /* intcond */ 
-                        end; /* inttimes */  					 
+                            end;  /* intcond */ 													
+                        end; /* inttimes */  
+					 
                     %end;  /* nintvar */                    
                     if x >= 1 then elig_persontime = elig_persontime + 1;
                     suminterv = suminterv + intervenedk[&time] ;
@@ -3858,6 +3859,17 @@ intusermacro7=,
 				 
                    %simcuminc ;                 
             %end;
+			%else %do;
+				%if &intno = 0 /**** AND %bquote(&censor) ^= ****/ %then %do;
+				    %put inside creating ncs variables &timepoints , &ncov ;
+				 	do time = 0 to %eval(&timepoints - 1) ;
+						%do myi = 1 %to &ncov ;				   
+							ncs&&cov&myi [ time] = s&&cov&myi [ time] ;
+							%if &&usevisitp&myi = 1 %then ncs&&cov&myi.randomvisitp [ time ] = s&&cov&myi.randomvisitp [ time]  ;;
+						%end;
+				 	end;
+				%end;
+			%end;
             
                  
             %*Outputting some summary measures;
@@ -4052,6 +4064,7 @@ intusermacro7=,
 
 
 
+
           data &covmeanname ;
           merge _diff_mean (where = (_sample_ = 0)) _cov_std2 ; 
           drop  _sample_ ;
@@ -4106,7 +4119,6 @@ intusermacro7=,
                     output ;
             %end;
             run;
-
 
 
             %if &print_cov_means = 1 %then %do ;
@@ -7617,7 +7629,6 @@ set _cont  ( where = ( substr(name,1,1)='s'
   %end;
  
 
-
     goptions reset = all  /* display */ hsize=8 in vsize = 8 in device=pdf  gsfname=mygraphs  ;
     symbol1 line = 1 width = 3 interpol = line  color = red ;
     symbol2 line = 2 width = 3 interpol = line color = blue ;
@@ -7680,8 +7691,6 @@ set _cont  ( where = ( substr(name,1,1)='s'
          
 
          
-        
-
          proc gplot data = _onegraph  ;
          plot   &vartmp * &time s&vartmp  * &time / overlay  vaxis = axis2 haxis = axis1 name="p%eval(&ngraph)" noframe nolegend;
          plot  &vartmp._diff * &time %if &frombootstrap = 1 %then &vartmp._ubp * &time &vartmp._lbp * &time ; / overlay  haxis = axis1  vaxis = axis3 name = "p%eval(&ngraph + 1)" vref=0 nolegend noframe ;
