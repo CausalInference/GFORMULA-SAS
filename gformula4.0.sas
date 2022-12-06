@@ -4685,7 +4685,6 @@ intusermacro7=,
 
 /**********************/
 
-
 %macro listpred(main,switchind,start,stop,t0,t1,t2,t3,pre,prep=0);
 /* listpred is in general called two ways, with main and contemp. contemp is for how variables covX appear in the models 
    for covY with X < Y . for main this will be run for all variables and may change  based on switchind = &i when using main */
@@ -6576,7 +6575,10 @@ not the time-varying covariates, which are handled below in %interactionsb*/
                             ts_last_&&cov&i = 0 ;
                         end;                                                        
                         else if &&cov&i.randomvisitp = 0  then do ;
-                            ts_last_&&cov&i = ts_last_&&cov&i.._l1 + 1 ;                                
+                            ts_last_&&cov&i = ts_last_&&cov&i.._l1 + 1 ;  
+							%if &intvisittype = 2 %then %do;
+								&&cov&i =  &&cov&i.._holder ; * uses the previous simulated value instead of a potential inervened on value ; 
+							%end; 
                         end ;
 
                     %end;
@@ -6736,6 +6738,9 @@ not the time-varying covariates, which are handled below in %interactionsb*/
                                     mygood = 0 ; 
                                 end;
                             %end;
+							%if &intvisittype = 2  %then %do ;
+				 				&&&cov&i.._holder = &&cov&i ; * will hold the most recent simulated value. will always be in a non-skip time ;
+							%end;
                     end ; /* this end is for the do loop that is conditional on the usevisitp macro variable, need an end here */
                         %end;
 
@@ -6743,8 +6748,10 @@ not the time-varying covariates, which are handled below in %interactionsb*/
             end;   
 
             s&&cov&i [ &time] = &&cov&i ;
-			%if &intvisittype = 2 %then %do ;
-				&&&cov&i.._holder = &&cov&i ; * will hold the most recent simulated value. will always be in a non-skip time ;
+			%if &intvisittype = 2  AND &&usevisitp&i = 0 %then %do ;
+			      * when there is a visitprocess the value of &&cov&i at this point could be from a carried forward value when this timepoint there is no
+			        visit. Only evaluate this definition when there is not a visit process. The code for the visit process situation is defined above. ;
+				 &&&cov&i.._holder = &&cov&i ; * will hold the most recent simulated value. will always be in a non-skip time ;
 			%end;
             %if &&usevisitp&i = 1 %then  s&&cov&i.randomvisitp[&time] = &&cov&i.randomvisitp ;;
             %*Generating derived variables (categories, etc);
@@ -6752,6 +6759,8 @@ not the time-varying covariates, which are handled below in %interactionsb*/
             %genpred(sim,lagtype=1);   
         end;
         else do ;
+		   /* with a skip type variable there is no visit process. We do not need to condition on &&usevisitp&i */
+
 		    %if &intvisittype=1 %then %do;
             	&&cov&i = &&cov&i.._l1 ; *original method to carry forward during skip time. This will use the intervened on value ;
 			%end;
