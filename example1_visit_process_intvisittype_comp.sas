@@ -12,11 +12,11 @@ options notes;
 
 
 %let interv1 = intno=1 ,  nintvar=1, intvisittype = 1 ,
-    intlabel='All subjects exercise at least 30 minutes: with intvisittype= 1',
-    intvar1 = act, inttype1 = 2, intmin1=30, intpr1=1, inttimes1 = 0 1 2 3 4 5 ;
+    intlabel='All subjects exercise at least 10 minutes: with intvisittype= 1',
+    intvar1 = act, inttype1 = 2, intmin1=10, intpr1=1, inttimes1 = 0 1 2 3 4 5 ;
 %let interv2 = intno=2 ,  nintvar=1, intvisittype = 2 ,
-    intlabel='All subjects exercise at least 30 minutes: with intvisittype= 2',
-    intvar1 = act, inttype1 = 2, intmin1=30, intpr1=1, inttimes1 = 0 1 2 3 4 5 ;
+    intlabel='All subjects exercise at least 10 minutes: with intvisittype= 2',
+    intvar1 = act, inttype1 = 2, intmin1=10, intpr1=1, inttimes1 = 0 1 2 3 4 5 ;
 
 
 
@@ -143,6 +143,7 @@ run;
 **GFORMULA Call;
 title 'GFORMULA SAMPLE';
 options mprint notes ;
+options nomprint nonotes ;
 %gformula(
 data= sample,
 id=id,
@@ -165,7 +166,7 @@ cov2  = act,    cov2otype  = 3, cov2ptype =lag1bin,
 
 hazardratio = 0 ,
 intcomp = 0 1 ,
-seed= 9458, nsamples = 0, numint=2 , usespline=0 
+seed= 9458, nsamples = 10, numint=2 , usespline=0 
 );
 
 
