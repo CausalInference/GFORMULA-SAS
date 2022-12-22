@@ -143,7 +143,7 @@ run;
 **GFORMULA Call;
 title 'GFORMULA SAMPLE';
 options mprint notes ;
-options nomprint nonotes ;
+*options nomprint nonotes ;
 %gformula(
 data= sample,
 id=id,
@@ -166,7 +166,7 @@ cov2  = act,    cov2otype  = 3, cov2ptype =lag1bin,
 
 hazardratio = 0 ,
 intcomp = 0 1 ,
-seed= 9458, nsamples = 10, numint=2 , usespline=0 
+seed= 9458, nsamples = 0, numint=2 , usespline=0 
 );
 
 
