@@ -2,7 +2,7 @@
   
 GFORMULA SAS MACRO
 
-Authors: Roger W. Logan, Jessica  G. Young, Sarah L. Taubman, Yu-Han Chiu, Sally Picciotto, Goodarz Danaei, Miguel A. Hernán
+Authors: Roger W. Logan, Jessica  G. Young, Sarah L. Taubman, Yu-Han Chiu, Sally Picciotto, Goodarz Danaei, Miguel A. HernÃ¡n
 
 Version April 2022. This version includes additions and fixes for the inclusion of censoring in the calculation of the natural 
 course risks and means of covariates under the simulation of the natural course.
@@ -4182,7 +4182,7 @@ intusermacro7=,
           by _sample_; 
           if pDref^=0 then rr=&pd /pDref;
           if pDref^=0 then rd=&pd - pDref;
-          if rd^=. and rd^=0 then nnt = 1/rd;
+          if rd^=. and rd>0 then nnt = 1/rd;
           *logrr=log(rr); /* commented out since this was the only occurrance of this variable */
           run;
 
