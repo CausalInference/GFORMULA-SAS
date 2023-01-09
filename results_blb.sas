@@ -31,7 +31,7 @@
           by _sample_r; 
           if pDref^=0 then rr=&pd /pDref;
           if pDref^=0 then rd=&pd - pDref;
-          if rd^=. and rd^=0 then nnt = 1/rd;
+          if rd^=. and rd>0 then nnt = 1/rd;
           *logrr=log(rr); /* commented out since this was the only occurrance of this variable */
           run;
 
@@ -152,7 +152,7 @@ run ;
           by _sample_s _sample_r; 
           if pDref^=0 then rr=&pd /pDref;
           if pDref^=0 then rd=&pd - pDref;
-          if rd^=. and rd^=0 then nnt = 1/rd;
+          if rd^=. and rd>0 then nnt = 1/rd;
           *logrr=log(rr); /* commented out since this was the only occurrance of this variable */
           run;
 
