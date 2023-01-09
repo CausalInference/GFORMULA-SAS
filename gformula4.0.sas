@@ -4182,7 +4182,7 @@ intusermacro7=,
           by _sample_; 
           if pDref^=0 then rr=&pd /pDref;
           if pDref^=0 then rd=&pd - pDref;
-          if rd^=. and rd^=0 then nnt = 1/rd;
+          if rd^=. and rd>0 then nnt = 1/rd;
           *logrr=log(rr); /* commented out since this was the only occurrance of this variable */
           run;
 
@@ -4684,7 +4684,6 @@ intusermacro7=,
 %mend ;
 
 /**********************/
-
 %macro listpred(main,switchind,start,stop,t0,t1,t2,t3,pre,prep=0);
 /* listpred is in general called two ways, with main and contemp. contemp is for how variables covX appear in the models 
    for covY with X < Y . for main this will be run for all variables and may change  based on switchind = &i when using main */
