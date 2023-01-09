@@ -275,6 +275,8 @@
 	 
 
     %*Looping over bootstrap samples;
+
+    %let bsample = 0 ;
     %do sample_s = 1 %to &BLB_s;
         %if (&outputs ^= yes or %eval(&sample_s) ^= 0) %then %do;
                %let ods_logit = ods select none ;
@@ -283,6 +285,7 @@
         %end;
 
 		%do sample_r = 1 %to &BLB_r ;
+			%let bsample = %eval(&bsample + 1 );
         		%*Generating samples;
 
 				%if &printlogstats = 1 %then %put  before sample =  ( &sample_s , &sample_r )   seed = &seed ;
@@ -614,6 +617,60 @@
     
  %end;
 
+
+     %if &runnc = 1 OR (&runnc = 0 AND &numint > 0 AND &refint > 0 ) %then %do;
+        %if &chunked = 0 %then %do;
+           %*Summarizing final results;
+           %results_blb(blb_samples = &BLB_s );
+        %end;
+        %else %if &chunked = 1 AND &sample_start = 0 %then %do;
+           %local visitlist ;
+           %let visitlist = ;
+           %do i = 1 %to &ncov;
+              %if &&usevisitp&i = 1 %then %let visitlist = &visitlist &i ;
+           %end;
+           %bootstrap_results(
+               bootlib = &savelib,
+               bootname = &intervname ,
+               outc = &outc ,
+               outctype = &outctype,
+               compevent = &compevent ,
+               censor = &censor ,
+               check_cov_models = &check_cov_models,
+               covmeandata = &covmeanname0 ,
+               ncov = &ncov,
+               usevisitp = &visitlist ,
+               survdata=&survdata,
+               observed_surv = &observed_surv,
+               print_cov_means = &print_cov_means,
+               savecovmean = 0,
+               bootstrap_hazard = 0,
+               hazardratio=&hazardratio,
+               hazardname = &hazardname0 ,
+               intcomp = &intcomp ,
+               time = &time ,
+               timepoints = &timepoints,
+               numparts = 1,
+               samplestart = 0 ,
+               sampleend = &sample_end,
+               numboot = &sample_end,
+               numint = &numint ,
+               refint = &refint ,
+               rungraphs = &rungraphs ,
+               graphfile = &graphfile,
+               resultsdata = &resultsdata,
+               runnc = &runnc ,              
+               titledata= &titledata,
+               title1= &title1,
+               title2= &title2,
+               title3= &title3,
+               tsize = &tsize,
+               printlogstats = &printlogstats
+               );
+              
+           
+       %end;
+    %end;
 %mend ;
 
 
