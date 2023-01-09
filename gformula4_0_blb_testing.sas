@@ -314,7 +314,8 @@ options mautosource minoperator ;
           cov0moddatausermacro cov0setblvar cov0simusermacro cov0barray cov0sarray cov0randomvisitp cov0visitpmaxgap cov0visitpwherem
           cov0visitpcount cov0visitpelse  newsimulkeeplist;
     %local covlist ;
-	%local bootstrap_counts ;
+	%local bootstrap_counts sample_r sample_s created_dataviews  ;
+	%let created_dataviews = 0 ;
     %local anytsswitch1 anylagcumavg ; /* any ptype equal to tsswitch1 for creating spline variables */
     %let anytsswitch1 = 0 ;
     %let anylagcumavg = 0 ;
@@ -628,11 +629,10 @@ options mautosource minoperator ;
 
 	%base_sample ;
 
-
-	%if &bootstrap_method = 0 %then %do;
+	%if &bootstrap_method = 0  %then %do;
 		%bootstrap_normal ;
 	%end;
-	%else %if &bootstrap_method = 1 %then %do;
+	%else %if &bootstrap_method = 1 AND &BLB_s > 0 %then %do;
 		%bootstrap_blb ;
 	%end;
      
@@ -654,9 +654,11 @@ options mautosource minoperator ;
 
    /* the base sample is done outside this macro . Will start the loop after base sample*/ 
 
-   %if &sample_start = 0 %then %let sample_start = 1 ;
+   %if &sample_start = 0 %then %let loop_start = 1 ;
+   %else %let loop_start = &sample_start ;
 
-    %do bsample = &sample_start %to &sample_end;
+    %do bsample = &loop_start %to &sample_end;
+	    %put inside bootstrap_normal, bsample = &bsample ;
         %if (&outputs ^= yes or %eval(&bsample) ^= 0) %then %do;
                %let ods_logit = ods select none ;
                %let ods_reg = ods select none ;
@@ -695,8 +697,10 @@ options mautosource minoperator ;
         _sample_ = &bsample ;
         run;
 
-       %if &bsample = &sample_start  %then %do;
+		/* check this line when running with chunks */
+       %if &bsample = &sample_start  AND &created_dataviews = 0  %then %do;
              /* initialize data views for interventions */
+	        
 
              %if &runnc = 1 %then %do;
                  %interv_init(intno=0, intlabel='Natural course' ); 
@@ -705,7 +709,9 @@ options mautosource minoperator ;
 
              %do intnum = 1 %to &numint;
                 %interv_init(&&interv&intnum);
-             %end;             
+             %end;  
+
+             %let created_dataviews = 1 ; 
 
         %end;            
        
@@ -887,7 +893,10 @@ options mautosource minoperator ;
                 %interv (intno=0 , intlabel='Natural course'); /* do not need to save simulated data set */                                 
             %end;   
 
-         
+         /*** this statement is not correct, when the base sample was already run */
+		 /*** not testing with chunking so this submacro starts with sample_start = 1 */
+		/*** for testing we will change the bsample = sample_start if condition to fail ***/
+
                 %if &bsample = &sample_start %then %do;  
                     data &survdata ;
                     set  surv_tmp0 ;
@@ -1331,8 +1340,17 @@ options mautosource minoperator ;
                     call symput("outcmax",trim(left(&outc._max)) );
                     end;
         %end;
-        _sample_ = 0 ;
-        keep  _sample_ %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3  %then  &outc._min &outc._max ;
+        %if &bootstrap_method = 0 %then %do;
+			_sample_ = 0 ;
+		%end;
+		%else %if &bootstrap_method = 1 %then %do;
+			_sample_r = 0 ;
+			_sample_s = 0 ;
+		%end;
+
+        keep  %if &bootstrap_method = 0 %then _sample_ ;
+              %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+               %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3  %then  &outc._min &outc._max ;
                 %do i = 0 %to &ncov ; 
                     %if &&cov&i.otype=3 or &&cov&i.otype=4 or &&cov&i.otype=6 or &&cov&i.otype=7   or &&cov&i.otype = -1  %then &&cov&i.._min &&cov&i.._max ;
                 %end ;
@@ -1759,10 +1777,11 @@ options mautosource minoperator ;
         merge _paramdata_ (in= p) _paramsample_;
         by newid ;
         if numberhits > 0 ; *delete those not selected into sample ;
+		bootstrap_counts = 1 ;
         do _copy_ = 1 to numberhits ; * make numberhits copies of each remaining subject ;
             output ;
-        end;
-		bootstrap_counts = 1 ; 
+
+        end;		 
         drop numberhits 
              %if %bquote(&censor) = %then _copy_ ; ;
         run;
@@ -1867,6 +1886,7 @@ options mautosource minoperator ;
         data simul ;
         set simul ;
         do _copy0_ = 1 to numberhits ;
+		        bootstrap_counts = 1 ;
                 output ;
         end;
         drop numberhits _copy0_ ;
@@ -1933,13 +1953,21 @@ options mautosource minoperator ;
         data outc;
         set outc;
         if _type_='PARMS';
-        _sample_ = &bsample;
+        %if &bootstrap_method = 0 %then %do;
+            _sample_=&bsample;
+		%end;
+		%else %if &bootstrap_method = 1 %then %do;
+			 _sample_s = &sample_s ;
+			_sample_r = &sample_r ;
+		%end;
         array avar intercept &outcpred;
         array abeta boutc00-boutc&dimoutc;
         do i=1 to dim(avar);
             abeta(i)=avar(i);
             end;
-        keep _sample_ boutc00-boutc&dimoutc;
+        keep %if &bootstrap_method = 0 %then _sample_ ;
+             %else %if &bootstrap_method = 1 %then _sample_r _sample_s ; 
+              boutc00-boutc&dimoutc;
         run;
    %end;
 
@@ -1964,13 +1992,21 @@ options mautosource minoperator ;
     data outc;
     set outc;
     if _type_='PARMS';
-     _sample_ = &bsample;
+    %if &bootstrap_method = 0 %then %do;
+        _sample_=&bsample;
+	%end;
+	%else %if &bootstrap_method = 1 %then %do;
+		_sample_s = &sample_s ;
+		_sample_r = &sample_r ;
+	%end;
         array avar intercept &outcpred;
         array abeta boutc00-boutc&dimoutc;
         do i=1 to dim(avar);
             abeta(i)=avar(i);
             end;
-        keep _sample_ boutc00-boutc&dimoutc;
+        keep %if &bootstrap_method = 0 %then _sample_ ;
+			 %else %if &bootstrap_method = 0 %then _sample_s _sample_r ;
+            boutc00-boutc&dimoutc;
         run;
 
 
@@ -1998,14 +2034,22 @@ options mautosource minoperator ;
     data outc;
         set outc;
         if _type_="PARMS";
-        _sample_=&bsample;
+        %if &bootstrap_method = 0 %then %do;
+            _sample_=&bsample;
+		%end;
+		%else %if &bootstrap_method = 1 %then %do;
+		 	_sample_s = &sample_s ;
+			_sample_r = &sample_r ;
+		%end;
         array avar intercept &outcpred;
         array abeta boutc00-boutc&dimoutc;
         do i=1 to dim(avar);
            abeta(i)=avar(i);
            end;
         se&outc=_rmse_;
-        keep _sample_ boutc00-boutc&dimoutc se&outc;
+        keep %if &bootstrap_method = 0 %then _sample_ ;
+              %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+             boutc00-boutc&dimoutc se&outc;
     run;
 
 
@@ -2061,14 +2105,22 @@ options mautosource minoperator ;
             data outc;
             set outc; 
             if _type_="PARM";
-            _sample_=&bsample;
+			%if &bootstrap_method = 0 %then %do;
+            	_sample_=&bsample;
+			%end;
+			%else %if &bootstrap_method = 1 %then %do;
+			 	_sample_s = &sample_s ;
+				_sample_r = &sample_r ;
+			%end;
             array avar intercept &outcpred;
             array abeta boutc00-boutc&dimoutc;
             do i=1 to dim(avar);
                abeta(i)=avar(i);
             end;
             se&outc=_Sigma;
-            keep _sample_ boutc00-boutc&dimoutc se&outc;
+            keep %if &bootstrap_method = 0 %then _sample_ ;
+                  %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+                   boutc00-boutc&dimoutc se&outc;
             run;
           
             proc datasets library = work nolist ;
@@ -2098,14 +2150,22 @@ options mautosource minoperator ;
            data outc;
            set outc;
            if _type_="PARM";
-        _sample_=&bsample;
+        	%if &bootstrap_method = 0 %then %do;
+            	_sample_=&bsample;
+			%end;
+			%else %if &bootstrap_method = 1 %then %do;
+			 	_sample_s = &sample_s ;
+				_sample_r = &sample_r ;
+			%end;
         array avar intercept &outcpred;
         array abeta boutc00-boutc&dimoutc;
         do i=1 to dim(avar);
            abeta(i)=avar(i);
            end;
         se&outc=_Sigma;
-        keep _sample_ boutc00-boutc&dimoutc se&outc;
+        keep %if &bootstrap_method = 0 %then _sample_ ;
+             %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+              boutc00-boutc&dimoutc se&outc;
     run;
 
     proc datasets library = work nolist ;
@@ -2126,13 +2186,21 @@ options mautosource minoperator ;
         data compevent;
             set compevent;
             if _type_='PARMS';
-            _sample_ = &bsample;
+            	%if &bootstrap_method = 0 %then %do;
+            	_sample_=&bsample;
+			%end;
+			%else %if &bootstrap_method = 1 %then %do;
+			 	_sample_s = &sample_s ;
+				_sample_r = &sample_r ;
+			%end;
             array avar intercept &compeventpred;
             array abeta bcompevent00-bcompevent&dimcompevent;
             do i=1 to dim(avar);
                 abeta(i)=avar(i);
                 end;
-            keep _sample_ bcompevent00-bcompevent&dimcompevent;
+            keep %if &bootstrap_method = 0 %then _sample_ ;
+  			      %else %if &bootstrap_method = 1 %then _sample_r _sample_s ;
+                  bcompevent00-bcompevent&dimcompevent;
         run;
 
     %end;
@@ -2301,6 +2369,7 @@ options mautosource minoperator ;
 
        %if &&usevisitp&i = 1 %then %do;
 
+
             proc logistic descending
                 data=param(keep =  _weight_ &outc &compevent   &time &&cov&i.randomvisitp &&cov&i.array &bootstrap_counts 
                 &wherevars  /* ts_last_&&cov&i.._l1  this should be included in &&cov&i.array */ )
@@ -2317,13 +2386,21 @@ options mautosource minoperator ;
             data &&cov&i.randomvisitp;
             set &&cov&i.randomvisitp;
             if _type_='PARMS';
-            _sample_ = &bsample;
+            	%if &bootstrap_method = 0 %then %do;
+            	_sample_=&bsample;
+			%end;
+			%else %if &bootstrap_method = 1 %then %do;
+			 	_sample_s = &sample_s ;
+				_sample_r = &sample_r ;
+			%end;
             array avar intercept &&cov&i.array;          
             array abeta bvar&i.visitp_00-bvar&i.visitp_&&dimvar&i;
             do j=1 to dim(avar); 
                 abeta(j)=avar(j); 
             end;
-            keep _sample_ bvar&i.visitp_00-bvar&i.visitp_&&dimvar&i;          
+            keep %if &bootstrap_method = 0 %then _sample_ ;
+                 %else %if &bootstrap_method = 1 %then _sample_r _sample_s ;
+                bvar&i.visitp_00-bvar&i.visitp_&&dimvar&i;          
             run;
 
        %end;
@@ -2512,14 +2589,22 @@ options mautosource minoperator ;
             data &&cov&i;
                 set &&cov&i;
                 if _type_='PARMS';
-                _sample_ = &bsample;
+                %if &bootstrap_method = 0 %then %do;
+            		_sample_=&bsample;
+				%end;
+				%else %if &bootstrap_method = 1 %then %do;
+			 		_sample_s = &sample_s ;
+					_sample_r = &sample_r ;
+				%end;
                 array avar intercept &&cov&i.array;       
                 array abeta bvar&i._00-bvar&i._&&dimvar&i;
                 do j=1 to dim(avar); abeta(j)=avar(j); end;
                     %if &&cov&i.otype=3 %then %do;
                         se&&cov&i=_rmse_;
                         %end;
-                    keep _sample_ bvar&i._00-bvar&i._&&dimvar&i 
+                    keep %if &bootstrap_method = 0 %then _sample_ ;
+                         %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+                         bvar&i._00-bvar&i._&&dimvar&i 
                         %if &&cov&i.otype=3 %then %do;
                         se&&cov&i
                             %end;
@@ -2530,7 +2615,9 @@ options mautosource minoperator ;
 
                data &&cov&i;
                merge &&cov&i.randomvisitp &&cov&i;
-               by _sample_;
+               by 	%if &bootstrap_method = 0 %then _sample_;
+                	%else %if &bootstrap_method = 1 %then _sample_s  _sample_r;
+			      ;
                run;
 
             %end; 
@@ -2543,21 +2630,37 @@ options mautosource minoperator ;
                 data c0_z&&cov&i;
                     set c0_z&&cov&i;
                     if _type_='PARMS';
-                    _sample_ = &bsample;
+                    %if &bootstrap_method = 0 %then %do;
+            			_sample_=&bsample;
+					%end;
+					%else %if &bootstrap_method = 1 %then %do;
+			 			_sample_s = &sample_s ;
+						_sample_r = &sample_r ;
+					%end;
                     array avar intercept &&cov&i.array;
                     array abeta bvar&i.z0_00-bvar&i.z0_&&dimvar&i;
                     do j=1 to dim(avar); abeta(j)=avar(j); end;
-                        keep _sample_ bvar&i.z0_00-bvar&i.z0_&&dimvar&i;
+                        keep %if &bootstrap_method = 0 %then _sample_ ;
+                            %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+                           bvar&i.z0_00-bvar&i.z0_&&dimvar&i;
                 run;
 
                 data c1_z&&cov&i;
                     set c1_z&&cov&i;
                     if _type_='PARMS';
-                    _sample_ = &bsample;
+                    %if &bootstrap_method = 0 %then %do;
+            			_sample_=&bsample;
+					%end;
+					%else %if &bootstrap_method = 1 %then %do;
+			 			_sample_s = &sample_s ;
+						_sample_r = &sample_r ;
+					%end;
                     array avar intercept &&cov&i.array;
                     array abeta bvar&i.z1_00-bvar&i.z1_&&dimvar&i;
                     do j=1 to dim(avar); abeta(j)=avar(j); end;
-                        keep _sample_ bvar&i.z1_00-bvar&i.z1_&&dimvar&i;
+                        keep %if &bootstrap_method = 0 %then _sample_ ;
+                              %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+                         bvar&i.z1_00-bvar&i.z1_&&dimvar&i;
                 run;
 
                 %end;
@@ -2565,22 +2668,38 @@ options mautosource minoperator ;
                 data z&&cov&i;
                     set z&&cov&i;
                     if _type_='PARMS';
-                    _sample_ = &bsample;
+                    %if &bootstrap_method = 0 %then %do;
+            	   		_sample_=&bsample;
+					%end;
+					%else %if &bootstrap_method = 1 %then %do;
+			 			_sample_s = &sample_s ;
+						_sample_r = &sample_r ;
+					%end;
                     array avar intercept &&cov&i.array;
                     array abeta bvar&i.z_00-bvar&i.z_&&dimvar&i;
                     do j=1 to dim(avar); abeta(j)=avar(j); end;
-                        keep _sample_ bvar&i.z_00-bvar&i.z_&&dimvar&i;
+                        keep %if &bootstrap_method = 0 %then _sample_ ;
+                              %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+                        bvar&i.z_00-bvar&i.z_&&dimvar&i;
                 run;
                 %end;
             data &&cov&i;
                 set &&cov&i;
                 if _type_='PARMS';
-                _sample_ = &bsample;
+                %if &bootstrap_method = 0 %then %do;
+            		_sample_=&bsample;
+				%end;
+				%else %if &bootstrap_method = 1 %then %do;
+			 		_sample_s = &sample_s ;
+					_sample_r = &sample_r ;
+				%end;
                 array avar intercept &&cov&i.array;
                 array abeta bvar&i._00-bvar&i._&&dimvar&i;
                 do j=1 to dim(avar); abeta(j)=avar(j); end;
                     se&&cov&i=_rmse_;
-                    keep _sample_ bvar&i._00-bvar&i._&&dimvar&i se&&cov&i;
+                    keep %if &bootstrap_method = 0 %then _sample_ ;
+                         %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+                      bvar&i._00-bvar&i._&&dimvar&i se&&cov&i;
             run;
             data &&cov&i;
                 %if %bquote(&&cov&i.class)^= %then %do;
@@ -2589,7 +2708,9 @@ options mautosource minoperator ;
                 %else %do;
                     merge &&cov&i z&&cov&i;
                     %end;
-                by _sample_;
+                by %if &bootstrap_method = 0 %then _sample_ ;
+				   %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+				    ;
             run;
 
           
@@ -2597,7 +2718,9 @@ options mautosource minoperator ;
 
                data &&cov&i;
                merge &&cov&i.randomvisitp &&cov&i;
-               by _sample_;
+               by %if &bootstrap_method = 0 %then _sample_ ;
+                   %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+                ;
                run;
 
             %end;      
@@ -2609,16 +2732,26 @@ options mautosource minoperator ;
                 data &&cov&i.._&l;
                     set &&cov&i.._&l;
                     if _type_='PARMS';
-                    _sample_ = &bsample;
+                    %if &bootstrap_method = 0 %then %do;
+            			_sample_=&bsample;
+					%end;
+					%else %if &bootstrap_method = 1 %then %do;
+			 			_sample_s = &sample_s ;
+						_sample_r = &sample_r ;
+					%end;
                     array avar_&l intercept &&cov&i.array;
                     array abeta_&l bvar&i._&l._00-bvar&i._&l._&&dimvar&i;
                     do j=1 to dim(avar_&l); abeta_&l.(j)=avar_&l.(j); end;
-                        keep _sample_  bvar&i._&l._00-bvar&i._&l._&&dimvar&i;
+                        keep %if &bootstrap_method = 0 %then _sample_ ;
+                            %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+                           bvar&i._&l._00-bvar&i._&l._&&dimvar&i;
                 run;
                 %end;
             data &&cov&i;
                 merge %do l = 1 %to %eval(&&cov&i.lev - 1); &&cov&i.._&l %end; ;
-                by _sample_;
+                by %if &bootstrap_method = 0 %then _sample_ ;
+                    %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+                        ;
             run;
 
 
@@ -2627,7 +2760,8 @@ options mautosource minoperator ;
 
                data &&cov&i;
                merge &&cov&i.randomvisitp &&cov&i;
-               by _sample_;
+               by %if &bootstrap_method = 0 %then _sample_ ;
+                    %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;;
                run;
 
             %end; 
@@ -2637,14 +2771,22 @@ options mautosource minoperator ;
             data &&cov&i;
                 set &&cov&i;
                 if _type_='PARM';
-                _sample_ = &bsample;
+                %if &bootstrap_method = 0 %then %do;
+            		_sample_=&bsample;
+				%end;
+				%else %if &bootstrap_method = 1 %then %do;
+			 		_sample_s = &sample_s ;
+					_sample_r = &sample_r ;
+				%end;
                 array avar intercept &&cov&i.array;       
                 array abeta bvar&i._00-bvar&i._&&dimvar&i;
                 do j=1 to dim(avar); abeta(j)=avar(j); end;
                     
                         se&&cov&i=_Sigma;
                         
-                    keep _sample_ bvar&i._00-bvar&i._&&dimvar&i 
+                    keep %if &bootstrap_method = 0 %then _sample_ ;
+                    %else %if &bootstrap_method = 1 %then _sample_s _sample_r ; 
+                        bvar&i._00-bvar&i._&&dimvar&i 
                         
                         se&&cov&i
                            
@@ -2656,7 +2798,8 @@ options mautosource minoperator ;
 
                data &&cov&i;
                merge &&cov&i.randomvisitp &&cov&i;
-               by _sample_;
+               by %if &bootstrap_method = 0 %then _sample_ ;
+                    %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;;
                run;
 
             %end; 
@@ -2693,18 +2836,20 @@ options mautosource minoperator ;
                         %end;
                     %end;
                     ;
-          by _sample_;
-                _sample_ = &bsample;
-    run;
+          by %if &bootstrap_method = 0 %then _sample_ ;
+                    %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;;               
+    	 run;
 
     proc append base=_beta_ data=samplebetas;
     run;
        
-    proc sort data=_beta_; by _sample_;
+    proc sort data=_beta_; 
+    by %if &bootstrap_method = 0 %then _sample_ ;
+                    %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;;
     run;
     
 
-    %if &bsample =   &sample_end   %then %do;            
+    %if  &bsample =   &sample_end   %then %do;            
          
         
         %if %bquote(&betadata)^= %then %do;
@@ -2729,7 +2874,8 @@ options mautosource minoperator ;
 
           proc sql ;
             create table &dataholder  as
-            select &bsample as _sample_ , 
+            select  %if &bootstrap_method = 0 %then &bsample as _sample_ , ;
+                    %else %if &bootstrap_method = 1 %then &sample_r as _sample_r , &sample_s as _sample_s, ; 
                 &time as _time_ , 
                 %if &outctype = binsurv %then %do;
                       max(sum(&outc),0) as e,
@@ -2945,10 +3091,11 @@ options mautosource minoperator ;
    %end;            
     
     %*Sort data;
+	/***
     proc sort data = simul;
         by _sample_;
     run;
-
+    ***/
   
     %*Outputting the mean of covariates and probability of event;
      proc means data=simulated&intno  noprint /*simulated&intno is a function*/; 
@@ -3097,12 +3244,21 @@ options mautosource minoperator ;
 
             data interv&intno;
             set stats_holder;
-            _sample_ = &bsample;
+			%if &bootstrap_method = 0 %then %do;
+            	_sample_ = &bsample;
+			%end;
+			%else %if &bootstrap_method = 1 %then %do;
+			  	_sample_r = &sample_r;
+				_sample_s = &sample_s ;
+			%end;
             length int2 $70 ;
             int=&intno;
             int2=&intlabel;
             n=_FREQ_;
-            keep int int2 _sample_ n %if &outctype=binsurv %then %do;
+            keep int int2  %if &bootstrap_method = 0 %then  _sample_ ;
+                           %else %if &bootstrap_method = 1 %then _sample_r _sample_s ; 
+                            n 
+                           %if &outctype=binsurv %then %do;
                                         pd 
                                         %do j = 1 %to %eval(&timepoints);
                                             s&outc.&j 										
@@ -3135,12 +3291,20 @@ options mautosource minoperator ;
                 data surv_tmp&intno;
                 set surv_holder ;
                 length int2 $70 ;
-                _sample_ = &bsample ;
+                %if &bootstrap_method = 0 %then %do;
+            		_sample_ = &bsample;
+				%end;
+				%else %if &bootstrap_method = 1 %then %do;
+			  		_sample_r = &sample_r;
+					_sample_s = &sample_s ;
+				%end;
                 int = &intno ;
                 int2 = &intlabel ;
                 n = _freq_ ;
                 surv0 = 1 ;
-                keep  int int2 _sample_ n surv0
+                keep  int int2 %if &bootstrap_method = 0 %then  _sample_ ;
+                                %else %if &bootstrap_method = 1 %then _sample_r _sample_s ;
+                   n surv0
                    %do n = 1 %to %eval(&timepoints);
                        risk&n surv&n compevent&n   
                    %end;
@@ -3155,7 +3319,9 @@ options mautosource minoperator ;
               data surv_tmp&intno ;
               set interv&intno ;
               
-              keep _sample_ s&outc int int2  ;
+              keep  %if &bootstrap_method = 0 %then  _sample_ ;
+                    %else %if &bootstrap_method = 1 %then _sample_r _sample_s ; 
+                    s&outc int int2  ;
               run;
           %end; 
 
@@ -3299,7 +3465,9 @@ options mautosource minoperator ;
     %end;
   
     data simul ;
-    set simul (keep =  _sample_ &newsimulkeeplist &bootstrap_counts );
+    set simul (keep =   %if &bootstrap_method = 0 %then  _sample_ ;
+                        %else %if &bootstrap_method = 1 %then _sample_r _sample_s ;
+                        &newsimulkeeplist &bootstrap_counts );
     run;
 
     proc datasets library = work nolist ;
@@ -3404,7 +3572,8 @@ intusermacro7=,
         merge simul _betar_  _seedr_ _covbounds_ 
                     %if &hazardratio = 1 %then   _calchazard_   ; 
                       end=_end_;
-        by _sample_;
+        by %if &bootstrap_method = 0 %then _sample_ ;
+		   %else %if &bootstrap_method = 1 %then _sample_s _sample_r ; ;
         
         call streaminit(_seedr_);
         drop _seedr_ ; 

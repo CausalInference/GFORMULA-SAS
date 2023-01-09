@@ -1,6 +1,9 @@
 /*Example: outctype=binsurv*/
 
-%include 'gformula4.0.sas';
+%include '/proj/sas_macros/gformula/master_branch/new_censoring/GFORMULA-SAS/gformula4_0_blb_testing.sas';
+%include '/proj/sas_macros/gformula/master_branch/new_censoring/GFORMULA-SAS/bootstrap_blb_version0.sas';
+%include '/proj/sas_macros/gformula/master_branch/new_censoring/GFORMULA-SAS/base_sample.sas';
+
 options linesize=88 pagesize=54;
 
 *options mprint mprintnest;
@@ -98,11 +101,15 @@ run;
 %create_sample;
 
 
-
+proc datasets library = work nolist ;
+save sample ;
+quit;
 
 **GFORMULA Call;
 title 'GFORMULA SAMPLE';
-options mprint notes ;
+options mprint mprintnest notes spool ;
+options nomlogic ;
+*options nonotes nomprint ;
 %gformula(
 data= sample,
 id=id,
@@ -122,9 +129,14 @@ ncov=2,
 cov1  = hbp,    cov1otype  = 2, cov1ptype = tsswitch1,
 cov2  = act,    cov2otype  = 4, cov2ptype = lag2cub,
 
-hazardratio = 1 ,
+hazardratio = 0 , /* this is broken */
 intcomp = 0 1 ,
-seed= 9458, nsamples = 0, numint=1
+seed= 9458, numint=1,
+bootstrap_method =1,
+nsamples = 2 ,
+BLB_b = 500 ,
+BLB_r = 2, /* for inner loop */
+BLB_s = 2 /* for outter loop */
 );
 
 

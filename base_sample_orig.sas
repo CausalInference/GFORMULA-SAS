@@ -21,12 +21,12 @@
                %let ods_qlim = ods select none ;
         %end;
         %*Generating samples;
-
+/***
 		%if &printlogstats = 1 AND &bootstrap_method = 0 %then %put  before sample =   &bsample   seed = &seed ;
 		%if &printlogstats = 1 AND &bootstrap_method = 1 %then %put  before sample =   (&sample_s , &sample_r ) ,  seed = &seed ;
 
 		%if &printlogstats = 1 %then %put  ;
-
+*****/
 	 
 
         %*Base data for estimation and simulation (sample 0);
@@ -34,7 +34,7 @@
         data param;
         set _paramdata_;        
 		%if &bootstrap_method = 0 %then %do;
-		    _sample_ = 0 ;
+		    _sample = 0 ;
 			bootstrap_counts = 1 ;
 		%end;
 		%else %if &bootstrap_method = 1 %then %do;
@@ -52,7 +52,7 @@
 		
             
 			%if &bootstrap_method = 0 %then %do;
-			    _sample_ = 0 ;
+			    _sample = 0
 				bootstrap_counts = 1 ;
 			%end;
 			%else %if &bootstrap_method = 1 %then %do;
@@ -72,13 +72,7 @@
 
             data simul ;
             set simul ;
-             %if &bootstrap_method = 0 %then %do;
-			 	_sample_ = 0 ;
-			 %end;
-			 %else %if &bootstrap_method = 1 %then %do;
-			 	_sample_s = 0 ;
-				_sample_r = 0 ;
-             %end;
+             _sample_ = 0 ;
 			 %if &use_bootstrap_counts = 0 %then %do;
             	do _copy_ = 1 to numberhits ;
                 	output ;
@@ -103,7 +97,8 @@
 			 %end;            
             run;
         %end;             
-  
+                  
+ 
           
         %*Estimating parameters;
         %if &usebetadata = 0 %then %do;            
@@ -139,7 +134,7 @@
 		%end;
         run;
 
-	 
+		%return ;
        
          /* initialize data views for interventions */
 
@@ -389,7 +384,7 @@
         %let intstart = 0 ;
         %if &runnc = 0 %then %let intstart = 1;
 
-        %if  &bsample = &sample_start %then %do;  
+        %if %eval(&bsample) = &sample_start %then %do;  
            
             %do int = &intstart %to %eval(&numint);
                 
@@ -453,5 +448,6 @@
         quit;
    
    
+
 
 %mend base_sample  ;

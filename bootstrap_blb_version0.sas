@@ -7,7 +7,7 @@
 
     %************ CREATING BOOTSTRAP SAMPLES;  
     
-       /* %if &printlogstats = 1 %then */ %put  Creating bootstrap sample &bsample , seed = &seed , ssize=&ssize , nsimul = &nsimul , nparam = &nparam  ;
+       /* %if &printlogstats = 1 %then */ %put  Creating bootstrap sample sample_s = &sample_s , sample_r = &sample_r , seed = &seed , ssize=&ssize , nsimul = &nsimul , nparam = &nparam  ;
        /* %if &printlogstats = 1 %then %put    ; */
 
         %*Generating random sample of ids to be used in bootstrap sample; 
@@ -24,13 +24,10 @@
    
         data _paramsample_ ;
         set _idsamples ;
-        _sample_ = &sample_r  ;
+        _sample_r = &sample_r  ;
+        _sample_s = &sample_s ;
         run; 
-proc contents data = _paramdata_ ;
-run;
 
-proc contents data = _paramsample_ ;
-run;
   
     * add in the variable numberhits for the number of times a subject is selected into the bootstrap sample ;
     data param ;
@@ -112,8 +109,9 @@ run;
                     call symput("outcmax",trim(left(&outc._max)) );
                     end;
         %end;
-         _sample_ = &bsample ;
-        keep  _sample_ %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3  %then  &outc._min &outc._max ;
+         _sample_r = &sample_r ;
+		 _sample_s = &sample_s ;
+        keep  _sample_r _sample_s %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3  %then  &outc._min &outc._max ;
                 %do i = 0 %to &ncov ; 
                     %if &&cov&i.otype=3 or &&cov&i.otype=4 or &&cov&i.otype=6 or &&cov&i.otype=7   or &&cov&i.otype = -1  %then &&cov&i.._min &&cov&i.._max ;
                 %end ;
@@ -123,11 +121,11 @@ run;
 
     %do i = 0 %to &ncov;
         %if &&cov&i.otype=3 or &&cov&i.otype=4 or  &&cov&i.otype=6 or &&cov&i.otype=7  or &&cov&i.otype=-1 %then %do;
-            %if &printlogstats = 1 %then %put  bootstrap sample &bsample &&cov&i range is &&cov&i.min to &&cov&i.max;                    
+            %if &printlogstats = 1 %then %put  bootstrap sample &sample_s &sample_r &&cov&i range is &&cov&i.min to &&cov&i.max;                    
             %end;
         %end;
     %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu %then %do;
-      %if &printlogstats = 1 %then %put  bootstrap sample &bsample &outc range is &outcmin to &outcmax;
+      %if &printlogstats = 1 %then %put  bootstrap sample &sample_s &sample_r &outc range is &outcmin to &outcmax;
       %end;
    
         
@@ -142,7 +140,8 @@ run;
         merge _simuldata_  _idsamples;
         by newid; 
 		if BLB_count0 > 0 ;
-        _sample_ = &sample_r  ; 
+        _sample_r = &sample_r  ; 
+		_sample_s = &sample_s ;
         run;
 
 
@@ -183,7 +182,8 @@ run;
 			%if &use_bootstrap_counts = 0 %then %do;
             	data simul ;
             	set simul_tmp ;
-            	_sample_ = &sample_r ;
+            	_sample_r = &sample_r ;
+				_sample_s = &sample_s ;
              	do _copy_ = 1 to numberhits ;
 				    BLB_counts = 1 ;
                     output ;
@@ -221,7 +221,8 @@ run;
      %if &hazardratio = 1  AND &bootstrap_hazard = 0  %then %do;     
          data _calchazard_ ;
          calchazard = 0 ;
-         _sample_ = &bsample ;
+         _sample_r = &sample_r  ;
+		 _sample_s = &sample_s ;
          run;
     %end;
 
@@ -274,20 +275,20 @@ run;
 	 
 
     %*Looping over bootstrap samples;
-    %do bsample_s = &sample_start %to &sample_end;
-        %if (&outputs ^= yes or %eval(&bsample_s) ^= 0) %then %do;
+    %do sample_s = 1 %to &BLB_s;
+        %if (&outputs ^= yes or %eval(&sample_s) ^= 0) %then %do;
                %let ods_logit = ods select none ;
                %let ods_reg = ods select none ;
                %let ods_qlim = ods select none ;
         %end;
 
-		%do bsample_r = 1 %to &BLB_r ;
+		%do sample_r = 1 %to &BLB_r ;
         		%*Generating samples;
 
-				%if &printlogstats = 1 %then %put  before sample =  ( &bsample_s , &bsample_r )   seed = &seed ;
+				%if &printlogstats = 1 %then %put  before sample =  ( &sample_s , &sample_r )   seed = &seed ;
 				%if &printlogstats = 1 %then %put  ;
 
-		        %samples_blb(sample_s = &bsample_s , sample_r = &bsample_r );    
+		        %samples_blb(sample_s = &sample_s , sample_r = &sample_r );    
 		        %*Estimating parameters;
 		        %if &usebetadata = 0 %then %do;            
 		                %if &uselabelc = 0  and &uselabelo = 0 %then options nolabel ;;
@@ -307,15 +308,16 @@ run;
 	        ods select all ; 
 
 	        data _betar_ ;
-	        set _beta_  (where = ( _sample_=&bsample)) ;
+	        set _beta_  (where = ( _sample_r = &sample_r and _sample_s = &sample_s )) ;
 	        run;
 
 	        data _seedr_ ;
 	        _seedr_ = %eval(&seed);
-	        _sample_ = &bsample ;
+	        _sample_r = &sample_r ;
+			_sample_s = &sample_s ;
 	        run;
 
-       		%if &bsample_s = &sample_start  %then %do;
+       		%if &created_dataviews = 0  %then %do;
 	             /* initialize data views for interventions */
 
 	             %if &runnc = 1 %then %do;
@@ -326,18 +328,19 @@ run;
 	             %do intnum = 1 %to &numint;
 	                %interv_init(&&interv&intnum);
 	             %end;             
-
+ 
+				 %let created_dataviews = 1 ;
         	%end;            
        
 	        %if &hazardratio = 1 %then %do;
-	             %if &bsample = 0 %then  %createhazard ;
+	             %if &sample_s = 0 %then  %createhazard ;
 	             %else %if &bootstrap_hazard = 1 %then %createhazard ;
 	        %end;
 
         	%if &runnc = 1 %then %do;  /*** for natural course results ***/
             	%*No intervention cumulative incidence;
 
-            	%if &bsample_s = 0 AND  %bquote(&simuldata)^=  %then %do;
+            	%if &sample_s = 0 AND  %bquote(&simuldata)^=  %then %do;
 
 	                %*Outputting/creating  simulated dataset;
 
@@ -413,7 +416,8 @@ run;
 
 	                data interv0;
 	                set interv0;
-	                _sample_ = 0;
+	                _sample_r = &sample_r;
+					_sample_s = &sample_s ;
 	                length int2 $70 ;
 	                int=0;
 	                int2="Natural course";
@@ -460,10 +464,11 @@ run;
                         length int2 $70 ;
                         int = 0 ;
                         int2 = "Natural course";
-                        _sample_ = 0 ;
+                        _sample_r = &sample_r;
+						_sample_s = &sample_s ;
                         surv0 = 1;
                         n = _freq_ ;
-                        keep  int int2 _sample_ n  surv0
+                        keep  int int2 _sample_r _sample_s n  surv0
                         %do n = 1 %to &timepoints;
                             risk&n surv&n compevent&n  
                         %end;
@@ -498,8 +503,9 @@ run;
                         length int2 $70 ;
                         int = 0 ;
                         int2 = "Natural course";
-                        _sample_ = 0 ;                                        
-                        keep  int int2 _sample_ s&outc  ;
+                        _sample_r = &sample_r;
+						_sample_s = &sample_s ;                                        
+                        keep  int int2 _sample_r _sample_s  s&outc  ;
                     run;
                 %end; 
             %end;  /* end of saving simuldata , needed outside of interv and interv_init macros */
@@ -508,7 +514,7 @@ run;
             %end;   
 
          
-                %if &bsample = &sample_start %then %do;  
+                %if &sample_s = &sample_start AND &sample_r = 1 AND &chunked = 1  %then %do;  
                     data &survdata ;
                     set  surv_tmp0 ;
                     run;
@@ -523,7 +529,7 @@ run;
 
         %do intnum = 1 %to &numint;
             %interv(&&interv&intnum);                    
-                %if &intnum = 1 AND &runnc = 0 AND &bsample = &sample_start %then %do;
+                %if &intnum = 1 AND &runnc = 0 AND &sample_s = &sample_start AND &sample_r = 1 AND &chunked = 1 %then %do;
                       data &survdata ;
                       set surv_tmp&intnum ;
                       run;
@@ -539,7 +545,7 @@ run;
         %let intstart = 0 ;
         %if &runnc = 0 %then %let intstart = 1;
 
-        %if %eval(&bsample) = &sample_start %then %do;  
+        %if %eval(&sample_s) = &sample_start and &sample_r = 1 and &chunked = 1 %then %do;  
            
             %do int = &intstart %to %eval(&numint);
                 
@@ -557,7 +563,7 @@ run;
 
         %if &chunked = 1 %then %do;
              /* save all interventions into a permanent data set for each chunk */
-             %if &bsample = &sample_start %then %do; 
+             %if &sample_s = &sample_start and &sample_r = 1 and &chunked = 1  %then %do; 
 
                   /* save interventions */
                   %if &runnc = 1 %then %do;
@@ -590,13 +596,13 @@ run;
              %end;
         %end;
  
-        %if &printlogstats = 1 %then %put  sample = &bsample , seed = &seed  ;
+        %if &printlogstats = 1 %then %put  sample_s = &sample_s , sample_r = &sample_r  , seed = &seed  ;
 
         %let seed = %eval(&seed+3);
 
 
        proc datasets library = work nolist ;
-        delete _betar_ _seedr_   %if &bsample > 0 %then _simulsample_ ; param simul  _covbounds_ 
+        delete _betar_ _seedr_   %if &sample_r > 0 and &sample_s > 0 %then _simulsample_ ; param simul  _covbounds_ 
                %if &runnc = 1 %then surv_tmp0 ;
                %do i = 1 %to &numint ; surv_tmp&i %end;
                ;
