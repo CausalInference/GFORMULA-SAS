@@ -536,7 +536,9 @@ options mautosource minoperator ;
 
     %let seed_list = &seed ;
     %let seed_holder  =  &seed ;
-    %do i = 1 %to &nsamples ;
+	%if &bootstrap_method = 0 %then %let number_seeds = &nsamples ;
+	%else %if &bootstrap_method = 1 %then %let number_seeds = %eval(&BLB_r * &BLB_s ) ;
+    %do i = 1 %to &number_seeds  ;
        %let seed =%eval(&seed + 3) ;
        %let seed_list = &seed_list &seed ;
     %end;
@@ -626,16 +628,16 @@ options mautosource minoperator ;
     %*Exiting in case of error;
     %exit:;
    
-
+%put before base_sample : seed = &seed ;
 	%base_sample ;
-
+%put after base_sample :  seed = &seed ;
 	%if &bootstrap_method = 0  %then %do;
 		%bootstrap_normal ;
 	%end;
 	%else %if &bootstrap_method = 1 AND &BLB_s > 0 %then %do;
 		%bootstrap_blb ;
 	%end;
-     
+ %put after bootstrap_code : seed = &seed ;
 
 	
     proc datasets library = work memtype = (data view)  nolist ;
@@ -657,6 +659,40 @@ options mautosource minoperator ;
    %if &sample_start = 0 %then %let loop_start = 1 ;
    %else %let loop_start = &sample_start ;
 
+
+%if &use_samples_orig = 0 %then %do;
+	        %let BLB_b = &ssize ;
+			%let BLB_s = 1 ;
+			%let BLB_r = &nsamples ;
+
+
+			proc surveyselect data = tmpids(keep =newid ) out = step1 (rename = (replicate = sample_si))
+	   		method = srs 
+	   		sampsize = &BLB_b 
+	   		reps = &BLB_s 
+			seed = &seed 
+	   		noprint 
+	   			;
+			run ;
+
+			proc surveyselect data = step1 
+	  		out=step2 (drop = ExpectedHits SamplingWeight rename = (replicate = sample_rj 
+	                                                                numberhits = BLB_count0))
+	  		method = urs 
+	  		sampsize = &ssize 
+	  		reps = &BLB_r 
+			seed = %eval(&seed * &seed )
+	  		noprint 
+	 			;
+	  		strata sample_si ;
+			run;
+
+data step2a ; set step2 ; run;
+
+
+%end;
+
+
     %do bsample = &loop_start %to &sample_end;
 	    %put inside bootstrap_normal, bsample = &bsample ;
         %if (&outputs ^= yes or %eval(&bsample) ^= 0) %then %do;
@@ -669,12 +705,24 @@ options mautosource minoperator ;
 %if &printlogstats = 1 %then %put  before sample = &bsample seed = &seed ;
 %if &printlogstats = 1 %then %put  ;
 
-        %samples;    
+        %if &use_samples_orig = 1 %then %do;
+        	%samples;    
+		%end ;
+	   %if &use_samples_orig = 0 %then %do;
+			%samples_blb (sample_s = 1 , sample_r = &bsample );
+
+			
+		%end;
+
         %*Estimating parameters;
         %if &usebetadata = 0 %then %do;            
                 %if &uselabelc = 0  and &uselabelo = 0 %then options nolabel ;;
                 %parameters;     
-                options &label_orig ;      
+                options &label_orig ;  
+				%if &bsample = &sample_check %then %do;
+					data param1 ; set param ; run ;
+					data simul1 ; set simul ; run ;				
+			 	%end; 
         %end;
 
         %else %do; /*feb2013*/
@@ -910,6 +958,14 @@ options mautosource minoperator ;
         %end ; /* run natural course = 1 **/
         %*Looping over interventions;
 
+%if &bsample = 2 %then %do;
+  
+
+   data roger1 ;
+   set simulated1 ;
+   run;
+%end;
+
         %do intnum = 1 %to &numint;
             %interv(&&interv&intnum);                    
                 %if &intnum = 1 AND &runnc = 0 AND &bsample = &sample_start %then %do;
@@ -991,6 +1047,8 @@ options mautosource minoperator ;
                ;
         quit;
    
+
+
     %end;
 
 
@@ -3845,7 +3903,6 @@ intusermacro7=,
                                         totinterv = totinterv + 1;
                                     end;      
                                 %end;
-
                                 %*Intervention Type 5: Randomly Assign for Observed Dist;
                                 %else %if &&inttype&i = 5 %then %do;
                                     if (rand('uniform')<=&&intpr&i) then do;
@@ -5852,7 +5909,6 @@ not the time-varying covariates, which are handled below in %interactionsb*/
 %macro makecatint(vrbl,iota,first,second,type1,type2,vartype,baseline);
   /* when first and second are spline variables, the same number of factors is used, except the variable
      names need to be changed. */
-
   /* vartype will indicate an outcome-type variable or covariate-type variable */
 
    %local level1 level2 nlevels1 nlevels2 var1 var2 splinelevel1 splinelevel2 mylag1 mylag2 lag1 lag2 lag3 spl1 spl2 varlevel1 varlevel2 ;
@@ -6518,7 +6574,6 @@ not the time-varying covariates, which are handled below in %interactionsb*/
            %end;        
 
         %end;
-
        /* for user-defined functions of cov&i and any cov&j where j < i (or possibly lagged values of cov&h where h > i ) */
         %if &&cov&i.genmacro^=  %then %do;
             %&&cov&i.genmacro;

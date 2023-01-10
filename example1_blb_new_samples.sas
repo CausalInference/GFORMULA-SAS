@@ -103,20 +103,17 @@ run;
 
 
 proc datasets library = work nolist ;
-save sample ;
+save sample roger1 simul1 param1 step2a ;
 quit;
 
 **GFORMULA Call;
 title 'GFORMULA SAMPLE';
-options mprint mprintnest notes spool mlogic ;
+options mprint mprintnest notes spool ;
 options nomlogic ;
 options nonotes nomprint ;
 
-%let use_samples_orig = 0 ;
-
+%let use_samples_orig = 1 ;
 %let sample_check = 5 ;
-
-
 %gformula(
 data= sample,
 id=id,
@@ -139,10 +136,10 @@ cov2  = act,    cov2otype  = 4, cov2ptype = lag2cub,
 hazardratio = 0 , /* this is broken */
 intcomp = 0 1 ,
 seed= 9458, numint=1,
-bootstrap_method =0,
-nsamples = 10 ,
+bootstrap_method =1,
+nsamples = 2 ,
 BLB_b = 1000 ,
-BLB_r = 50, /* for inner loop */
+BLB_r = 10, /* for inner loop */
 BLB_s = 1 /* for outter loop */
 );
 

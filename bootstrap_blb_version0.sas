@@ -37,6 +37,7 @@
 		%if &use_bootstrap_counts = 0 %then %do;
 	        do _copy_ = 1 to BLB_count0 ; * make numberhits copies of each remaining subject ;
 			    BLB_counts = 1 ;
+				%if &bootstrap_method = 0 %then bootstrap_counts = 1 ;;
 	            output ;
 	        end;
 		%end;
@@ -109,9 +110,16 @@
                     call symput("outcmax",trim(left(&outc._max)) );
                     end;
         %end;
-         _sample_r = &sample_r ;
-		 _sample_s = &sample_s ;
-        keep  _sample_r _sample_s %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3  %then  &outc._min &outc._max ;
+		%if &bootstrap_method = 0 %then %do ;
+			_sample_ = &bsample ;
+		%end;
+		%else %if &bootstrap_method = 1 %then %do;
+         	_sample_r = &sample_r ;
+		 	_sample_s = &sample_s ;
+		%end;
+        keep %if &bootstrap_method = 0 %then _sample_ ;
+             %else %if &bootstrap_method = 1 %then _sample_r _sample_s ;
+              %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3  %then  &outc._min &outc._max ;
                 %do i = 0 %to &ncov ; 
                     %if &&cov&i.otype=3 or &&cov&i.otype=4 or &&cov&i.otype=6 or &&cov&i.otype=7   or &&cov&i.otype = -1  %then &&cov&i.._min &&cov&i.._max ;
                 %end ;
@@ -140,8 +148,13 @@
         merge _simuldata_  _idsamples;
         by newid; 
 		if BLB_count0 > 0 ;
-        _sample_r = &sample_r  ; 
-		_sample_s = &sample_s ;
+		%if &bootstrap_method = 0 %then %do;
+			_sample_ = &bsample ;
+		%end;
+		%else %if &bootstrap_method = 1 %then %do;
+        	_sample_r = &sample_r  ; 
+			_sample_s = &sample_s ;
+		%end;
         run;
 
 
@@ -149,7 +162,9 @@
         	data simul ;
         	set simul ;
         	do _copy0_ = 1 to BLB_count0;
-			    BLB_counts = 1 ;
+			    
+			    %if &bootstrap_method = 0 %then bootstrap_counts = 1 ;;
+				%if &bootstrap_method = 1 %then BLB_counts = 1 ;;
                 output ;
         	end;
         	drop BLB_count0 _copy0_ ;
@@ -182,8 +197,13 @@
 			%if &use_bootstrap_counts = 0 %then %do;
             	data simul ;
             	set simul_tmp ;
-            	_sample_r = &sample_r ;
-				_sample_s = &sample_s ;
+				%if &bootstrap_method = 1 %then %do;
+            		_sample_r = &sample_r ;
+					_sample_s = &sample_s ;
+				 %end;
+				 %else %if &bootstrap_method = 0 %then %do;
+					_sample_ = &bsample ;
+				 %end;
              	do _copy_ = 1 to numberhits ;
 				    BLB_counts = 1 ;
                     output ;
@@ -230,7 +250,7 @@
         delete _idsamples ;
     quit;
    
-    
+    proc contents data = simul ; run ;
      
 %mend samples_blb;
 
@@ -257,6 +277,7 @@
 	   		method = srs 
 	   		sampsize = &BLB_b 
 	   		reps = &BLB_s 
+			seed = &seed 
 	   		noprint 
 	   			;
 			run ;
@@ -267,12 +288,15 @@
 	  		method = urs 
 	  		sampsize = &ssize 
 	  		reps = &BLB_r 
+			seed = %eval(&seed * &seed )
 	  		noprint 
 	 			;
 	  		strata sample_si ;
 			run;
 
-	 
+	 data step2b ;
+	 set step2 ;
+	 run;
 
     %*Looping over bootstrap samples;
 
@@ -291,12 +315,23 @@
 				%if &printlogstats = 1 %then %put  before sample =  ( &sample_s , &sample_r )   seed = &seed ;
 				%if &printlogstats = 1 %then %put  ;
 
-		        %samples_blb(sample_s = &sample_s , sample_r = &sample_r );    
+		        %samples_blb(sample_s = &sample_s , sample_r = &sample_r ); 
+
+
+			%if &sample_r = &sample_check and &sample_s = 1  %then %do;
+				data param2 ; set param ; run ;
+				data simul2 ; set simul ; run ;
+			 %end; 
 		        %*Estimating parameters;
 		        %if &usebetadata = 0 %then %do;            
 		                %if &uselabelc = 0  and &uselabelo = 0 %then options nolabel ;;
 		                %parameters;     
-		                options &label_orig ;      
+		                options &label_orig ;  
+						%if &sample_r = &sample_check and &sample_s = 1  %then %do;
+							data param2 ; set param ; run ;
+							data simul2 ; set simul ; run ;
+						
+			 			%end;  
 		        %end;
 
 		        %else %do; /*feb2013*/
@@ -529,6 +564,7 @@
            
         %end ; /* run natural course = 1 **/
         %*Looping over interventions;
+
 
         %do intnum = 1 %to &numint;
             %interv(&&interv&intnum);                    
