@@ -224,8 +224,8 @@ run ;
      %else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 %then %do;
           title6 "Observed mean= %sysevalf(&obspm) ";
      %end;
-     title7 "Data= &data, Sample size= &ssize, Monte Carlo sample size= &BLB_b";
-     title8 "Number of bootstrap samples using Bag of Little Bootstraps method with &BLB_s samples of size &BLB_b and &BLB_r samples of size &ssize";
+     title7 "Data= &data, Sample size= &ssize, Monte Carlo sample size= &nsimul ";
+     title8 "Number of bootstrap samples using Bag of Little Bootstraps method with &BLB_s samples of size &BLB_b, each with &BLB_r samples of size &nsimul";
      title9 "Reference intervention is &refint";
 
      proc print data=finfin noobs label double; 

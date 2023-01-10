@@ -181,6 +181,8 @@
         		set simul ;
 			 
         		do _copy0_ = 1 to BLB_count0  ;
+				   	%if &bootstrap_method = 0 %then bootstrap_counts = 1 ;;
+				    %if &bootstrap_method = 1 %then BLB_counts = 1 ;;
                 	output ;
         		end;
         		drop BLB_count0 _copy0_ ;
@@ -205,10 +207,10 @@
 					_sample_ = &bsample ;
 				 %end;
              	do _copy_ = 1 to numberhits ;
-				    BLB_counts = 1 ;
+				    %if &bootstrap_method = 0 %then bootstrap_counts = 1 ;;
+				    %if &bootstrap_method = 1 %then BLB_counts = 1 ;;;
                     output ;
-             	end;
-				bootstrap_counts = 1 ;
+             	end;				
              	drop _copy_ numberhits ;
              	run;
 			%end;

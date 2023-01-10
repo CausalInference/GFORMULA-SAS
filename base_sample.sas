@@ -81,15 +81,16 @@
              %end;
 			 %if &use_bootstrap_counts = 0 %then %do;
             	do _copy_ = 1 to numberhits ;
+					%if &bootstrap_method = 0 %then %do;
+						bootstrap_counts = 1 ;
+					%end;
+					%else %if &bootstrap_method = 1 %then %do;
+						BLB_counts = 1 ;
+					%end;
                 	output ;
             	end;
            
-				%if &bootstrap_method = 0 %then %do;
-					bootstrap_counts = 1 ;
-				%end;
-				%else %if &bootstrap_method = 1 %then %do;
-					BLM_counts = 1 ;
-				%end;
+			
 				drop _copy_ numberhits ;
 		     %end;
 			 %else %do;

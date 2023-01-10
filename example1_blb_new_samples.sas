@@ -113,7 +113,8 @@ options nomlogic ;
 options nonotes nomprint ;
 
 %let use_samples_orig = 1 ;
-%let sample_check = 5 ;
+%let sample_check = -1 ;
+
 %gformula(
 data= sample,
 id=id,
@@ -136,11 +137,12 @@ cov2  = act,    cov2otype  = 4, cov2ptype = lag2cub,
 hazardratio = 0 , /* this is broken */
 intcomp = 0 1 ,
 seed= 9458, numint=1,
+nsimul = 2000 ,
 bootstrap_method =1,
 nsamples = 2 ,
-BLB_b = 1000 ,
-BLB_r = 10, /* for inner loop */
-BLB_s = 1 /* for outter loop */
+BLB_b = 500 ,
+BLB_r = 20, /* for inner loop, takes place of nsamples */
+BLB_s = 3 /* for outter loop */
 );
 
 
