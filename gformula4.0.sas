@@ -334,6 +334,7 @@ options mautosource minoperator ;
           %let bootstrap_hazard = 0;
           %let intcomp = ;
           %let hazardname = ;
+		  %if %bquote(&censor) ^= AND %bquote(&compevent)^= %then %let compevent_cens = 1 ;
     %end; 
     %if &minimalistic = yes %then %do;
         %let rungraphs = 0 ;
@@ -2277,7 +2278,6 @@ options mautosource minoperator ;
             run;
 
        %end;
-
         %if &&cov&i.otype=1 %then %do;
             proc logistic descending
                 data=param(keep = _weight_ &outc &compevent   &time &&cov&i  &&cov&i.randomvisitp  &&cov&i.array &wherevars )
@@ -4684,7 +4684,6 @@ intusermacro7=,
       %results ;
 
 %mend ;
-
 /**********************/
 %macro listpred(main,switchind,start,stop,t0,t1,t2,t3,pre,prep=0);
 /* listpred is in general called two ways, with main and contemp. contemp is for how variables covX appear in the models 
