@@ -2195,8 +2195,7 @@ options mautosource minoperator ;
        				meanoutc %if %bquote(&compevent) ^= AND &compevent_cens = 0 %then meancompevent ; ;
 			%end;
 			%else %do ;
-				output out = forwtY (keep = &time &outc %if %bquote(&compevent) ^= %then meancompevent ;) mean( &outc &compevent) = &outc 
-			 	%if %bquote(&compevent) ^= AND &compevent_cens = 0 %then meancompevent ; ;
+				output out = forwtY (keep = &time &outc )   mean( &outc ) = &outc  ;
 			%end;
 			run;
 			*calculate E[L_k * (1-Y_k) &W_{k-1} ] / E[(1-Y_k)*W_{k-1}]
@@ -2703,14 +2702,17 @@ options mautosource minoperator ;
 	  %if %bquote(&censor) ^= %then %do;
 			data  &dataholder ;
 			%if &outctype = binsurv %then %do;
- 				merge  &dataholder forwtY (keep = &time meanoutc %if %bquote(&compevent) ^= AND &compevent_cens = 0 %then meancompevent ; ) forwtCov (keep = &time &covlisttmp ) ;
+ 				merge  &dataholder 
+                       forwtY (keep = &time meanoutc %if %bquote(&compevent) ^= AND &compevent_cens = 0 %then meancompevent ; ) 
+                       forwtCov (keep = &time &covlisttmp ) ;
 			%end;
 			%else %do;
-				merge  &dataholder forwtY (keep = &time &outc %if %bquote(&compevent) ^= AND &compevent_cens = 0 %then meancompevent ;)  forwtCov (keep = &time &covlisttmp )  ;
+				merge  &dataholder 
+                       forwtY (keep = &time &outc  )   
+                       forwtCov (keep = &time &covlisttmp )  ;
 			%end;
 			by &time ;
-            run;
-
+            run;		
 
 			proc datasets library = work nolist ;
 			delete _censor_ forwtY forwtCov;
@@ -3847,7 +3849,7 @@ intusermacro7=,
             %end;
 			%else %do;
 				%if &intno = 0 /**** AND %bquote(&censor) ^= ****/ %then %do;
-				    %put inside creating ncs variables &timepoints , &ncov ;
+				   /* %put inside creating ncs variables &timepoints , &ncov ; */
 				 	do time = 0 to %eval(&timepoints - 1) ;
 						%do myi = 1 %to &ncov ;				   
 							ncs&&cov&myi [ time] = s&&cov&myi [ time] ;
@@ -4684,7 +4686,6 @@ intusermacro7=,
 %mend ;
 
 /**********************/
-
 %macro listpred(main,switchind,start,stop,t0,t1,t2,t3,pre,prep=0);
 /* listpred is in general called two ways, with main and contemp. contemp is for how variables covX appear in the models 
    for covY with X < Y . for main this will be run for all variables and may change  based on switchind = &i when using main */
@@ -7064,8 +7065,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
 %mend rescaleround;
 
 %macro labels;
-   label pD_ulim95 = 'Upper limit 95% CI';
-   label pD_llim95 = 'Lower limit 95% CI';
+  
    label RR_ulim95 = 'Upper limit 95% CI';
    label RR_llim95 = 'Lower limit 95% CI';
    label RD_ulim95 = 'Upper limit 95% CI';
@@ -7076,6 +7076,8 @@ not the time-varying covariates, which are handled below in %interactionsb*/
    label int2      = 'Description';
    
 %if &outctype=binsurv or &outctype=bineofu %then %do;
+ 	label pD_ulim95 = 'Upper limit 95% CI';
+   label pD_llim95 = 'Lower limit 95% CI';
    label pD        = 'Risk (%)';
    label pD_std    = 'Bootstrap Risk SE';
    label pD_mean   = 'Bootstrap Risk Mean';
@@ -7087,9 +7089,11 @@ not the time-varying covariates, which are handled below in %interactionsb*/
    %end;
 
 %else %if &outctype=conteofu %then %do;
-   label pD        = 'Mean';
-   label pD_std    = 'Bootstrap Mean SE';
-   label pD_mean   = 'Bootstrap Mean Mean';
+ label s&outc._ulim95 = 'Upper limit 95% CI';
+   label s&outc._llim95 = 'Lower limit 95% CI';
+   label s&outc        = 'Mean';
+   label s&outc._std    = 'Bootstrap Mean SE';
+   label s&outc._mean   = 'Bootstrap Mean Mean';
    label rr        = 'Ratio of means';
    label RD        = 'Difference of Means';
    %end;
@@ -7142,7 +7146,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
     %let nperiods = %sysfunc(compress(&nperiods)) ;
     %let mintime = %sysfunc(compress(&mintime)) ;
 
- goptions reset=all noborder device=pdf gsfname=mygraphs  ;
+ goptions reset=all noborder device=png gsfname=mygraphs  ;
  proc greplay tc=work.tempcat nofs;
  tdef newtemp des="my four panel template"
      1/llx=0   lly=52
@@ -7471,10 +7475,12 @@ set _cont  ( where = ( substr(name,1,1)='s'
        * keep _sample_ ncmean;
        * run;
 
+	 
         data _both1_ ;
         merge &obssurv &simsurv ; * for continuous at eof type outcome which use the mean ;
         by _sample_ ;
-        mean_diff = &outcome - ncmean ;
+        **mean_diff = &outcome - ncmean ;
+		mean_diff = &outcome - s&outcome  ;
         run;
 
         data _both10_ ;
@@ -7504,29 +7510,37 @@ set _cont  ( where = ( substr(name,1,1)='s'
 
 
             proc gslide name="mdiff";         
-            note height=4
-            justify=center 
+            note height=3
+            justify=right 
             color="black" 
             "Mean difference &meandiff (&lb , &ub )" ;        
             run;
             quit;
  
        %end;
-        
+
+ 
        data _null_ ;
        set _both10_ ;
        call symput('obsmean',trim(left(round(&outcome,0.001))));
-       call symput('simmean',trim(left(round(ncmean,0.001))));
+       call symput('simmean',trim(left(round(s&outcome,0.001))));
        run;
 
+ /* IP-weighted natrual course estimates (solid line), parameteric g-formula estimated natural  */
 
-       proc gslide name="mean";         
-       note height=4
+	   %local titletmp ;
+
+	    %if %bquote(&censor)= %then %let titletmp = Observed nc ; 
+		%else %let titletmp = Observed IP-weighted nc ;
+
+       proc gslide name="mean";   
+       note height=3
        justify=left 
        color="black" 
-       "Observed mean &outcome :   &obsmean" 
+       "&titletmp &outcome : &obsmean"  ;
+	   note height = 3 color="black"
        justify=left 
-       "Simulated mean &outcome :  &simmean";
+       "Parametric g-formula estimated nc &outcome : &simmean";
        run;
        quit;
  
@@ -7635,7 +7649,7 @@ set _cont  ( where = ( substr(name,1,1)='s'
   %end;
  
 
-    goptions reset = all  /* display */ hsize=8 in vsize = 8 in device=pdf  gsfname=mygraphs  ;
+    goptions reset = all  /* display */ hsize=8 in vsize = 8 in device=png  gsfname=mygraphs  ;
     symbol1 line = 1 width = 3 interpol = line  color = red ;
     symbol2 line = 2 width = 3 interpol = line color = blue ;
     symbol3 line = 2 width = 3 interpol = line color = blue ;
@@ -7643,10 +7657,11 @@ set _cont  ( where = ( substr(name,1,1)='s'
     axis1 order = 0 to &nperiods by 1 minor = none label=none value=(h=2) ;
     axis2 minor = none value=(h=2) label = (h = 3  justify=center angle=90 "Cummulative incidence %upcase(&outcome) " ) ;
     axis3 minor = none value=(h=2) label= none  ;
+	/**
 	%if %bquote(&censor ) ^= %then %do;
 		axis3 order = -0.05 to 0.05 by 0.01 minor = none value=(h=2) label= none  ;
 	%end;
-
+    ***/
    
     %if &outctype = binsurv   %then %do;
  
@@ -7658,7 +7673,7 @@ set _cont  ( where = ( substr(name,1,1)='s'
  
     %end;
      %if %bquote(&compevent)^= AND &compevent_cens = 0  %then %do;
-        axis2 minor = none value=(h=2) label = (h = 3 justify=center angle=90 'Cummulative incidence for competing risk' ) ;
+        axis2 minor = none value=(h=2) label = (h = 3 justify=center angle=90 "Cummulative incidence %upcase(&compevent) " ) ;
         proc gplot data = _graph3   ;
         plot   obs * &time sim * &time / overlay    vaxis = axis2 haxis = axis1 name='crisk' noframe nolegend;
         plot  riskdiff * &time  %if &frombootstrap = 1 %then ub * &time lb * &time ; / overlay  haxis = axis1 vaxis=axis3 name = 'criskd' noframe nolegend ;

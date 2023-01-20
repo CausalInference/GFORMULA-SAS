@@ -1,0 +1,746 @@
+1                                                          The SAS System                           17:15 Wednesday, January 4, 2023
+
+NOTE: Unable to open SASUSER.PROFILE. WORK.PROFILE will be opened instead.
+NOTE: All profile changes will be lost at the end of the session.
+NOTE: Copyright (c) 2016 by SAS Institute Inc., Cary, NC, USA. 
+NOTE: SAS (r) Proprietary Software 9.4 (TS1M7) 
+      Licensed to HARVARD UNIVERSITY - SFA T&R, Site 70106881.
+NOTE: This session is executing on the Linux 3.10.0-1160.80.1.el7.x86_64 (LIN X64) platform.
+
+
+
+NOTE: Analytical products:
+      
+      SAS/STAT 15.2
+      SAS/ETS 15.2
+      SAS/IML 15.2
+      SAS/QC 15.2
+
+NOTE: Additional host information:
+
+ Linux LIN X64 3.10.0-1160.80.1.el7.x86_64 #1 SMP Tue Nov 8 15:48:59 UTC 2022 x86_64 CentOS Linux release 7.9.2009 (Core) 
+
+You are running SAS 9. Some SAS 8 files will be automatically converted 
+by the V9 engine; others are incompatible.  Please see 
+http://support.sas.com/rnd/migration/planning/platform/64bit.html
+
+PROC MIGRATE will preserve current SAS file attributes and is 
+recommended for converting all your SAS libraries from any 
+SAS 8 release to SAS 9.  For details and examples, please see
+http://support.sas.com/rnd/migration/index.html
+
+
+This message is contained in the SAS news file, and is presented upon
+initialization.  Edit the file "news" in the "misc/base" directory to
+display site-specific news and information in the program log.
+The command line option "-nonews" will prevent this display.
+
+
+
+
+NOTE: SAS initialization used:
+      real time           0.05 seconds
+      cpu time            0.03 seconds
+      
+1          /*Example: outctype=binsurv*/
+2          
+3          %include '/proj/sas_macros/gformula/master_branch/new_censoring/GFORMULA-SAS/gformula4_0_blb_testing.sas';
+8191       %include '/proj/sas_macros/gformula/master_branch/new_censoring/GFORMULA-SAS/bootstrap_blb_version0.sas';
+8811       %include '/proj/sas_macros/gformula/master_branch/new_censoring/GFORMULA-SAS/base_sample.sas';
+9266       
+9267       options linesize=88 pagesize=54;
+9268       
+9269       *options mprint mprintnest;
+9270       *options mlogic mlogicnest;
+2                                    The SAS System     17:15 Wednesday, January 4, 2023
+
+9271       *options fullstimer notes;
+9272       options notes;
+9273       *options threads;
+9274       
+9275       
+9276       
+9277       %let interv1 = intno=1 ,  nintvar=1,
+9278           intlabel='All subjects exercise at least 30 minutes per day in all
+9278     ! intervals',
+9279           intvar1 = act, inttype1 = 2, intmin1=30, intpr1=1, inttimes1 = 0 1 2 3 4
+9279     ! 5 ;
+9280       
+9281       
+9282       
+9283       %macro create_sample ;
+9284       %let condition = ;
+9285       %let condition = dia or censlost or dead ;
+9286       
+9287       
+9288       
+9289       
+9290       
+9291       **SAMPLE Data;
+9292           data sample(drop = i j ahbp1-ahbp8 aact1-aact8);
+9293       
+9294               call streaminit(5027);
+9295       
+9296               do i=1 to 1000;
+9297                   baseage = int( 35 + 25*rand('uniform'));
+9298       
+9299                   array ahbp(8);
+9300                   array aact(8);
+9301       
+9302                   do j=1 to 8;
+9303                       ahbp(j) = (0.2>rand('uniform'));
+9304                       if j > 1 & ahbp(j-1) = 1 then ahbp(j) = 1 ;
+9305       
+9306               aact(j)=(0.7>rand('uniform'));
+9307               if aact(j)=1 then do;
+9308                          aact(j) = int(exp(3.5+0.4*(rand('normal'))));
+9309               end;
+9310                       end;
+9311       
+9312                   do j=3 to 8  until ( &condition   ) ;
+9313                       id=i;
+9314                       time=j-3;
+9315       
+9316       
+9317                       hbp     = ahbp(j);
+9318                       hbp_l1  = ahbp(j-1);
+9319                       hbp_l2  = ahbp(j-2);
+9320       
+3                                    The SAS System     17:15 Wednesday, January 4, 2023
+
+9321       
+9322                       act     = aact(j);
+9323                       act_l1  = aact(j-1);
+9324                       act_l2  = aact(j-2);
+9325       
+9326       
+9327                     dia = ( (j/500) >rand('uniform'));
+9328                       censlost  = (0.05>rand('uniform'));
+9329                       dead      = (0.05>rand('uniform'));
+9330       
+9331       
+9332       
+9333       
+9334                       output;
+9335       
+9336                       end;
+9337                  end;
+9338       
+9339       
+9340       
+9341       
+9342           run;
+9343       
+9344       
+9345       data sample;
+9346       set sample;
+9347       if censlost=1 then do;
+9348              dia= .;
+9349              dead= .;
+9350       end;
+9351       else do;
+9352          if dead=1 then dia= .;
+9353       end;
+9354       run;
+9355       
+9356       proc means data=sample;
+9357       title 'Means of SAMPLE data';
+9358       run;
+9359       %mend ;
+9360       
+9361       %create_sample;
+
+NOTE: The data set WORK.SAMPLE has 4741 observations and 12 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.01 seconds
+      cpu time            0.01 seconds
+      
+
+
+NOTE: There were 4741 observations read from the data set WORK.SAMPLE.
+NOTE: The data set WORK.SAMPLE has 4741 observations and 12 variables.
+NOTE: DATA statement used (Total process time):
+4                                    The SAS System     17:15 Wednesday, January 4, 2023
+
+      real time           0.01 seconds
+      cpu time            0.01 seconds
+      
+
+
+NOTE: There were 4741 observations read from the data set WORK.SAMPLE.
+NOTE: The PROCEDURE MEANS printed page 1.
+NOTE: PROCEDURE MEANS used (Total process time):
+      real time           0.04 seconds
+      cpu time            0.05 seconds
+      
+
+9362       
+9363       
+9364       proc datasets library = work nolist ;
+9365       save sample ;
+9366       quit;
+
+NOTE: Saving WORK.SAMPLE (memtype=DATA).
+NOTE: Deleting WORK.PROFILE (memtype=CATALOG).
+NOTE: File WORK.PROFILE (memtype=CATALOG) cannot be deleted because it is in use.
+NOTE: Deleting WORK.SASMACR (memtype=CATALOG).
+NOTE: File WORK.SASMACR (memtype=CATALOG) cannot be deleted because it is in use.
+NOTE: PROCEDURE DATASETS used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.00 seconds
+      
+
+9367       
+9368       **GFORMULA Call;
+9369       title 'GFORMULA SAMPLE';
+9370       options mprint mprintnest notes spool ;
+9371       options nomlogic ;
+9372       *options nonotes nomprint ;
+9373       %gformula(
+9374       data= sample,
+9375       id=id,
+9376       time=time,
+9377       timepoints = 6,
+9378       outc=dia,
+9379       outctype=binsurv,
+9380       compevent=dead,
+9381       compevent_cens  = 0   ,
+9382       censor = censlost ,
+9383       
+9384       fixedcov = baseage,
+9385       timeptype= concat,
+9386       timeknots = 1 2 3 4 5,
+9387       
+9388       ncov=2,
+9389       cov1  = hbp,    cov1otype  = 2, cov1ptype = tsswitch1,
+9390       cov2  = act,    cov2otype  = 4, cov2ptype = lag2cub,
+5                                    The SAS System     17:15 Wednesday, January 4, 2023
+
+9391       
+9392       hazardratio = 0 , /* this is broken */
+9393       intcomp = 0 1 ,
+9394       seed= 9458, numint=0,
+9395       bootstrap_method =0,
+9396       nsamples = 0 ,
+9397       BLB_b = 500 ,
+9398       BLB_r = 2, /* for inner loop */
+9399       BLB_s = 2 /* for outter loop */
+9400       );
+MPRINT(GFORMULA):   ;
+covlist = hbp act
+MPRINT(GFORMULA):   ;
+
+MPRINT(GFORMULA):  ;
+seed = 9458 , seedlist = 9458
+Number of categories of time : cov0lev=6
+MPRINT(GFORMULA.DATAPREP):   data _null_(drop=);
+MPRINT(GFORMULA.DATAPREP):   set sample;
+MPRINT(GFORMULA.DATAPREP):  ;
+MPRINT(GFORMULA.DATAPREP):  ;
+MPRINT(GFORMULA.DATAPREP):  ;
+MPRINT(GFORMULA.DATAPREP):  ;
+MPRINT(GFORMULA.DATAPREP):  ;
+MPRINT(GFORMULA.DATAPREP):   run;
+
+NOTE: There were 4741 observations read from the data set WORK.SAMPLE.
+NOTE: DATA statement used (Total process time):
+      real time           0.01 seconds
+      cpu time            0.01 seconds
+      
+
+Outcome predictors are: baseage time_1                           time_2                 
+          time_3                           time_4                           time_5      
+                      hbp tshbp_inter tshbp_inter_spl1   tshbp_inter_spl2               
+            act_l1 act acts_l1 acts actc_l1 actc
+Censoring by death predictors are: baseage time_1                           time_2      
+                     time_3                           time_4                           
+time_5                            hbp tshbp_inter tshbp_inter_spl1   tshbp_inter_spl2   
+                        act_l1 act acts_l1 acts actc_l1 actc
+Censoring by lost-to-followup predictors are: baseage time_1                           
+time_2                           time_3                           time_4                
+           time_5                            hbp tshbp_inter tshbp_inter_spl1   
+tshbp_inter_spl2                           act_l1 act acts_l1 acts actc_l1 actc
+cov0ninterx=0
+cov1ninterx=0
+cov1 (hbp) predictors are: baseage time_1                           time_2              
+             time_3                           time_4                           time_5   
+                        act_l2 act_l1 acts_l2 acts_l1 actc_l2 actc_l1
+
+cov2ninterx=0
+cov2 (act) predictors are: baseage time_1                           time_2              
+6                                    The SAS System     17:15 Wednesday, January 4, 2023
+
+             time_3                           time_4                           time_5   
+                                hbp tshbp_inter  tshbp_inter_spl1 tshbp_inter_spl2      
+                     act_l2 act_l1 acts_l2 acts_l1 actc_l2 actc_l1
+
+MPRINT(GFORMULA.DATAPREP.OBSCUMINC):   proc sql noprint ;
+MPRINT(GFORMULA.DATAPREP.OBSCUMINC):   create table summed as select time , mean(dia) 
+as proboutc , mean(dead) as probcompevent from sample(keep = time dia dead ) group by 
+time order by time ;
+NOTE: Table WORK.SUMMED created, with 6 rows and 3 columns.
+
+MPRINT(GFORMULA.DATAPREP.OBSCUMINC):   quit;
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.01 seconds
+      cpu time            0.02 seconds
+      
+
+MPRINT(GFORMULA.DATAPREP.OBSCUMINC):   data cuminc;
+MPRINT(GFORMULA.DATAPREP.OBSCUMINC):   set summed;
+MPRINT(GFORMULA.DATAPREP.OBSCUMINC):   keep cuminc;
+MPRINT(GFORMULA.DATAPREP.OBSCUMINC):   by time;
+MPRINT(GFORMULA.DATAPREP.OBSCUMINC):   retain cumsurv 1 cuminc 0;
+MPRINT(GFORMULA.DATAPREP.OBSCUMINC):   inc = cumsurv * proboutc * (1.0 - probcompevent) 
+;
+MPRINT(GFORMULA.DATAPREP.OBSCUMINC):   cuminc = cuminc + inc;
+MPRINT(GFORMULA.DATAPREP.OBSCUMINC):   surv = (1.0 - proboutc) * (1.0 - probcompevent) ;
+MPRINT(GFORMULA.DATAPREP.OBSCUMINC):   cumsurv = cumsurv * surv;
+MPRINT(GFORMULA.DATAPREP.OBSCUMINC):   if _N_ = 6 then output;
+MPRINT(GFORMULA.DATAPREP.OBSCUMINC):   run;
+
+NOTE: There were 6 observations read from the data set WORK.SUMMED.
+NOTE: The data set WORK.CUMINC has 1 observations and 1 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.00 seconds
+      
+
+MPRINT(GFORMULA.DATAPREP.OBSCUMINC):   proc datasets library=work nolist;
+MPRINT(GFORMULA.DATAPREP.OBSCUMINC):   delete summed;
+MPRINT(GFORMULA.DATAPREP.OBSCUMINC):   run;
+NOTE: Deleting WORK.SUMMED (memtype=DATA).
+MPRINT(GFORMULA.DATAPREP):  ;
+
+NOTE: PROCEDURE DATASETS used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.00 seconds
+      
+
+MPRINT(GFORMULA.DATAPREP):   proc sort data=sample nodupkey out=indiv;
+MPRINT(GFORMULA.DATAPREP):   by id;
+MPRINT(GFORMULA.DATAPREP):   run;
+
+NOTE: There were 4741 observations read from the data set WORK.SAMPLE.
+7                                    The SAS System     17:15 Wednesday, January 4, 2023
+
+NOTE: 3741 observations with duplicate key values were deleted.
+NOTE: The data set WORK.INDIV has 1000 observations and 12 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.01 seconds
+      
+
+MPRINT(GFORMULA.DATAPREP):   data _orig_ (keep= _sample_ newid id);
+MPRINT(GFORMULA.DATAPREP):   merge indiv cuminc end=_end_;
+MPRINT(GFORMULA.DATAPREP):   newid=_n_;
+MPRINT(GFORMULA.DATAPREP):   _sample_=0;
+MPRINT(GFORMULA.DATAPREP):   if _n_=1 then do;
+MPRINT(GFORMULA.DATAPREP):   array aoutc baseage time_1 time_2 time_3 time_4 time_5 hbp 
+tshbp_inter tshbp_inter_spl1 tshbp_inter_spl2 act_l1 act acts_l1 acts actc_l1 actc;
+MPRINT(GFORMULA.DATAPREP):   dimoutc=dim(aoutc);
+MPRINT(GFORMULA.DATAPREP):   call symput('dimoutc',trim(left(put(dimoutc,8.))) );
+MPRINT(GFORMULA.DATAPREP):   array acompevent baseage time_1 time_2 time_3 time_4 
+time_5 hbp tshbp_inter tshbp_inter_spl1 tshbp_inter_spl2 act_l1 act acts_l1 acts 
+actc_l1 actc;
+MPRINT(GFORMULA.DATAPREP):   dimcompevent=dim(acompevent);
+MPRINT(GFORMULA.DATAPREP):   call 
+symput('dimcompevent',trim(left(put(dimcompevent,8.))) );
+MPRINT(GFORMULA.DATAPREP):   array avar0 time_1 time_2 time_3 time_4 time_5 hbp_l1 
+tshbp_l1_inter tshbp_l1_inter_spl1 tshbp_l1_inter_spl2 act_l2 act_l1 acts_l2 acts_l1 
+actc_l2 actc_l1;
+MPRINT(GFORMULA.DATAPREP):   dimvar0 = dim(avar0);
+MPRINT(GFORMULA.DATAPREP):   call 
+symput('dimvar'||(left(put(0,8.))),trim(left(put(dimvar0,8.))) );
+MPRINT(GFORMULA.DATAPREP):   array avar1 baseage time_1 time_2 time_3 time_4 time_5 
+act_l2 act_l1 acts_l2 acts_l1 actc_l2 actc_l1;
+MPRINT(GFORMULA.DATAPREP):   dimvar1 = dim(avar1);
+MPRINT(GFORMULA.DATAPREP):   call 
+symput('dimvar'||(left(put(1,8.))),trim(left(put(dimvar1,8.))) );
+MPRINT(GFORMULA.DATAPREP):   array avar2 baseage time_1 time_2 time_3 time_4 time_5 hbp 
+tshbp_inter tshbp_inter_spl1 tshbp_inter_spl2 act_l2 act_l1 acts_l2 acts_l1 actc_l2 
+actc_l1;
+MPRINT(GFORMULA.DATAPREP):   dimvar2 = dim(avar2);
+MPRINT(GFORMULA.DATAPREP):   call 
+symput('dimvar'||(left(put(2,8.))),trim(left(put(dimvar2,8.))) );
+MPRINT(GFORMULA.DATAPREP):   call symput('obsp',trim(left(cuminc)));
+MPRINT(GFORMULA.DATAPREP):   end;
+MPRINT(GFORMULA.DATAPREP):   if _end_ then do;
+MPRINT(GFORMULA.DATAPREP):   call symput('ssize',trim(left(newid)));
+MPRINT(GFORMULA.DATAPREP):   end;
+MPRINT(GFORMULA.DATAPREP):   run;
+
+NOTE: Numeric values have been converted to character values at the places given by: 
+      (Line):(Column).
+      9400:68    9400:180   
+NOTE: There were 1000 observations read from the data set WORK.INDIV.
+NOTE: There were 1 observations read from the data set WORK.CUMINC.
+NOTE: The data set WORK._ORIG_ has 1000 observations and 3 variables.
+8                                    The SAS System     17:15 Wednesday, January 4, 2023
+
+NOTE: DATA statement used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.01 seconds
+      
+
+MPRINT(GFORMULA.DATAPREP):   proc sort data=_orig_;
+MPRINT(GFORMULA.DATAPREP):   by id;
+MPRINT(GFORMULA.DATAPREP):   run;
+
+NOTE: There were 1000 observations read from the data set WORK._ORIG_.
+NOTE: The data set WORK._ORIG_ has 1000 observations and 3 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.00 seconds
+      
+
+MPRINT(GFORMULA.DATAPREP):   proc sort data=sample out=_inputd_;
+MPRINT(GFORMULA.DATAPREP):   by id descending time;
+MPRINT(GFORMULA.DATAPREP):   run;
+
+NOTE: There were 4741 observations read from the data set WORK.SAMPLE.
+NOTE: The data set WORK._INPUTD_ has 4741 observations and 12 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.01 seconds
+      
+
+MPRINT(GFORMULA.DATAPREP):   data _inputd_;
+MPRINT(GFORMULA.DATAPREP):   merge _orig_ _inputd_;
+MPRINT(GFORMULA.DATAPREP):   by id;
+MPRINT(GFORMULA.DATAPREP):  ;
+MPRINT(GFORMULA.DATAPREP):   run;
+
+NOTE: There were 1000 observations read from the data set WORK._ORIG_.
+NOTE: There were 4741 observations read from the data set WORK._INPUTD_.
+NOTE: The data set WORK._INPUTD_ has 4741 observations and 14 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.01 seconds
+      
+
+MPRINT(GFORMULA.DATAPREP):   proc sort data = _inputd_ ;
+MPRINT(GFORMULA.DATAPREP):   by newid time;
+MPRINT(GFORMULA.DATAPREP):   run;
+
+NOTE: There were 4741 observations read from the data set WORK._INPUTD_.
+NOTE: The data set WORK._INPUTD_ has 4741 observations and 14 variables.
+NOTE: PROCEDURE SORT used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.01 seconds
+      
+
+9                                    The SAS System     17:15 Wednesday, January 4, 2023
+
+MPRINT(GFORMULA.DATAPREP):   data _covbounds_;
+MPRINT(GFORMULA.DATAPREP):   set _inputd_ end=_end_;
+MPRINT(GFORMULA.DATAPREP):   retain act_min act_max;
+MPRINT(GFORMULA.DATAPREP):   if _n_ = 1 then do;
+MPRINT(GFORMULA.DATAPREP):   act_min = 1.0e100;
+MPRINT(GFORMULA.DATAPREP):   act_max = -1.0e100;
+MPRINT(GFORMULA.DATAPREP):   end;
+MPRINT(GFORMULA.DATAPREP):  ;
+MPRINT(GFORMULA.DATAPREP):   if act > 0 and act < act_min then act_min = act;
+MPRINT(GFORMULA.DATAPREP):   if act ne . and act > act_max then act_max = act;
+MPRINT(GFORMULA.DATAPREP):   if _end_ then do;
+MPRINT(GFORMULA.DATAPREP):   call symput("cov2min", trim(left(act_min)));
+MPRINT(GFORMULA.DATAPREP):   call symput("cov2max", trim(left(act_max)));
+MPRINT(GFORMULA.DATAPREP):   end;
+MPRINT(GFORMULA.DATAPREP):   _sample_ = 0 ;
+MPRINT(GFORMULA.DATAPREP):   keep _sample_ act_min act_max ;
+MPRINT(GFORMULA.DATAPREP):   if _end_ then output ;
+MPRINT(GFORMULA.DATAPREP):   run;
+
+NOTE: Numeric values have been converted to character values at the places given by: 
+      (Line):(Column).
+      9400:1   9400:1   
+NOTE: There were 4741 observations read from the data set WORK._INPUTD_.
+NOTE: The data set WORK._COVBOUNDS_ has 1 observations and 3 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.00 seconds
+      
+
+act range is 8 to 116
+MPRINT(GFORMULA.DATAPREP):   data _inputd_;
+MPRINT(GFORMULA.DATAPREP):   set _inputd_ ;
+MPRINT(GFORMULA.DATAPREP):   by newid time;
+MPRINT(GFORMULA.DATAPREP):   time_l1 = time-1;
+MPRINT(GFORMULA.DATAPREP):   time_l2 = time-2;
+MPRINT(GFORMULA.DATAPREP):   time_l3 = time-3;
+MPRINT(GFORMULA.DATAPREP):   retain _ind2 _ind3 _ind4 ;
+MPRINT(GFORMULA.DATAPREP):   if first.newid then do ;
+MPRINT(GFORMULA.DATAPREP):   _ind2 = 0 ;
+MPRINT(GFORMULA.DATAPREP):   _ind3 = 0 ;
+MPRINT(GFORMULA.DATAPREP):   _ind4 = 0 ;
+MPRINT(GFORMULA.DATAPREP):   end;
+MPRINT(GFORMULA.DATAPREP):   if time = 2 then _ind2 = 1 ;
+MPRINT(GFORMULA.DATAPREP):   if time = 3 then _ind3 = 1 ;
+MPRINT(GFORMULA.DATAPREP):   if time = 4 then _ind4 = 1 ;
+MPRINT(GFORMULA.DATAPREP):   retain time_b ;
+MPRINT(GFORMULA.DATAPREP):   time_l1 = time - 1 ;
+MPRINT(GFORMULA.DATAPREP):   time_l2 = time - 2 ;
+MPRINT(GFORMULA.DATAPREP):   time_l3 = time - 3 ;
+MPRINT(GFORMULA.DATAPREP):   if time = 0 then time_b = time ;
+MPRINT(GFORMULA.DATAPREP.GENPRED.MAKECAT):   if time = . then timegr = .;
+MPRINT(GFORMULA.DATAPREP.GENPRED.MAKECAT):   else if time < 1 then timegr = 1;
+10                                   The SAS System     17:15 Wednesday, January 4, 2023
+
+MPRINT(GFORMULA.DATAPREP.GENPRED.MAKECAT):   else if time < 2 then timegr = 2;
+MPRINT(GFORMULA.DATAPREP.GENPRED.MAKECAT):   else if time < 3 then timegr = 3;
+MPRINT(GFORMULA.DATAPREP.GENPRED.MAKECAT):   else if time < 4 then timegr = 4;
+MPRINT(GFORMULA.DATAPREP.GENPRED.MAKECAT):   else if time < 5 then timegr = 5;
+MPRINT(GFORMULA.DATAPREP.GENPRED.MAKECAT):   else timegr = 6;
+MPRINT(GFORMULA.DATAPREP.GENPRED.MAKECAT):   time_1 = (timegr = 1);
+MPRINT(GFORMULA.DATAPREP.GENPRED.MAKECAT):   time_2 = (timegr = 2);
+MPRINT(GFORMULA.DATAPREP.GENPRED.MAKECAT):   time_3 = (timegr = 3);
+MPRINT(GFORMULA.DATAPREP.GENPRED.MAKECAT):   time_4 = (timegr = 4);
+MPRINT(GFORMULA.DATAPREP.GENPRED.MAKECAT):   time_5 = (timegr = 5);
+MPRINT(GFORMULA.DATAPREP.GENPRED.MAKECAT):   drop timegr;
+MPRINT(GFORMULA.DATAPREP.GENPRED):  ;
+MPRINT(GFORMULA.DATAPREP):  ;
+MPRINT(GFORMULA.DATAPREP):   retain hbp_b ;
+MPRINT(GFORMULA.DATAPREP):   if time = 0 then hbp_b = hbp ;
+MPRINT(GFORMULA.DATAPREP.GENPRED):   retain tshbp_inter ;
+MPRINT(GFORMULA.DATAPREP.GENPRED):  ;
+MPRINT(GFORMULA.DATAPREP.GENPRED):   if time = 0 then do;
+MPRINT(GFORMULA.DATAPREP.GENPRED):   tshbp_inter = 0 ;
+MPRINT(GFORMULA.DATAPREP.GENPRED):   tshbp_l1_inter = 0 ;
+MPRINT(GFORMULA.DATAPREP.GENPRED):   end;
+MPRINT(GFORMULA.DATAPREP.GENPRED):   tshbp_l1_inter = tshbp_inter ;
+MPRINT(GFORMULA.DATAPREP.GENPRED):   tshbp_inter = tshbp_l1_inter + hbp ;
+MPRINT(GFORMULA.DATAPREP.GENPRED):   *sumtemp&i = sumtemp&i + &&cov&i;
+MPRINT(GFORMULA.DATAPREP.GENPRED):   *sumtemp_l1&i = sumtemp_l1&i + &&cov&i.._l1;
+MPRINT(GFORMULA.DATAPREP.GENPRED):   *ts&&cov&i.._inter = &&cov&i*sumtemp&i;
+MPRINT(GFORMULA.DATAPREP.GENPRED):   *ts&&cov&i.._l1_inter = &&cov&i.._l1*sumtemp_l1&i;
+MPRINT(GFORMULA.DATAPREP):  ;
+MPRINT(GFORMULA.DATAPREP):   retain act_b ;
+MPRINT(GFORMULA.DATAPREP):   if time = 0 then act_b = act ;
+MPRINT(GFORMULA.DATAPREP.GENPRED):   acts = act*act;
+MPRINT(GFORMULA.DATAPREP.GENPRED):   acts_l1 = act_l1*act_l1;
+MPRINT(GFORMULA.DATAPREP.GENPRED):   acts_l2 = act_l2*act_l2;
+MPRINT(GFORMULA.DATAPREP.GENPRED):   actc = act*act*act;
+MPRINT(GFORMULA.DATAPREP.GENPRED):   actc_l1 = act_l1*act_l1*act_l1;
+MPRINT(GFORMULA.DATAPREP.GENPRED):   actc_l2 = act_l2*act_l2*act_l2;
+MPRINT(GFORMULA.DATAPREP.GENPRED):   zact = (act ne 0);
+MPRINT(GFORMULA.DATAPREP.GENPRED):   if zact = 1 then lact = log(act);
+MPRINT(GFORMULA.DATAPREP.GENPRED):   zact_l1 = (act_l1 ne 0);
+MPRINT(GFORMULA.DATAPREP.GENPRED):   if zact_l1 = 1 then lact_l1 = log(act_l1);
+MPRINT(GFORMULA.DATAPREP.GENPRED):   zact_l2 = (act_l2 ne 0);
+MPRINT(GFORMULA.DATAPREP.GENPRED):   if zact_l2 = 1 then lact_l2 = log(act_l2);
+MPRINT(GFORMULA.DATAPREP):  ;
+MPRINT(GFORMULA.DATAPREP):   _weight_ = 1.0 ;
+MPRINT(GFORMULA.DATAPREP):   run;
+
+NOTE: There were 4741 observations read from the data set WORK._INPUTD_.
+NOTE: The data set WORK._INPUTD_ has 4741 observations and 43 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.01 seconds
+      cpu time            0.02 seconds
+      
+11                                   The SAS System     17:15 Wednesday, January 4, 2023
+
+
+MPRINT(GFORMULA.DATAPREP):   proc univariate data = _inputd_ (where = (hbp = 1)) 
+noprint ;
+MPRINT(GFORMULA.DATAPREP):   var tshbp_inter ;
+MPRINT(GFORMULA.DATAPREP):   output out = tsscov_pct (keep = tsscov_pct5 tsscov_pct25 
+tsscov_pct75 tsscov_pct95 ) pctlpre = tsscov pctlname = _pct5 _pct25 _pct75 _pct95 
+pctlpts = 5 25 75 95;
+MPRINT(GFORMULA.DATAPREP):   run;
+
+NOTE: The data set WORK.TSSCOV_PCT has 1 observations and 4 variables.
+NOTE: PROCEDURE UNIVARIATE used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.01 seconds
+      
+
+MPRINT(GFORMULA.DATAPREP):   proc transpose data = tsscov_pct out = ttsscov_pct (keep = 
+col1);
+MPRINT(GFORMULA.DATAPREP):   run;
+
+NOTE: There were 1 observations read from the data set WORK.TSSCOV_PCT.
+NOTE: The data set WORK.TTSSCOV_PCT has 4 observations and 1 variables.
+NOTE: PROCEDURE TRANSPOSE used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.00 seconds
+      
+
+MPRINT(GFORMULA.DATAPREP):   proc sql noprint ;
+MPRINT(GFORMULA.DATAPREP):   select col1 into : cov1knots separated by ' ' from 
+ttsscov_pct ;
+MPRINT(GFORMULA.DATAPREP):   quit ;
+NOTE: PROCEDURE SQL used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.00 seconds
+      
+
+knots for hbp_inter  = 1 2 4 6
+MPRINT(GFORMULA.DATAPREP):   proc datasets library = work nolist ;
+MPRINT(GFORMULA.DATAPREP):   delete tsscov_pct ttsscov_pct ;
+MPRINT(GFORMULA.DATAPREP):   quit;
+
+NOTE: Deleting WORK.TSSCOV_PCT (memtype=DATA).
+NOTE: Deleting WORK.TTSSCOV_PCT (memtype=DATA).
+NOTE: PROCEDURE DATASETS used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.00 seconds
+      
+
+MPRINT(GFORMULA.DATAPREP):   data _inputd_;
+MPRINT(GFORMULA.DATAPREP):   set _inputd_;
+MPRINT(GFORMULA.DATAPREP.RCSPLINE):   DROP _kd_;
+MPRINT(GFORMULA.DATAPREP.RCSPLINE):   _kd_= (6 - 1)**.666666666666 ;
+MPRINT(GFORMULA.DATAPREP.RCSPLINE):   
+12                                   The SAS System     17:15 Wednesday, January 4, 2023
+
+tshbp_inter_spl1=max((tshbp_inter-1)/_kd_,0)**3+((4-1)*max((tshbp_inter-6)/_kd_,0)**3 
+-(6-1)*max((tshbp_inter-4)/_kd_,0)**3)/(6-4);
+MPRINT(GFORMULA.DATAPREP.RCSPLINE):  ;
+MPRINT(GFORMULA.DATAPREP.RCSPLINE):   
+tshbp_inter_spl2=max((tshbp_inter-2)/_kd_,0)**3+((4-2)*max((tshbp_inter-6)/_kd_,0)**3 
+-(6-2)*max((tshbp_inter-4)/_kd_,0)**3)/(6-4);
+MPRINT(GFORMULA.DATAPREP.RCSPLINE):  ;
+MPRINT(GFORMULA.DATAPREP):  ;
+MPRINT(GFORMULA.DATAPREP.RCSPLINE):   DROP _kd_;
+MPRINT(GFORMULA.DATAPREP.RCSPLINE):   _kd_= (6 - 1)**.666666666666 ;
+MPRINT(GFORMULA.DATAPREP.RCSPLINE):   
+tshbp_l1_inter_spl1=max((tshbp_l1_inter-1)/_kd_,0)**3+((4-1)*max((tshbp_l1_inter-6)/_kd_
+,0)**3 -(6-1)*max((tshbp_l1_inter-4)/_kd_,0)**3)/(6-4);
+MPRINT(GFORMULA.DATAPREP.RCSPLINE):  ;
+MPRINT(GFORMULA.DATAPREP.RCSPLINE):   
+tshbp_l1_inter_spl2=max((tshbp_l1_inter-2)/_kd_,0)**3+((4-2)*max((tshbp_l1_inter-6)/_kd_
+,0)**3 -(6-2)*max((tshbp_l1_inter-4)/_kd_,0)**3)/(6-4);
+MPRINT(GFORMULA.DATAPREP.RCSPLINE):  ;
+MPRINT(GFORMULA.DATAPREP):  ;
+MPRINT(GFORMULA.DATAPREP):  ;
+MPRINT(GFORMULA.DATAPREP):  ;
+MPRINT(GFORMULA.DATAPREP):  ;
+MPRINT(GFORMULA.DATAPREP):  ;
+MPRINT(GFORMULA.DATAPREP):   run;
+
+NOTE: There were 4741 observations read from the data set WORK._INPUTD_.
+NOTE: The data set WORK._INPUTD_ has 4741 observations and 47 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.02 seconds
+      cpu time            0.03 seconds
+      
+
+MPRINT(GFORMULA.DATAPREP):   data _paramdata_;
+MPRINT(GFORMULA.DATAPREP):   set _inputd_;
+MPRINT(GFORMULA.DATAPREP):   keep _sample_ newid _weight_ dia baseage time_1 time_2 
+time_3 time_4 time_5 hbp tshbp_inter tshbp_inter_spl1 tshbp_inter_spl2 act_l1 act 
+acts_l1 acts actc_l1 actc dead baseage time_1 time_2 time_3 time_4 time_5 hbp 
+tshbp_inter tshbp_inter_spl1 tshbp_inter_spl2 act_l1 act acts_l1 acts actc_l1 actc 
+censlost baseage time_1 time_2 time_3 time_4 time_5 hbp tshbp_inter tshbp_inter_spl1 
+tshbp_inter_spl2 act_l1 act acts_l1 acts actc_l1 actc time time time_1 time_2 time_3 
+time_4 time_5 hbp_l1 tshbp_l1_inter tshbp_l1_inter_spl1 tshbp_l1_inter_spl2 act_l2 
+act_l1 acts_l2 acts_l1 actc_l2 actc_l1 hbp baseage time_1 time_2 time_3 time_4 time_5 
+act_l2 act_l1 acts_l2 acts_l1 actc_l2 actc_l1 hbp_l1 act baseage time_1 time_2 time_3 
+time_4 time_5 hbp tshbp_inter tshbp_inter_spl1 tshbp_inter_spl2 act_l2 act_l1 acts_l2 
+acts_l1 actc_l2 actc_l1 zact lact ;
+MPRINT(GFORMULA.DATAPREP):   run;
+
+NOTE: There were 4741 observations read from the data set WORK._INPUTD_.
+NOTE: The data set WORK._PARAMDATA_ has 4741 observations and 32 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.01 seconds
+      cpu time            0.01 seconds
+13                                   The SAS System     17:15 Wednesday, January 4, 2023
+
+      
+
+MPRINT(GFORMULA.DATAPREP):   data _simuldata_ ;
+MPRINT(GFORMULA.DATAPREP):   set _inputd_ (where = (time = 0) keep= newid time baseage 
+hbp hbp_l1 hbp_b act act_l2 act_l1 act_b ) ;
+MPRINT(GFORMULA.DATAPREP):   run;
+
+NOTE: There were 1000 observations read from the data set WORK._INPUTD_.
+      WHERE time=0;
+NOTE: The data set WORK._SIMULDATA_ has 1000 observations and 10 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.00 seconds
+      
+
+MPRINT(GFORMULA.DATAPREP):   data tmpids ;
+MPRINT(GFORMULA.DATAPREP):   do newid = 1 to 1000 ;
+MPRINT(GFORMULA.DATAPREP):   output;
+MPRINT(GFORMULA.DATAPREP):   end;
+MPRINT(GFORMULA.DATAPREP):   run;
+
+NOTE: The data set WORK.TMPIDS has 1000 observations and 1 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.00 seconds
+      
+
+MPRINT(GFORMULA.DATAPREP):   data _calchazard_ ;
+MPRINT(GFORMULA.DATAPREP):   calchazard = 0 ;
+MPRINT(GFORMULA.DATAPREP):   run;
+NOTE: The data set WORK._CALCHAZARD_ has 1 observations and 1 variables.
+NOTE: DATA statement used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.00 seconds
+      
+
+MPRINT(GFORMULA.DATAPREP):   proc datasets library=work nolist;
+MPRINT(GFORMULA.DATAPREP):   delete cuminc indiv _orig_ ;
+MPRINT(GFORMULA.DATAPREP):   quit;
+
+NOTE: Deleting WORK.CUMINC (memtype=DATA).
+NOTE: Deleting WORK.INDIV (memtype=DATA).
+NOTE: Deleting WORK._ORIG_ (memtype=DATA).
+NOTE: PROCEDURE DATASETS used (Total process time):
+      real time           0.00 seconds
+      cpu time            0.01 seconds
+      
+
+MPRINT(GFORMULA):  ;
+MPRINT(GFORMULA):  ;
+ 
+ERROR:  An exception has been encountered.
+14                                   The SAS System     17:15 Wednesday, January 4, 2023
+
+Please contact technical support and provide them with the following traceback 
+       information:
+ 
+The SAS task name is [Program ]
+Segmentation Violation
+ 
+Traceback of the Exception:
+ 
+/usr/local/SASHome/SASFoundation/9.4/sasexe/sas(+0x17d5fe) [0x55cdadc325fe]
+/usr/local/SASHome/SASFoundation/9.4/sasexe/sas(+0x503fe) [0x55cdadb053fe]
+/usr/local/SASHome/SASFoundation/9.4/sasexe/tkmk.so(bkt_signal_handler+0x14b) 
+       [0x7fabcd9812db]
+/lib64/libpthread.so.0(+0xf630) [0x7fabcf35a630]
+/usr/local/SASHome/SASFoundation/9.4/sasexe/sasxmac(+0x12dda) [0x7fabb0ca1dda]
+/usr/local/SASHome/SASFoundation/9.4/sasexe/sasxmac(yjoch+0x1146) [0x7fabb0cccc86]
+/usr/local/SASHome/SASFoundation/9.4/sasexe/sasxshel(ytscan+0x24a1) [0x7fabb330a341]
+/usr/local/SASHome/SASFoundation/9.4/sasexe/sasxshel(yjdelta+0x30) [0x7fabb32ef2e0]
+/usr/local/SASHome/SASFoundation/9.4/sasexe/sasxmac(+0x2a0f0) [0x7fabb0cb90f0]
+/usr/local/SASHome/SASFoundation/9.4/sasexe/sasxmac(yjintrp+0x2786) [0x7fabb0cb5506]
+/usr/local/SASHome/SASFoundation/9.4/sasexe/sasxmac(yjoch+0x11d3) [0x7fabb0cccd13]
+/usr/local/SASHome/SASFoundation/9.4/sasexe/sasxshel(ytscan+0x24a1) [0x7fabb330a341]
+/usr/local/SASHome/SASFoundation/9.4/sasexe/sasxshel(yjdelta+0x30) [0x7fabb32ef2e0]
+/usr/local/SASHome/SASFoundation/9.4/sasexe/sasxmac(+0x2a0f0) [0x7fabb0cb90f0]
+/usr/local/SASHome/SASFoundation/9.4/sasexe/sasxmac(yjintrp+0x2786) [0x7fabb0cb5506]
+/usr/local/SASHome/SASFoundation/9.4/sasexe/sasxmac(yjoch+0x11d3) [0x7fabb0cccd13]
+/usr/local/SASHome/SASFoundation/9.4/sasexe/sasxshel(ytscan+0x24a1) [0x7fabb330a341]
+/usr/local/SASHome/SASFoundation/9.4/sasexe/sasxshel(yjdelta+0x30) [0x7fabb32ef2e0]
+/usr/local/SASHome/SASFoundation/9.4/sasexe/sasxmac(+0x2a0f0) [0x7fabb0cb90f0]
+/usr/local/SASHome/SASFoundation/9.4/sasexe/sasxmac(yjintrp+0x2786) [0x7fabb0cb5506]
+/usr/local/SASHome/SASFoundation/9.4/sasexe/sasxmac(yjoch+0x11d3) [0x7fabb0cccd13]
+/usr/local/SASHome/SASFoundation/9.4/sasexe/sasxshel(ytscan+0x24a1) [0x7fabb330a341]
+/usr/local/SASHome/SASFoundation/9.4/sasexe/sasxshel(yjdelta+0x30) [0x7fabb32ef2e0]
+/usr/local/SASHome/SASFoundation/9.4/sasexe/sasxmac(+0x2a0f0) [0x7fabb0cb90f0]
+/usr/local/SASHome/SASFoundation/9.4/sasexe/sasxmac(yjintrp+0x2786) [0x7fabb0cb5506]
+
+ERROR: Errors printed on pages 13,14.
+
+NOTE: SAS Institute Inc., SAS Campus Drive, Cary, NC USA 27513-2414
+NOTE: The SAS System used:
+      real time           4.06 seconds
+      cpu time            4.02 seconds
+      
