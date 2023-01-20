@@ -1,17 +1,13 @@
 /*Example: outctype=binsurv*/
 
-%include '/proj/sas_macros/gformula/master_branch/new_censoring/GFORMULA-SAS/gformula4_0_blb_testing.sas';
-%include '/proj/sas_macros/gformula/master_branch/new_censoring/GFORMULA-SAS/bootstrap_blb_version0.sas';
-%include '/proj/sas_macros/gformula/master_branch/new_censoring/GFORMULA-SAS/base_sample.sas';
-%include '/proj/sas_macros/gformula/master_branch/new_censoring/GFORMULA-SAS/results_blb.sas';
-%include '/proj/sas_macros/gformula/master_branch/new_censoring/GFORMULA-SAS/for_covmeans_graphs.sas';
-
+%include '/proj/sas_macros/gformula/master_branch/new_censoring/GFORMULA-SAS/gformula4.0.sas';
 options linesize=88 pagesize=54;
 
 *options mprint mprintnest;
 *options mlogic mlogicnest;
 *options fullstimer notes;
 options notes;
+options nonotes nomprint ;
 *options threads;
 
 
@@ -102,29 +98,41 @@ run;
 
 %create_sample;
 
-/***/
-proc datasets library = work nolist ;
-save sample  /* roger1 simul1 param1 step2a */;
-quit;
-/***/
+proc freq data = sample ;
+table 
+time ;
+run;
+
+
+data sample ;
+set sample ;
+conteof = . ;
+call streaminit(1234321);
+if time = 5 then do ;
+   conteof = -1+2*rand('uniform');
+   bineof = rand('bernoulli',0.4) ;
+end;
+censor = (dead = 1 or censlost = 1) ;
+run;
+
+ 
+ proc greplay igout = GSEG nofs ;
+ delete _all_ ;
+ run;
+ quit;
 
 **GFORMULA Call;
 title 'GFORMULA SAMPLE';
-options mprint mprintnest notes spool ;
-options nomlogic ;
-*options nonotes nomprint ;
-
-%let use_samples_orig = 1 ;
-%let sample_check = -1 ;
-
+options mprint notes ;
+options nomprint nonotes ;
 %gformula(
 data= sample,
 id=id,
 time=time,
 timepoints = 6,
-outc=dia,
+outc=dia ,
 outctype=binsurv,
-compevent=dead,
+compevent= dead,
 compevent_cens  = 0   ,
 censor = censlost ,
 
@@ -135,19 +143,14 @@ timeknots = 1 2 3 4 5,
 ncov=2,
 cov1  = hbp,    cov1otype  = 2, cov1ptype = tsswitch1,
 cov2  = act,    cov2otype  = 4, cov2ptype = lag2cub,
-
-hazardratio = 0 , /* this is broken */
+ save_raw_covmean = 1,
+hazardratio = 1 ,
 bootstrap_hazard = 1 ,
 intcomp = 0 1 ,
-seed= 9458, numint=1,
-nsimul = 1000 ,
-bootstrap_method =1,
-nsamples = 10 ,
-BLB_b = 500 ,
-BLB_r = 2, /* for inner loop, takes place of nsamples */
-BLB_s = 2 /* for outter loop */,
-rungraphs = 1,
-print_cov_means = 0 
+seed= 9458, nsamples = 10, numint=1 ,
+rungraphs = 1 ,
+
+resultsdata = myresults 
 );
 
 

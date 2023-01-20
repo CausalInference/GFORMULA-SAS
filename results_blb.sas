@@ -1,6 +1,9 @@
 
 %macro results_blb (blb_samples = 1 );
 
+/*****/
+%blb_graphs_part1(blb_samples = &blb_samples  ) ;
+/******/
      data fin_s;
 	 run;
 

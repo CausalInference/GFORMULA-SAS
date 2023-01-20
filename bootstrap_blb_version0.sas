@@ -251,9 +251,9 @@
     proc datasets library=work nolist ;
         delete _idsamples ;
     quit;
-   
+   /**
     proc contents data = simul ; run ;
-     
+   **/  
 %mend samples_blb;
 
 %macro bootstrap_blb ;

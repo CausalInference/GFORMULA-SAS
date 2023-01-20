@@ -2927,8 +2927,14 @@ data step2a ; set step2 ; run;
 
      %if &check_cov_models = 1 OR &rungraphs = 1   %then %do;
           %local dataholder ;
-		  %if &bsample = &sample_start %then %let dataholder = &covmeanname ;  
-          %else %let dataholder = _cov_mean_tmp ; 
+		  %if &bootstrap_method = 0 %then %do;
+		  		%if &bsample = &sample_start %then %let dataholder = &covmeanname ;  
+          		%else %let dataholder = _cov_mean_tmp ; 
+		  %end ;
+		  %else %if &bootstrap_method = 1 %then %do;
+		  		%if &sample_s = 0  and &sample_r = 0 %then %let dataholder = &covmeanname ;
+				%else %let dataholder = _cov_mean_tmp ;
+		  %end;
 
           proc sql ;
             create table &dataholder  as
@@ -2980,7 +2986,8 @@ data step2a ; set step2 ; run;
 			quit;
 	  %end;
         
-        %if &bsample > &sample_start  %then %do;
+	    
+        %if (&bootstrap_method = 0 and &bsample > &sample_start ) OR (&bootstrap_method = 1 and &sample_s > 0 )   %then %do;
            proc append base = &covmeanname data = _cov_mean_tmp  ;
            run;
 
@@ -3126,7 +3133,6 @@ data step2a ; set step2 ; run;
                 U = rand('uniform');
                 distid=int(U*&dsize)+1;
             run;
-
             proc sort data=simul;
                 by distid;
             run;
@@ -4626,7 +4632,6 @@ intusermacro7=,
           set drmst ;
           array drmst{*} drmst&intstart - drmst&numint ;
           array rmst{*} rmst&intstart - rmst&numint ;
-
           do i = 1 to %eval(&numint + 1 - &intstart);
                drmst[i] = rmst[i] - rmst&refint ;
           end;
@@ -5903,7 +5908,6 @@ not the time-varying covariates, which are handled below in %interactionsb*/
      %end; 
 %end;
 %mend listcatint;
-
 
 
 %macro makecatint(vrbl,iota,first,second,type1,type2,vartype,baseline);
