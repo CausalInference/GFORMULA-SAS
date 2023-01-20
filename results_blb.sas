@@ -4,109 +4,116 @@
      data fin_s;
 	 run;
 
+	 data _inthrstat_s ;
+	 run;
+
 	 %do sample = 1 %to &blb_samples ;
-     %*Generating reference cumulative incidence;        
-     data _ref_;
-     set interv&refint._all (where = (_sample_s = &sample   )); /*change jgy*/
-     %if &outctype=binsurv %then   pDref=pD;
-     %else pDref=s&outc ;;
-     keep _sample_r pDref;
-     run;
+	     %*Generating reference cumulative incidence;        
+	     data _ref_;
+	     set interv&refint._all (where = (_sample_s = &sample   )); /*change jgy*/
+	     %if &outctype=binsurv %then   pDref=pD;
+	     %else pDref=s&outc ;;
+	     keep _sample_r pDref;
+	     run;
 
 
 
-     %do i=&intstart %to &numint;
+	     %do i=&intstart %to &numint;
 
-          %*Outputting summary of intervention;
-          %*proc means data = interv&i._all;
-          %*run;
+	          %*Outputting summary of intervention;
+	          %*proc means data = interv&i._all;
+	          %*run;
 
-          %*Comparing intervention to reference;
-                 
-          %let pd = pd ;
-          %if &outctype ^= binsurv %then %let pd = s&outc ;
+	          %*Comparing intervention to reference;
+	                 
+	          %let pd = pd ;
+	          %if &outctype ^= binsurv %then %let pd = s&outc ;
 
-          data interv&i; 
-          merge interv&i._all (where = (_sample_s = &sample )) _ref_;
-          by _sample_r; 
-          if pDref^=0 then rr=&pd /pDref;
-          if pDref^=0 then rd=&pd - pDref;
-          if rd^=. and rd>0 then nnt = 1/rd;
-          *logrr=log(rr); /* commented out since this was the only occurrance of this variable */
-          run;
+	          data interv&i; 
+	          merge interv&i._all (where = (_sample_s = &sample )) _ref_;
+	          by _sample_r; 
+	          if pDref^=0 then rr=&pd /pDref;
+	          if pDref^=0 then rd=&pd - pDref;
+	          if rd^=. and rd>0 then nnt = 1/rd;
+	          *logrr=log(rr); /* commented out since this was the only occurrance of this variable */
+	          run;
 
-		  /***************
+			  /***************
 
-          %*Appending intervention datasets;
-		  * this data set will be used for printing the output. has rows for each intervention ;
+	          %*Appending intervention datasets;
+			  * this data set will be used for printing the output. has rows for each intervention ;
 
-          data fin; 
-          set fin interv&i; 
-          if _sample =0  ;
-          if int=. then int=&i;
-          run;
-            
-		  *********/
-
-
-          %*Calculating bootstrap mean, variance and confidence intervals;
-          proc univariate data=interv&i noprint;
-          where _sample_r ne 0;
-          var &pd rr rd nnt;
-          output out = temp&i
-          mean = &pd._mean RR_mean RD_mean NNT_mean
-          std =  &pd._std  RR_std  RD_std  NNT_std
-          pctlpre = &pd._  RR_     RD_     NNT_
-          pctlname = llim95 ulim95  pctlpts = 2.5 97.5;
-          run;
-
-          data temp&i;
-          set temp&i;
-          int = &i;
-		  _sample_s = &sample ;
-          run;
+	          data fin; 
+	          set fin interv&i; 
+	          if _sample =0  ;
+	          if int=. then int=&i;
+	          run;
+	            
+			  *********/
 
 
-		  /*** used for printing output 
-          data fin;
-          merge fin temp&i;
-          by int;
-          run;
-          *************/
- 
-		  data fin_s ;
-		  set fin_s temp&i ;
-		  if _sample_s ne . ;
-		  run;
+	          %*Calculating bootstrap mean, variance and confidence intervals;
+	          proc univariate data=interv&i noprint;
+	          where _sample_r ne 0;
+	          var &pd rr rd nnt;
+	          output out = temp&i
+	          mean = &pd._mean RR_mean RD_mean NNT_mean
+	          std =  &pd._std  RR_std  RD_std  NNT_std
+	          pctlpre = &pd._  RR_     RD_     NNT_
+	          pctlname = llim95 ulim95  pctlpts = 2.5 97.5;
+	          run;
+
+	          data temp&i;
+	          set temp&i;
+	          int = &i;
+			  _sample_s = &sample ;
+	          run;
 
 
-          %*Deleting no longer needed datasets;
-        *  proc datasets library=work nolist; 
-        *  delete  interv&i interv&i._all temp&i;
-        *  quit;
+			  /*** used for printing output 
+	          data fin;
+	          merge fin temp&i;
+	          by int;
+	          run;
+	          *************/
+	 
+			  data fin_s ;
+			  set fin_s temp&i ;
+			  if _sample_s ne . ;
+			  run;
 
-     %end;
+
+	          %*Deleting no longer needed datasets;
+	        *  proc datasets library=work nolist; 
+	        *  delete  interv&i interv&i._all temp&i;
+	        *  quit;
+
+     	%end;
 
 
-     %if &hazardratio = 1 AND &bootstrap_hazard = 1 %then %do;
-             proc univariate data = &hazardname (where = (_sample_ > 0)) ;
-             var hazardratio ;
-             output out = _inthrstat_ 
-             mean = hr_mean  
-             std =  hr_std   
-             pctlpre = hr_   
-             pctlname = llim95 ulim95  pctlpts = 2.5 97.5;
-             run;
+	     %if &hazardratio = 1 AND &bootstrap_hazard = 1 %then %do;
+	             proc univariate data = &hazardname (where = (_sample_s = &sample   ))  ;
+	             var hazardratio ;
+	             output out = temp_inthrstat_ 
+	             mean = hr_mean  
+	             std =  hr_std   
+	             pctlpre = hr_   
+	             pctlname = llim95 ulim95  pctlpts = 2.5 97.5;
+	             run;
 
-             proc sql ;
-             select round(hr_llim95,0.01) into :hrlb from _inthrstat_ ;
-             select round(hr_ulim95,0.01) into :hrub from _inthrstat_;
-             quit;
+				data temp_inthrstat_ ;
+				set temp_inthrstat_ ;
+				_sample_s = &sample ;
+				run;
 
-             %let hrub = %sysfunc(compress(&hrub));
-             %let hrlb = %sysfunc(compress(&hrlb));
+				data _inthrstat_s ;
+				set _inthrstat_s temp_inthrstat_ ;
+				if _sample_s ne . ;
+				run;
 
-     %end;
+
+
+	     %end;
 %end;
 
 
@@ -168,6 +175,26 @@ run ;
          
      %end;
 
+
+
+	   %if &hazardratio = 1 AND &bootstrap_hazard = 1 %then %do;
+
+	            %let mylist2 = hr_mean hr_std hr_llim95 hr_ulim95 ;
+	   
+				proc means data = _inthrstat_s noprint ;
+				var &mylist2 ;
+			*	by int ;
+				output out=_inthrstat_ mean(&mylist2 ) = ;
+				run;
+
+	             proc sql ;
+	             select round(hr_llim95,0.01) into :hrlb from _inthrstat_ ;
+	             select round(hr_ulim95,0.01) into :hrub from _inthrstat_ ;
+	             quit;
+
+	             %let hrub = %sysfunc(compress(&hrub));
+	             %let hrlb = %sysfunc(compress(&hrlb));
+	 %end;
 
  	data fin;
     merge fin fin_results;

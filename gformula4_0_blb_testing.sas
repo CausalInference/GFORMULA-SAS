@@ -8110,7 +8110,13 @@ set _cont  ( where = ( substr(name,1,1)='s'
      %local firstint secondint ;
       data _calchazard_ ;
       calchazard = 1 ;
+	  %if &bootstrap_method = 0 %then %do;
       _sample_ = &bsample ;
+	  %end;
+	  %else %if &bootstrap_method = 1 %then %do;
+	  	_sample_r = &sample_r ;
+		_sample_s = &sample_s ;
+	  %end;
       run;
 
       %let firstint = %sysfunc(compress(%scan(&intcomp,1)));
@@ -8134,7 +8140,14 @@ set _cont  ( where = ( substr(name,1,1)='s'
 
       data _calchazard_ ;
       calchazard = 0 ;
-      _sample_ = &bsample ;
+
+      %if &bootstrap_method = 0 %then %do;
+      	_sample_ = &bsample ;
+	  %end;
+	  %else %if &bootstrap_method = 1 %then %do;
+	  	_sample_r = &sample_r ;
+		_sample_s = &sample_s ;
+	  %end;
       run;
 
 
@@ -8174,7 +8187,13 @@ run;
 
     data _inthr0_ ;
     set _inthr0_ (keep = HazardRatio) ;
-    _sample_ = &bsample ;
+     %if &bootstrap_method = 0 %then %do;
+      _sample_ = &bsample ;
+	  %end;
+	  %else %if &bootstrap_method = 1 %then %do;
+	  	_sample_r = &sample_r ;
+		_sample_s = &sample_s ;
+	  %end;
     run;
 
     %if &bsample = &sample_start %then %do;
