@@ -3337,7 +3337,7 @@ intusermacro7=,
                                          %end;
                                     %end;   
                                     %else &outc ;
-                                    %if &hazardratio = 1 %then censor newtime &outc ;
+                                    %if &hazardratio = 1 %then _censor _newtime  ;
                                     
                                     
                                      )   /view = simulated&intno  ;
@@ -3354,9 +3354,9 @@ intusermacro7=,
 
          
         %if &hazardratio = 1 %then %do;
-            &outc = .;
-            censor = . ;
-            newtime = .;
+            
+            _censor = . ;
+            _newtime = .;
             
         %end;
         %else %do;
@@ -3703,11 +3703,10 @@ intusermacro7=,
                             s&outc[&time] = p&outc ;
                             %if &hazardratio = 1 %then %do;
                                 if calchazard = 1 then do ;  
-                                    if Uoutc[&time] <= p&outc then &outc = 1;
-                                    else &outc = 0;
-                                    if &outc = 1 then do ; 
-                                        newtime = &time ;
-                                        censor = 0 ; 
+                                    if Uoutc[&time] <= p&outc then _censor = 1;
+                                    
+                                    if  _censor = 1 then do ; 
+                                        _newtime = &time ;                                         
                                         mygood = 0 ;  /* do not want to simulate any further covariate history    */
                                     end;                    
                                 end; 
@@ -3784,12 +3783,11 @@ intusermacro7=,
                             %if &hazardratio = 1 %then %do;
 
                                 if calchazard = 1 then do;
-                                    if Ucompevent[&time] <= pcompevent then censor = 2;
-                                    else censor = 0;
+                                    if Ucompevent[&time] <= pcompevent then _censor = 2;
+                                    
 
-                                    if censor = 2 then do ;
-                                        newtime = &time ;
-                                        &outc = .;
+                                    if _censor = 2 then do ;
+                                        _newtime = &time ;                                        
                                         mygood = 0 ;  /* do not want to simulate any further covariate history   */
                                     end;
                                 end;
@@ -3807,9 +3805,8 @@ intusermacro7=,
                     %if &hazardratio = 1   %then %do;
                         /*  made it to end-of-followup without event or censor. need to censor due to eof */
                         if calchazard = 1 and mygood = 1 and &time = ( &timepoints -1) then do ; 
-                            censor = 1 ;
-                            &outc = . ;
-                            newtime = &time ;
+                            _censor = 0 ;                            
+                            _newtime = &time ;
                         end;
                     %end;
                     /* increment lagged variables for the next time point */
@@ -7850,13 +7847,13 @@ set _cont  ( where = ( substr(name,1,1)='s'
       data hazard1 ;
       set simulated&firstint;
       int = &firstint;
-      keep int newtime &outc censor ;
+      keep int _newtime  _censor ;
       run;
 
       data hazard2 ;
       set simulated&secondint;
       int = &secondint ;
-      keep int newtime &outc censor ;
+      keep int _newtime _censor ;
       run;
 
       data both ;
@@ -7872,11 +7869,8 @@ set _cont  ( where = ( substr(name,1,1)='s'
       
 data both ;
 set both ;
+rename  _censor = event _newtime = newtime ;
 
-event = &outc ;
-
-*if &outc = 1 then event = 1 ;
-*else event = 0 ;
 if int = &firstint then int = 0;
 else int = 1 ;
 run;
