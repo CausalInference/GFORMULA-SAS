@@ -14,7 +14,7 @@ Version January 2019. This version includes options and improvements that are no
 of the software. For questions and comments, email rwlogan@hsph.harvard.edu or jyoung@hsph.harvard.edu
  
 
-Copyright (c) 2007, 2021, The President and Fellows of Harvard College
+Copyright (c) 2007, 2023, The President and Fellows of Harvard College
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated 
 documentation files (the "Software"), to deal in the Software without restriction, including without limitation 
