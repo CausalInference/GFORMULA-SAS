@@ -341,6 +341,7 @@ options mautosource minoperator ;
           %let bootstrap_hazard = 0;
           %let intcomp = ;
           %let hazardname = ;
+		  %if %bquote(&censor) ^= AND %bquote(&compevent)^= %then %let compevent_cens = 1 ;
     %end; 
     %if &minimalistic = yes %then %do;
         %let rungraphs = 0 ;
@@ -2975,7 +2976,9 @@ data step2a ; set step2 ; run;
  				merge  &dataholder forwtY (keep = &time meanoutc %if %bquote(&compevent) ^= AND &compevent_cens = 0 %then meancompevent ; ) forwtCov (keep = &time &covlisttmp ) ;
 			%end;
 			%else %do;
-				merge  &dataholder forwtY (keep = &time &outc %if %bquote(&compevent) ^= AND &compevent_cens = 0 %then meancompevent ;)  forwtCov (keep = &time &covlisttmp )  ;
+				merge  &dataholder 
+                       forwtY (keep = &time &outc  )   
+                       forwtCov (keep = &time &covlisttmp )  ;
 			%end;
 			by &time ;
             run;
@@ -3626,9 +3629,8 @@ intusermacro7=,
                                          %end;
                                     %end;   
                                     %else &outc ;
-                                    %if &hazardratio = 1 %then censor newtime &outc ;
+                                    %if &hazardratio = 1 %then _censor _newtime  mygood  ;
                                     &bootstrap_counts 
-                                    
                                      )   /view = simulated&intno  ;
  
 
@@ -3638,15 +3640,13 @@ intusermacro7=,
                       end=_end_;
         by %if &bootstrap_method = 0 %then _sample_ ;
 		   %else %if &bootstrap_method = 1 %then _sample_s _sample_r ; ;
-        
         call streaminit(_seedr_);
         drop _seedr_ ; 
 
          
-        %if &hazardratio = 1 %then %do;
-            &outc = .;
-            censor = . ;
-            newtime = .;
+        %if &hazardratio = 1 %then %do;            
+            _censor = . ;
+            _newtime = .;
             
         %end;
         %else %do;
@@ -3992,11 +3992,9 @@ intusermacro7=,
                             s&outc[&time] = p&outc ;
                             %if &hazardratio = 1 %then %do;
                                 if calchazard = 1 then do ;  
-                                    if Uoutc[&time] <= p&outc then &outc = 1;
-                                    else &outc = 0;
-                                    if &outc = 1 then do ; 
-                                        newtime = &time ;
-                                        censor = 0 ; 
+                                    if Uoutc[&time] <= p&outc then _censor = 1;                                    
+                                    if  _censor = 1 then do ; 
+                                        _newtime = &time ;                                         
                                         mygood = 0 ;  /* do not want to simulate any further covariate history    */
                                     end;                    
                                 end; 
@@ -4073,12 +4071,9 @@ intusermacro7=,
                             %if &hazardratio = 1 %then %do;
 
                                 if calchazard = 1 then do;
-                                    if Ucompevent[&time] <= pcompevent then censor = 2;
-                                    else censor = 0;
-
-                                    if censor = 2 then do ;
-                                        newtime = &time ;
-                                        &outc = .;
+                                    if Ucompevent[&time] <= pcompevent then _censor = 2;                                    
+                                    if _censor = 2 then do ;
+                                        _newtime = &time ;                                        
                                         mygood = 0 ;  /* do not want to simulate any further covariate history   */
                                     end;
                                 end;
@@ -4092,13 +4087,11 @@ intusermacro7=,
                         p&outc = . ;
                     end;
                  
-
                     %if &hazardratio = 1   %then %do;
                         /*  made it to end-of-followup without event or censor. need to censor due to eof */
                         if calchazard = 1 and mygood = 1 and &time = ( &timepoints -1) then do ; 
-                            censor = 1 ;
-                            &outc = . ;
-                            newtime = &time ;
+                            _censor = 0 ;                            
+                            _newtime = &time ;
                         end;
                     %end;
                     /* increment lagged variables for the next time point */
@@ -4138,7 +4131,7 @@ intusermacro7=,
             %end;
 			%else %do;
 				%if &intno = 0 /**** AND %bquote(&censor) ^= ****/ %then %do;
-				    %put inside creating ncs variables &timepoints , &ncov ;
+				   /* %put inside creating ncs variables &timepoints , &ncov ; */
 				 	do time = 0 to %eval(&timepoints - 1) ;
 						%do myi = 1 %to &ncov ;				   
 							ncs&&cov&myi [ time] = s&&cov&myi [ time] ;
@@ -5910,6 +5903,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
 %mend listcatint;
 
 
+
 %macro makecatint(vrbl,iota,first,second,type1,type2,vartype,baseline);
   /* when first and second are spline variables, the same number of factors is used, except the variable
      names need to be changed. */
@@ -7413,6 +7407,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
  quit;
 *****/
 
+
  %local nperiods mintime mydate mywork anydoubles  idouble word simlist i ivar vartmp ngraph mycount myextra mypair graphlist graph1
         graph2 graph3 graph4 graph5 graph6 ;
 
@@ -7422,14 +7417,14 @@ not the time-varying covariates, which are handled below in %interactionsb*/
        filename mygraphs "&mywork./graphs.pdf";
    
     proc sql noprint ;
-    select count(&time) as mtime into :nperiods from &covmean ;
+    select count(distinct &time) as mtime into :nperiods from &covmean ; * add in distinct time for testing when bootstrap_method = 1 ;
     select min(&time)   as mintime into :mintime from &covmean ;      
     quit;
 
     %let nperiods = %sysfunc(compress(&nperiods)) ;
     %let mintime = %sysfunc(compress(&mintime)) ;
 
- goptions reset=all noborder device=pdf gsfname=mygraphs  ;
+ goptions reset=all noborder device=png gsfname=mygraphs  ;
  proc greplay tc=work.tempcat nofs;
  tdef newtemp des="my four panel template"
      1/llx=0   lly=52
@@ -7463,7 +7458,6 @@ not the time-varying covariates, which are handled below in %interactionsb*/
        urx=48  ury=90
        lrx=48  lry=52
         
-
      2/llx=0   lly=10
        ulx=0   uly=48
        urx=48  ury=48
@@ -7649,7 +7643,10 @@ set _cont  ( where = ( substr(name,1,1)='s'
 
         * natural course risk ;
         data _estncrsk ;
-        set _datass ( keep = risk1 - risk&nperiods _sample_ int where = (_sample_ = 0 and int = 0));
+        set _datass ( keep = risk1 - risk&nperiods int 
+			%if &bootstrap_method = 0 %then _sample_ where = (_sample_ = 0 and int = 0)) ;
+			%else %if &bootstrap_method = 1 %then _sample_s _sample_r where = (_sample_s = 0 and _sample_r = 0 and int = 0)) ;
+			;
         array risk{&nperiods} ;
         &time = 0 ;
         r = 0 ;
@@ -7668,19 +7665,29 @@ set _cont  ( where = ( substr(name,1,1)='s'
         run;
 
 
-        %if &frombootstrap = 1 %then %do;
+        %if &frombootstrap = 1  %then %do;
+		   /* simulated risk under natural course from bootstrap samples */
             data _bsss ;
-            set _datass ( keep = risk1 - risk&nperiods _sample_ int where = (_sample_ > 0 and int = 0) )  ;
+            set _datass ( keep = risk1 - risk&nperiods int 
+				%if &bootstrap_method = 0 %then _sample_  where = (_sample_ > 0 and int = 0) ;
+				%else %if &bootstrap_method = 1 %then _sample_s _sample_r where = (_sample_s > 0 and int = 0 ) ;
+				)  ;
             drop int ;
             run;
 
+			/* observed natural course risk from bootstrap samples*/
             data _ncss ;
-            set _dataos (keep = obrisk&mintime - obrisk%eval(&mintime + &nperiods - 1) _sample_ where = (_sample_ > 0));
+            set _dataos (keep = obrisk&mintime - obrisk%eval(&mintime + &nperiods - 1)
+				%if &bootstrap_method = 0 %then _sample_ where = (_sample_ > 0) ;
+				%else %if &bootstrap_method = 1 %then _sample_s _sample_r where = (_sample_s > 0 ) ;
+			);
             run;
 
             data _bsres ;
             merge _bsss _ncss ;
-            by _sample_ ;
+            %if &bootstrap_method = 0 %then by _sample_ ;
+			%else %if &bootstrap_method = 1 %then by _sample_s _sample_r ;
+			   ;
             array obrisk{&nperiods} obrisk&mintime - obrisk%eval(&mintime+&nperiods-1) ;
             array risk{&nperiods} risk1 - risk&nperiods ;
 
@@ -7692,31 +7699,62 @@ set _cont  ( where = ( substr(name,1,1)='s'
 
         
 
-        
-           proc univariate data = _bsres  noprint  ;
-           var  rdiff1 - rdiff&nperiods  ;
+           %if &bootstrap_method = 0 %then %do;
+           		proc univariate data = _bsres  noprint  ;
+           		var  rdiff1 - rdiff&nperiods  ;
 
 
-           output out = _bsstd2  pctlpre =  rdiff1 - rdiff&nperiods
-                pctlname = _pct025 _pct975 
-                pctlpts = 2.5 97.5 ;
-            run;
+           		output out = _bsstd2  pctlpre =  rdiff1 - rdiff&nperiods
+                	pctlname = _pct025 _pct975 
+                	pctlpts = 2.5 97.5 ;
+
+            	run;
          
-            data _bsstd2 ;
-            set _bsstd2 ;
-            %do i = 1 %to &nperiods ;
-                &time = &i ;
-                lb = rdiff&i._pct025 ;
-                ub = rdiff&i._pct975 ;
-                output ;
-            %end;
-            keep &time lb ub ;
-            run;
+	            data _bsstd2 ;
+	            set _bsstd2 ;
+	            %do i = 1 %to &nperiods ;
+	                &time = &i ;
+	                lb = rdiff&i._pct025 ;
+	                ub = rdiff&i._pct975 ;
+	                output ;
+	            %end;
+	            keep &time lb ub ;
+	            run;
+		   %end;
+		   %else %if &bootstrap_method = 1 %then %do;
 
-        %end;
+				data mybsres ;
+				set _bsres ;
+				run;
+		   	
+         
+				%let mylist = rdiff1 rdiff2 rdiff3 rdiff4 rdiff5 rdiff6 ;
+
+				data datain ;
+				set _bsres (where = (_sample_s > 0  ));
+				run;
+			
+
+				%blb_pct_helper( datain = datain , varlistin = &mylist , dataout = _tmp3_) ;
+
+				data _bsstd2 ;
+	            set _tmp3_ ;
+	            %do i = 1 %to &nperiods ;
+	                &time = &i ;
+	                lb = rdiff&i._pct025 ;
+	                ub = rdiff&i._pct975 ;
+	                output ;
+	            %end;
+	            keep &time lb ub ;
+	            run;
+
+			%end;
+		%end;
 
         data _estobsrisk ;
-        set _dataos (keep = obrisk&mintime - obrisk%eval(&mintime+&nperiods-1) _sample_ where = (_sample_ = 0));
+        set _dataos (keep = obrisk&mintime - obrisk%eval(&mintime+&nperiods-1)
+            %if &bootstrap_method = 0 %then _sample_ where = (_sample_ = 0));
+			%else %if &bootstrap_method = 1 %then _sample_s _sample_r where = (_sample_s = 0 and _sample_r = 0)) ;;
         array obrisk{&nperiods} obrisk&mintime - obrisk%eval(&mintime+&nperiods-1) ;
          &time = 0 ;
         obs = 0 ;
@@ -7758,10 +7796,12 @@ set _cont  ( where = ( substr(name,1,1)='s'
        * keep _sample_ ncmean;
        * run;
 
+	 
         data _both1_ ;
         merge &obssurv &simsurv ; * for continuous at eof type outcome which use the mean ;
         by _sample_ ;
-        mean_diff = &outcome - ncmean ;
+        **mean_diff = &outcome - ncmean ;
+		mean_diff = &outcome - s&outcome  ;
         run;
 
         data _both10_ ;
@@ -7791,29 +7831,37 @@ set _cont  ( where = ( substr(name,1,1)='s'
 
 
             proc gslide name="mdiff";         
-            note height=4
-            justify=center 
+            note height=3
+            justify=right 
             color="black" 
             "Mean difference &meandiff (&lb , &ub )" ;        
             run;
             quit;
  
        %end;
-        
+
+ 
        data _null_ ;
        set _both10_ ;
        call symput('obsmean',trim(left(round(&outcome,0.001))));
-       call symput('simmean',trim(left(round(ncmean,0.001))));
+       call symput('simmean',trim(left(round(s&outcome,0.001))));
        run;
 
+ /* IP-weighted natrual course estimates (solid line), parameteric g-formula estimated natural  */
 
-       proc gslide name="mean";         
-       note height=4
+	   %local titletmp ;
+
+	    %if %bquote(&censor)= %then %let titletmp = Observed nc ; 
+		%else %let titletmp = Observed IP-weighted nc ;
+
+       proc gslide name="mean";   
+       note height=3
        justify=left 
        color="black" 
-       "Observed mean &outcome :   &obsmean" 
+       "&titletmp &outcome : &obsmean"  ;
+	   note height = 3 color="black"
        justify=left 
-       "Simulated mean &outcome :  &simmean";
+       "Parametric g-formula estimated nc &outcome : &simmean";
        run;
        quit;
  
@@ -7839,12 +7887,16 @@ set _cont  ( where = ( substr(name,1,1)='s'
         do i = 1 to &nperiods ;
            death[i] = 1 - obrisk[i] - osurv[i];
         end;
-        keep _sample_  estobsdeath1 - estobsdeath&nperiods  ;
+        keep  estobsdeath1 - estobsdeath&nperiods 
+			%if &bootstrap_method = 0 %then _sample_ ;
+			%else %if &bootstrap_method = 1 %then _sample_s _sample_r ;;
         run;
 
 
         data _estncdeath ;
-        set _datass (keep = _sample_ compevent1 - compevent&nperiods int where = (   int = 0 ));
+        set _datass (keep = %if &bootstrap_method = 0 %then _sample_ ;
+                          %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+                         compevent1 - compevent&nperiods int where = (   int = 0 ));
         drop  int ;
         run;
 
@@ -7853,43 +7905,63 @@ set _cont  ( where = ( substr(name,1,1)='s'
         %if &frombootstrap = 1 %then %do;
             data _forgraph3  ;
             merge _estobssurv   _estncdeath  ;
-            by _sample_ ;
+            by  %if &bootstrap_method = 0 %then _sample_ ;
+			    %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+				;
             array death{&nperiods} estobsdeath1 - estobsdeath&nperiods  ;
             array cdeath{&nperiods} compevent1 - compevent&nperiods ;
             array riskdiff{&nperiods} ;
 
-            if _sample_ > 0 ;
+            %if &bootstrap_method = 0 %then if _sample_ > 0 ;
+			%else %if &bootstrap_method = 1 %then if _sample_s > 0 and _sample_r > 0 ;
+			   ;
             do &time = 1 to &nperiods ;     
                riskdiff[&time] = death[&time] - cdeath[&time] ;      
             end;
-            keep _sample_ riskdiff1 - riskdiff&nperiods ;
+            keep %if &bootstrap_method = 0 %then _sample_  ;
+                 %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+                riskdiff1 - riskdiff&nperiods ;
             run;
 
         
  
 
-       
-            proc univariate data = _forgraph3  noprint  ;
-            var  riskdiff1 - riskdiff&nperiods  ;
-            output out = _sdgraph4  pctlpre =  riskdiff1 - riskdiff&nperiods
-                 pctlname = _pct025 _pct975 
-                 pctlpts = 2.5 97.5 ;
-            run;
-     
+           %if &bootstrap_method = 0 %then %do;
 
-
-            data _sdgraph4 ;
-            set _sdgraph4 ;
-            %do i = 1 %to &nperiods ;
-               rename riskdiff&i._pct025 = pctlb&i riskdiff&i._pct975 = pctub&i ; 
+	            proc univariate data = _forgraph3  noprint  ;
+	            var  riskdiff1 - riskdiff&nperiods  ;
+	            output out = _sdgraph4  pctlpre =  riskdiff1 - riskdiff&nperiods
+	                 pctlname = _pct025 _pct975 
+	                 pctlpts = 2.5 97.5 ;
+	            run;
+	     
             %end;
-            run;
 
+			%else %if &bootstrap_method = 1 %then %do ;
+				%let mylist = riskdiff1 riskdiff2 riskdiff3 riskdiff4 riskdiff5 riskdiff6 ;
+				
+				%blb_pct_helper( datain = _forgraph3 , varlistin = &mylist , dataout = _sdgraph4) ;
+
+
+		   %end;
+
+	            data _sdgraph4 ;
+	            set _sdgraph4 ;
+	            %do i = 1 %to &nperiods ;
+	               rename riskdiff&i._pct025 = pctlb&i riskdiff&i._pct975 = pctub&i ; 
+	            %end;
+	            run;
+		  
+		   
         %end ;
 
 
         data _graph3  ;
-        merge _estobssurv(where = (_sample_ = 0)) _estncdeath(where = (_sample_ = 0))  
+        merge _estobssurv(where = ( %if &bootstrap_method = 0 %then _sample_ = 0 ; 
+                                    %else %if &bootstrap_method = 1 %then _sample_s = 0 and _sample_r = 0 ;
+                                )) 
+             _estncdeath(where = (        %if &bootstrap_method = 0 %then _sample_ = 0 ; 
+                                    %else %if &bootstrap_method = 1 %then _sample_s = 0 and _sample_r = 0 ;))  
              %if &frombootstrap = 1 %then _sdgraph4 ; ;
         %if &frombootstrap = 1 %then %do ;
             array  pctlb{&nperiods} ;
@@ -7922,7 +7994,7 @@ set _cont  ( where = ( substr(name,1,1)='s'
   %end;
  
 
-    goptions reset = all  /* display */ hsize=8 in vsize = 8 in device=pdf  gsfname=mygraphs  ;
+    goptions reset = all  /* display */ hsize=8 in vsize = 8 in device=png  gsfname=mygraphs  ;
     symbol1 line = 1 width = 3 interpol = line  color = red ;
     symbol2 line = 2 width = 3 interpol = line color = blue ;
     symbol3 line = 2 width = 3 interpol = line color = blue ;
@@ -7930,10 +8002,11 @@ set _cont  ( where = ( substr(name,1,1)='s'
     axis1 order = 0 to &nperiods by 1 minor = none label=none value=(h=2) ;
     axis2 minor = none value=(h=2) label = (h = 3  justify=center angle=90 "Cummulative incidence %upcase(&outcome) " ) ;
     axis3 minor = none value=(h=2) label= none  ;
+	/**
 	%if %bquote(&censor ) ^= %then %do;
 		axis3 order = -0.05 to 0.05 by 0.01 minor = none value=(h=2) label= none  ;
 	%end;
-
+    ***/
    
     %if &outctype = binsurv   %then %do;
  
@@ -7945,7 +8018,7 @@ set _cont  ( where = ( substr(name,1,1)='s'
  
     %end;
      %if %bquote(&compevent)^= AND &compevent_cens = 0  %then %do;
-        axis2 minor = none value=(h=2) label = (h = 3 justify=center angle=90 'Cummulative incidence for competing risk' ) ;
+        axis2 minor = none value=(h=2) label = (h = 3 justify=center angle=90 "Cummulative incidence %upcase(&compevent) " ) ;
         proc gplot data = _graph3   ;
         plot   obs * &time sim * &time / overlay    vaxis = axis2 haxis = axis1 name='crisk' noframe nolegend;
         plot  riskdiff * &time  %if &frombootstrap = 1 %then ub * &time lb * &time ; / overlay  haxis = axis1 vaxis=axis3 name = 'criskd' noframe nolegend ;
@@ -8126,16 +8199,17 @@ set _cont  ( where = ( substr(name,1,1)='s'
       %let firstint = %sysfunc(compress(%scan(&intcomp,1)));
       %let secondint = %sysfunc(compress(%scan(&intcomp,2)));
 
+
       data hazard1 ;
       set simulated&firstint;
       int = &firstint;
-      keep int newtime &outc censor ;
+      keep int _newtime  _censor ;
       run;
 
       data hazard2 ;
       set simulated&secondint;
       int = &secondint ;
-      keep int newtime &outc censor ;
+      keep int _newtime _censor ;
       run;
 
       data both ;
@@ -8156,18 +8230,14 @@ set _cont  ( where = ( substr(name,1,1)='s'
 
 
       
-data both ;
-set both ;
+	data both ;
+	set both ;
+	rename  _censor = event _newtime = newtime ;
 
-event = &outc ;
+	if int = &firstint then int = 0;
+	else int = 1 ;
+	run;
 
-*if &outc = 1 then event = 1 ;
-*else event = 0 ;
-if int = &firstint then int = 0;
-else int = 1 ;
-run;
-
- 
  *ods select none ;
  proc phreg data = both   ;
  ods output ParameterEstimates=_inthr0_  ; 
