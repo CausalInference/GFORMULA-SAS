@@ -94,7 +94,7 @@
 	               run;
 
 	               %if &&usevisitp&i = 1 %then %do;
-	                    proc transpose data = &covmeanname (where = (_sample_s = &sample )) )out = _mean_vp&i (drop = _NAME_) prefix=&&cov&i.randomvisitp ;
+	                    proc transpose data = &covmeanname (where = (_sample_s = &sample )) out = _mean_vp&i (drop = _NAME_) prefix=&&cov&i.randomvisitp ;
 	                    var &&cov&i.randomvisitp;
 	                    by _sample_r;
 	                    run;
@@ -202,11 +202,14 @@
 
 
 
-/** need to add in code for any visit process ****/
+
 		%let myvarlist = ;
 		%do i = 1 %to &ncov ;
 			%do j = 1 %to &timepoints ;
 				%let myvarlist = &myvarlist d&&cov&i..&j._pct025 d&&cov&i..&j._pct975 d&&cov&i..&j._stddev ;
+				%if &&usevisitp&i = 1 %then %do;
+					%let myvarlist = &myvarlist d&&cov&i.randomvisitp.&j._pct025 d&&cov&i.randomvisitp.&j._pct975 d&&cov&i.randomvisitp.&j._stddev ; 
+				%end;
 			 %end;
 		%end;
 

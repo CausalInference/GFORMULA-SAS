@@ -7728,7 +7728,13 @@ set _cont  ( where = ( substr(name,1,1)='s'
 				run;
 		   	
          
-				%let mylist = rdiff1 rdiff2 rdiff3 rdiff4 rdiff5 rdiff6 ;
+			
+			    %let mylist = ;
+				%do i = 1 %to &nperiods ;
+					%let mylist = &mylist rdiff&i ;
+				%end;
+
+				
 
 				data datain ;
 				set _bsres (where = (_sample_s > 0  ));
@@ -7938,7 +7944,13 @@ set _cont  ( where = ( substr(name,1,1)='s'
             %end;
 
 			%else %if &bootstrap_method = 1 %then %do ;
-				%let mylist = riskdiff1 riskdiff2 riskdiff3 riskdiff4 riskdiff5 riskdiff6 ;
+
+			    %let mylist = ;
+				%do i = 1 %to &nperiods ;
+					%let mylist = &mylist riskdiff&i ;
+				%end;
+
+				
 				
 				%blb_pct_helper( datain = _forgraph3 , varlistin = &mylist , dataout = _sdgraph4) ;
 
