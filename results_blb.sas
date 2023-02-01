@@ -291,7 +291,7 @@ run ;
 /******/
 
 
-%macro blb_pct_helper(indata = , varinlist =  , dataout= );
+%macro blb_pct_helper(datain = , varlistin =  , dataout= );
 
 proc sort data = &datain out = _tmp_ ;
 by _sample_s _sample_r ;
@@ -314,13 +314,13 @@ run;
 
 
 %do itmp = 1 %to &ntmp ;
-	%let word = %scan(&varlistin , &itmp  ;
+	%let word = %scan(&varlistin , &itmp ) ;
 	%let varlisttmp = &varlisttmp &word._pct025 &word._pct975 ;
 %end;
 
 proc means data = _tmp2_ noprint ;
 var &varlisttmp ;
-output out = _tmp3_ ( keep = &varlisttmp  ) mean( &varlisttmp  ) = ;
+output out = &dataout ( keep = &varlisttmp  ) mean( &varlisttmp  ) = ;
 run;
 
 %mend ;
