@@ -14,172 +14,189 @@
 		  data res_s ;
 		  run;
 
+		 
 
+           /* include base sample for _sample_s = 0 */
 		  %do sample = 0 %to &blb_samples ;
 
 
-          %if &outctype = binsurv %then %do;
-
-               data rr ;              
-               set &covmeanname (keep = _sample_r _sample_s  _time_   meanoutc   meancompevent where = (_sample_s = &sample) ) ;
-               by _sample_r _time_ ;
-               retain cumsurv  cuminc newn ;
-               if first._sample_r then do ;
-                    cumsurv = 1;
-                    cuminc = 0 ;
-                    newn = 0 ;
-               end;
-               newn = newn + 1 ;                            
-               inc = cumsurv * meanoutc * (1 - meancompevent) ;
-               cuminc = cuminc + inc;                
-               surv = (1 - meanoutc) * ( 1 - meancompevent ) ;
-               cumsurv = cumsurv * surv;
-               if newn <= &timepoints then output;
-               keep _sample_r  _time_  cuminc cumsurv ;
-               run;
+	          %if &outctype = binsurv %then %do;
+					/* results from observed data, used for observed_risk data : cuminc and sumsurv  */
+			        /* for use in natural course, int = 0 */
  
+	               data rr ;              
+	               set &covmeanname (keep = _sample_r _sample_s  _time_   meanoutc   meancompevent where = (_sample_s = &sample) ) ;
+	               by _sample_r _time_ ;
+	               retain cumsurv  cuminc newn ;
+	               if first._sample_r then do ;
+	                    cumsurv = 1;
+	                    cuminc = 0 ;
+	                    newn = 0 ;
+	               end;
+	               newn = newn + 1 ;                            
+	               inc = cumsurv * meanoutc * (1 - meancompevent) ;
+	               cuminc = cuminc + inc;                
+	               surv = (1 - meanoutc) * ( 1 - meancompevent ) ;
+	               cumsurv = cumsurv * surv;
+	               if newn <= &timepoints then output;
+	               keep _sample_r  _time_  cuminc cumsurv ;
+	               run;
+		 
 
-               proc transpose data = rr  out=_stmp_ prefix= obsurv ;
-               var cumsurv ;
-               id _time_ ;
-               by _sample_r; 
-               run;
-               proc transpose data = rr out = _itmp_ prefix= obrisk ;
-               var cuminc ;
-               id _time_ ;
-               by _sample_r ;
-               run;
+	               proc transpose data = rr  out=_stmp_ prefix= obsurv ;
+	               var cumsurv ;
+	               id _time_ ;
+	               by _sample_r; 
+	               run;
 
-               data &observed_surv._s ;
-               merge _stmp_ _itmp_ ;
-               by _sample_r ;
-               _int_ = 0 ;
-               drop _NAME_ ;
-               run;
+	               proc transpose data = rr out = _itmp_ prefix= obrisk ;
+	               var cuminc ;
+	               id _time_ ;
+	               by _sample_r ;
+	               run;
 
-               proc datasets library = work nolist ;
-               delete rr _stmp_ _itmp_ ;
-               quit;
+	               data _observed_surv_s  ;
+	               merge _stmp_ _itmp_ ;
+	               by _sample_r ;
+	               _int_ = 0 ;
+				   _sample_s = &sample ;
+	               drop _NAME_ ;
+	               run;
 
-          %end; /* binsurv */
-          %else %do; /* for all other outcome types  */
-               data _obsoutcmean_ &observed_surv ;
-               set &covmeanname (keep = _sample_r _sample_s &time &outc where = (_sample_s = &sample ) );
-               if &time = &timepoints -1  ;  
-               run;
- 
-          %end;
+				   %if &sample = 0 %then %do;
+				   		data &observed_surv ;
+						set _observed_surv_s ;
+						run;
+					%end;
+					%else %do;
+						data &observed_surv ;
+						set &observed_surv _observed_surv_s ;
+						run;
+				   %end;
+	               proc datasets library = work nolist ;
+	               delete rr _stmp_ _itmp_ ;
+	               quit;
 
-          %do i = 1 %to &ncov ;
+	          %end; /* binsurv */
+	          %else %do; /* for all other outcome types  */
+	               data _obsoutcmean_ &observed_surv ;
+	               set &covmeanname (keep = _sample_r _sample_s &time &outc where = (_sample_s = &sample ) );
+	               if &time = &timepoints -1  ;  
+	               run;
+	 
+	          %end;
 
-               proc transpose data = &covmeanname  (where = (_sample_s = &sample))  out = _mean_&i(drop = _NAME_ ) prefix = &&cov&i ;
-               var &&cov&i ;
-               by _sample_r ;
-               run;
+	          %do i = 1 %to &ncov ;
 
-               %if &&usevisitp&i = 1 %then %do;
-                    proc transpose data = &covmeanname (where = (_sample_s = &sample )) )out = _mean_vp&i (drop = _NAME_) prefix=&&cov&i.randomvisitp ;
-                    var &&cov&i.randomvisitp;
-                    by _sample_r;
-                    run;
+	               proc transpose data = &covmeanname  (where = (_sample_s = &sample))  out = _mean_&i(drop = _NAME_ ) prefix = &&cov&i ;
+	               var &&cov&i ;
+	               by _sample_r ;
+	               run;
 
-               %end;
-          %end ;
+	               %if &&usevisitp&i = 1 %then %do;
+	                    proc transpose data = &covmeanname (where = (_sample_s = &sample )) )out = _mean_vp&i (drop = _NAME_) prefix=&&cov&i.randomvisitp ;
+	                    var &&cov&i.randomvisitp;
+	                    by _sample_r;
+	                    run;
 
-          data &covmeanname._s ;
-          merge %do i = 1 %to &ncov ;
-                    _mean_&i 
-                    %if &&usevisitp&i = 1 %then _mean_vp&i ;
-               %end;
-               ;
-          by _sample_r ;
-          run;
+	               %end;
+	          %end ;
 
-          data _diff_mean ;
-          merge &covmeanname._s  (keep = _sample_r 
-               %do i = 1 %to &ncov ;
-                    %do k = 1 %to &timepoints ;
-                         &&cov&i..&k
-                         %if &&usevisitp&i = 1 %then &&cov&i.randomvisitp.&k ;
-                    %end;
-               %end;)                
-               interv0_all(keep = _sample_r _sample_s 
-               %do i = 1 %to &ncov ;
-                    %do k = 1 %to %eval(&timepoints);
-                       /***  s&&cov&i..&k ***/
-					      ncs&&cov&i..&k 
-                         %if &&usevisitp&i = 1 %then %do ;
-						    /***	s&&cov&i.randomvisitp.&k  ***/
-						     ncs&&cov&i.randomvisitp.&k
-                         %end;     
-                    %end;
-               %end; 
-			
-				  rename = (
-					%do i = 1 %to &ncov ;
-	                    %do k = 1 %to %eval(&timepoints);	                          
-						   ncs&&cov&i..&k = s&&cov&i..&k 
-						   %if &&usevisitp&i = 1 %then  ncs&&cov&i.randomvisitp.&k = s&&cov&i.randomvisitp.&k ;  
-	                    %end;               				  
-			   		%end; 
-					 )
-					 where = (_sample_s = &sample )
-			);
+	          data &covmeanname._s ;
+	          merge %do i = 1 %to &ncov ;
+	                    _mean_&i 
+	                    %if &&usevisitp&i = 1 %then _mean_vp&i ;
+	               %end;
+	               ;
+	          by _sample_r ;
+	          run;
 
-           %do i = 1 %to &ncov ;
-                    %do k = 1 %to &timepoints ;
-                         d&&cov&i..&k  = &&cov&i..&k  - s&&cov&i..&k ;
-                         %if &&usevisitp&i = 1 %then d&&cov&i.randomvisitp.&k = &&cov&i.randomvisitp.&k - s&&cov&i.randomvisitp.&k;;
-                    %end;
-           %end;
-		   by _sample_r ;
-		   
-           run;
+	          data _diff_mean ;
+	          merge &covmeanname._s  (keep = _sample_r 
+	               %do i = 1 %to &ncov ;
+	                    %do k = 1 %to &timepoints ;
+	                         &&cov&i..&k
+	                         %if &&usevisitp&i = 1 %then &&cov&i.randomvisitp.&k ;
+	                    %end;
+	               %end;)                
+	               interv0_all(keep = _sample_r _sample_s 
+	               %do i = 1 %to &ncov ;
+	                    %do k = 1 %to %eval(&timepoints);
+	                       /***  s&&cov&i..&k ***/
+						      ncs&&cov&i..&k 
+	                         %if &&usevisitp&i = 1 %then %do ;
+							    /***	s&&cov&i.randomvisitp.&k  ***/
+							     ncs&&cov&i.randomvisitp.&k
+	                         %end;     
+	                    %end;
+	               %end; 
+				
+					  rename = (
+						%do i = 1 %to &ncov ;
+		                    %do k = 1 %to %eval(&timepoints);	                          
+							   ncs&&cov&i..&k = s&&cov&i..&k 
+							   %if &&usevisitp&i = 1 %then  ncs&&cov&i.randomvisitp.&k = s&&cov&i.randomvisitp.&k ;  
+		                    %end;               				  
+				   		%end; 
+						 )
+						 where = (_sample_s = &sample )
+				);
 
-		  %if &sample = 0 %then %do;
-		  		data _diff_mean_0 ;
-				set _diff_mean ;				
-				run;
-		  %end;
-		  %else %do;
-          proc univariate data = _diff_mean(where = (_sample_r > 0))  noprint  ;
-          var %do i = 1 %to &ncov ;
-                    %do k = 1 %to &timepoints  ;
-                         d&&cov&i..&k 
-                         %if &&usevisitp&i = 1 %then d&&cov&i.randomvisitp.&k ;
-                    %end;
-               %end;
-               ;
+	           %do i = 1 %to &ncov ;
+	                    %do k = 1 %to &timepoints ;
+	                         d&&cov&i..&k  = &&cov&i..&k  - s&&cov&i..&k ;
+	                         %if &&usevisitp&i = 1 %then d&&cov&i.randomvisitp.&k = &&cov&i.randomvisitp.&k - s&&cov&i.randomvisitp.&k;;
+	                    %end;
+	           %end;
+			   by _sample_r ;
+			   
+	           run;
 
-          output out = _cov_std2 
-               std = %do i = 1 %to &ncov ;
-                         %do k = 1 %to &timepoints  ;
-                              d&&cov&i..&k._stddev 
-                              %if &&usevisitp&i = 1 %then d&&cov&i.randomvisitp.&k._stddev ;
-                         %end;
-                    %end;
-               pctlpre = %do i = 1 %to &ncov ;
-                              %do k = 1 %to &timepoints  ;
-                                   d&&cov&i..&k 
-                                   %if &&usevisitp&i = 1 %then d&&cov&i.randomvisitp.&k ;
-                              %end;
-                         %end;
-               pctlname = _pct025 _pct975 
-               pctlpts = 2.5 97.5 ;
-          run;
+			  %if &sample = 0 %then %do;
+			  		data _diff_mean_0 ;
+					set _diff_mean ;				
+					run;
+			  %end;
+			  %else %do;
 
+		          proc univariate data = _diff_mean(where = (_sample_r > 0))  noprint  ;
+		          var %do i = 1 %to &ncov ;
+		                    %do k = 1 %to &timepoints  ;
+		                         d&&cov&i..&k 
+		                         %if &&usevisitp&i = 1 %then d&&cov&i.randomvisitp.&k ;
+		                    %end;
+		               %end;
+		               ;
 
-		  data _cov_std2 ;
-		  set _cov_std2 ;
-		  _sample_s = &sample ;
-		  run;
+		          output out = _cov_std2 
+		               std = %do i = 1 %to &ncov ;
+		                         %do k = 1 %to &timepoints  ;
+		                              d&&cov&i..&k._stddev 
+		                              %if &&usevisitp&i = 1 %then d&&cov&i.randomvisitp.&k._stddev ;
+		                         %end;
+		                    %end;
+		               pctlpre = %do i = 1 %to &ncov ;
+		                              %do k = 1 %to &timepoints  ;
+		                                   d&&cov&i..&k 
+		                                   %if &&usevisitp&i = 1 %then d&&cov&i.randomvisitp.&k ;
+		                              %end;
+		                         %end;
+		               pctlname = _pct025 _pct975 
+		               pctlpts = 2.5 97.5 ;
+		          run;
 
 
-		data res_s ;
-		set res_s  _cov_std2 ;
-		if _sample_s > . ;
-		run;
-        %end;
+			  data _cov_std2 ;
+			  set _cov_std2 ;
+			  _sample_s = &sample ;
+			  run;
+
+
+			data res_s ;
+			set res_s  _cov_std2 ;
+			if _sample_s > . ;
+			run;
+	        %end;
 
  		%end; /* sample loop */
 
@@ -292,7 +309,7 @@
                          outcome=&outc ,
                          compevent = &compevent ,
                          outctype = &outctype,
-                         covmean=&covmeandata ,
+                         covmean=&covmeandata._test ,
                          obssurv = &observed_surv ,
                          simsurv = &survdata ,
                          sixgraphs = 0 ,

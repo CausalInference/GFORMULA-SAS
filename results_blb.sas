@@ -1,8 +1,15 @@
 
 %macro results_blb (blb_samples = 1 );
-
+/* blb_samples is BLB_s, the number of outer samples of size BLB_b used in
+   bootstrap samples */
 /*****/
-%blb_graphs_part1(blb_samples = &blb_samples  ) ;
+
+%if (&check_cov_models = 1 OR &rungraphs = 1  ) AND &runnc = 1 %then %do;
+    /* following macro includes the first parts of the results macro */
+    
+	%blb_graphs_part1(blb_samples = &blb_samples  ) ;
+%end;
+
 /******/
      data fin_s;
 	 run;
@@ -10,9 +17,13 @@
 	 data _inthrstat_s ;
 	 run;
 
+/* for each sample of size BLB_b of BLB_s samples (outer limit ) use one 
+	 loop of the results macro and then average over the BLB_s subsets */
+
 	 %do sample = 1 %to &blb_samples ;
+
 	     %*Generating reference cumulative incidence;        
-	     data _ref_;
+	     data _ref_s ;
 	     set interv&refint._all (where = (_sample_s = &sample   )); /*change jgy*/
 	     %if &outctype=binsurv %then   pDref=pD;
 	     %else pDref=s&outc ;;
@@ -33,7 +44,7 @@
 	          %if &outctype ^= binsurv %then %let pd = s&outc ;
 
 	          data interv&i; 
-	          merge interv&i._all (where = (_sample_s = &sample )) _ref_;
+	          merge interv&i._all (where = (_sample_s = &sample )) _ref_s ;
 	          by _sample_r; 
 	          if pDref^=0 then rr=&pd /pDref;
 	          if pDref^=0 then rd=&pd - pDref;
@@ -120,7 +131,9 @@
 %end;
 
 
-proc sort data = fin_s ; by int _sample_s ;run;
+proc sort data = fin_s ; 
+by int _sample_s ;
+run;
 
 
 
@@ -273,3 +286,42 @@ run ;
 
 
 %mend ;
+
+
+/******/
+
+
+%macro blb_pct_helper(indata = , varinlist =  , dataout= );
+
+proc sort data = &datain out = _tmp_ ;
+by _sample_s _sample_r ;
+run ;
+
+
+
+proc univariate data = _tmp_ noprint ;
+var &varlistin ;
+output out = _tmp2_ pctlpre = &varlistin 
+          pctlname = _pct025 _pct975 
+          pctlpts = 2.5 97.5 ;
+by _sample_s ;
+run;
+
+
+%let varlisttmp = ;
+
+%let ntmp = %numargs(&varlistin ) ;
+
+
+%do itmp = 1 %to &ntmp ;
+	%let word = %scan(&varlistin , &itmp  ;
+	%let varlisttmp = &varlisttmp &word._pct025 &word._pct975 ;
+%end;
+
+proc means data = _tmp2_ noprint ;
+var &varlisttmp ;
+output out = _tmp3_ ( keep = &varlisttmp  ) mean( &varlisttmp  ) = ;
+run;
+
+%mend ;
+
