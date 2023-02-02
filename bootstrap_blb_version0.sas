@@ -34,7 +34,7 @@
         merge _paramdata_ (in= p) _paramsample_;
         by newid ;
         if BLB_count0 > 0 ; *delete those not selected into sample ;
-		%if &use_bootstrap_counts = 0 %then %do;
+		%if &expand_param_counts = 1 %then %do;
 	        do _copy_ = 1 to BLB_count0 ; * make numberhits copies of each remaining subject ;
 			    BLB_counts = 1 ;
 				%if &bootstrap_method = 0 %then bootstrap_counts = 1 ;;
@@ -158,7 +158,7 @@
         run;
 
 
-        %if &use_bootstrap_counts = 0 %then %do;
+        %if &expand_simul_counts = 1 %then %do;
         	data simul ;
         	set simul ;
         	do _copy0_ = 1 to BLB_count0;

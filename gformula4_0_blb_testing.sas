@@ -299,9 +299,13 @@ options mautosource minoperator ;
     testing = no    ,   /* keep each simulated data set for each intervention. will be named savelib.simulated&intno */
 	bootstrap_method = 0 ,
 	use_bootstrap_counts = 0 ,
+	expand_param_counts = 1 ,
+	expand_simul_counts = 1 ,
 	BLB_b =  ,
+	BLB_s = ,
 	BLB_r = ,
-	BLB_s = 
+
+	monitor_time = 0 
     );
 
 
@@ -628,16 +632,56 @@ options mautosource minoperator ;
 
     %*Exiting in case of error;
     %exit:;
-   
+  %if &monitor_time = 1 %then %do;
+    %local start_time_base_sample start_time_bootstraps  ;
+		data _null_;
+    	tm = datetime();	 
+		put tm= nldatm.;
+    	call symput('start_time_base_sample', put(tm, z15.));
+		run;
+	%end; 
 %put before base_sample : seed = &seed ;
 	%base_sample ;
 %put after base_sample :  seed = &seed ;
+
+%if &monitor_time = 1 %then %do;    
+	data _null_;
+    _start = &start_time_base_sample;
+    _end = datetime();
+	put "End time for base sample : " _end= nldatm.;
+    elaps = _end - _start;
+    put ">>> Total run time for base sample (processing data not included ) : " elaps= time9.;
+	%if   ((&bootstrap_method = 0 AND &nsamples > 0 ) OR (&bootstrap_method = 1 AND &BLB_s > 0 AND &BLB_r > 0 )) %then %do; 
+    	tm = datetime();	 
+		put"Start time for bootstraps :" tm= nldatm.;
+    	call symput('start_time_bootstraps', put(tm, z15.));
+	%end;
+	run;
+%end;
+
 	%if &bootstrap_method = 0  %then %do;
 		%bootstrap_normal ;
 	%end;
 	%else %if &bootstrap_method = 1 AND &BLB_s > 0 %then %do;
 		%bootstrap_blb ;
 	%end;
+	
+%if &monitor_time = 1 AND ((&bootstrap_method = 0 AND &nsamples > 0 ) OR (&bootstrap_method = 1 AND &BLB_s > 0 AND &BLB_r > 0 )) %then %do; 
+    %local _ns_ ;
+    %if &bootstrap_method = 0 %then %let _ns_ = %eval(&nsamples ) ;
+	%else %if &bootstrap_method = 1 %then %let _ns_ = %eval(&BLB_s * &BLB_r ) ;
+	data _null_;
+    _start = &start_time_bootstraps ;
+    _end = datetime();
+	put _end= nldatm.;
+    elaps = _end - _start;
+    put ">>> Total run time for &_ns_ bootstrap samples : " elaps= time9.;
+	_start_base = &start_time_base_sample ;
+	elaps = _end - _start_base ;
+	put ">>> Total run time for %eval(&_ns_+ 1)  samples : " elaps= time9.;
+	run;
+ %end;
+
  %put after bootstrap_code : seed = &seed ;
 
 	
@@ -3088,7 +3132,6 @@ data step2a ; set step2 ; run;
     );
 
     %************ SIMULATION TO GET CUMULATIVE INCIDENCE UNDER INTERVENTION;
-
     %local n j i ;
     %if &printlogstats = 1 %then %put  Computing intervention &intno;
 
@@ -5862,7 +5905,6 @@ not the time-varying covariates, which are handled below in %interactionsb*/
 /* when usespline = 1, there can be additional spline variables for types 6,8 and 9.
    for type = 6 there is one spline for each term
        type = 8, 9 there are cov.lev - 2 spline variables for each variable */
-
 
 %let nlevels1 = 1 ; /* default value for bin type and baseline variables */
 
