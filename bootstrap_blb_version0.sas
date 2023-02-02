@@ -61,6 +61,9 @@
 	    run;
 	%end;
 
+proc means data = param(where = (&time = 0)) n sum ;
+var BLB_counts ;
+run;
 
        * reset the outcome and covariate bounds to that models and simulated 
         values depend on what would be the observed bounds ;
@@ -172,6 +175,13 @@
         	drop BLB_count0 _copy0_ ;
         	run;
 		%end;
+		%else %do;
+			proc datasets library = work nolist;
+			modify simul ;
+			rename BLB_count0 = BLB_counts ;
+			quit;
+		%end;
+		
 
         /* want to sample when nsimul is different from size of param data set */
         %if &nsimul ne &ssize %then %do;
@@ -192,7 +202,7 @@
 			%end;
 
             proc surveyselect data = %if &use_bootstrap_counts = 0 %then simul ;
-			                         %else %if &use_bootstrap_counts = 1 %then sumul_expanded ;
+			                         %else %if &use_bootstrap_counts = 1 %then simul_tmp ;
                         out = simul_tmp noprint
                         method=urs  
                         sampsize=&nsimul seed=&subseed;			
