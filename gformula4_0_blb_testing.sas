@@ -959,13 +959,7 @@ data step2a ; set step2 ; run;
         %end ; /* run natural course = 1 **/
         %*Looping over interventions;
 
-%if &bsample = 2 %then %do;
-  
 
-   data roger1 ;
-   set simulated1 ;
-   run;
-%end;
 
         %do intnum = 1 %to &numint;
             %interv(&&interv&intnum);                    
@@ -7458,6 +7452,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
        urx=48  ury=90
        lrx=48  lry=52
         
+
      2/llx=0   lly=10
        ulx=0   uly=48
        urx=48  ury=48
