@@ -41,12 +41,14 @@
 	            output ;
 	        end;
 		%end;
-        drop %if &use_bootstrap_counts = 0 %then BLB_count0 ; 
-             %if %bquote(&censor) = %then _copy_ ; ;
+		%if &expand_param_counts = 0 %then rename BLB_count0 = BLB_counts ;;
+        drop %if &expand_param_counts = 1 %then BLB_count0 ; 
+             %if %bquote(&censor) =  AND &expand_param_counts = 1 %then _copy_ ; ;
         run;
 
 
-	%if %bquote(&censor) ^= %then %do;
+	%if %bquote(&censor) ^= AND &expand_param_counts = 1 %then %do;
+	    /* when using censoring weights we need to create a newid so that the expansion will work when merged */
 		proc sort data = param ;
 		by newid _copy_ &time ;
 		run;
