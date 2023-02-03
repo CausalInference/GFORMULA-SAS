@@ -30,6 +30,10 @@
 
   
     * add in the variable numberhits for the number of times a subject is selected into the bootstrap sample ;
+
+		%let droplist = ;
+ 		%if &expand_param_counts = 1 %then %let droplist = BLB_count0 ;
+		%if %bquote(&censor) =  AND &expand_param_counts = 1 %then %let droplist = &droplist _copy_ ;
     data param ;
         merge _paramdata_ (in= p) _paramsample_;
         by newid ;
@@ -42,8 +46,8 @@
 	        end;
 		%end;
 		%if &expand_param_counts = 0 %then rename BLB_count0 = BLB_counts ;;
-        drop %if &expand_param_counts = 1 %then BLB_count0 ; 
-             %if %bquote(&censor) =  AND &expand_param_counts = 1 %then _copy_ ; ;
+        %if %bquote(&droplist )^= %then  drop &droplist ;;
+              ;
         run;
 
 

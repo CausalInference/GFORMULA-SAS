@@ -6,7 +6,7 @@ Authors: Roger W. Logan, Jessica  G. Young, Sarah L. Taubman, Yu-Han Chiu, Sally
 
 Version April 2022. This version includes additions and fixes for the inclusion of censoring in the calculation of the natural 
 course risks and means of covariates under the simulation of the natural course.
-
+-
 Version September 2021. This viersion includes fixes to rcspline macro for using negative knots and listpred for 
 including variabls of ptype cumavg twice in the model lists.
 
@@ -1870,21 +1870,26 @@ data step2a ; set step2 ; run;
 
   
     * add in the variable numberhits for the number of times a subject is selected into the bootstrap sample ;
-    data param ;
+    	data param ;
         merge _paramdata_ (in= p) _paramsample_;
         by newid ;
         if numberhits > 0 ; *delete those not selected into sample ;
-		bootstrap_counts = 1 ;
-        do _copy_ = 1 to numberhits ; * make numberhits copies of each remaining subject ;
-            output ;
+		%if &expand_param_counts = 1 %then %do;
+			bootstrap_counts = 1 ;
+	        do _copy_ = 1 to numberhits ; * make numberhits copies of each remaining subject ;
+	            output ;
 
-        end;		 
+	        end;		 
+		%end;
+		%else %do;
+		   bootstrap_counts = numberhits ;
+		%end;
         drop numberhits 
-             %if %bquote(&censor) = %then _copy_ ; ;
+             %if %bquote(&censor) = AND &expand_param_counts = 1  %then _copy_ ; ;
         run;
 
 
-	%if %bquote(&censor) ^= %then %do;
+	%if %bquote(&censor) ^= AND &expand_param_counts = 1   %then %do;
 		proc sort data = param ;
 		by newid _copy_ &time ;
 		run;
@@ -1898,6 +1903,11 @@ data step2a ; set step2 ; run;
 	%end;
 
 
+	%if &expand_param_counts = 0 %then %do ;
+		proc means data = param (where = (&time = 0)) n sum ;
+		var bootstrap_counts ;
+		run;
+	 %end;
        * reset the outcome and covariate bounds to that models and simulated 
         values depend on what would be the observed bounds ;
 
