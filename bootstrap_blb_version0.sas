@@ -7,7 +7,7 @@
 
     %************ CREATING BOOTSTRAP SAMPLES;  
     
-       /* %if &printlogstats = 1 %then */ %put  Creating bootstrap sample sample_s = &sample_s , sample_r = &sample_r , seed = &seed , ssize=&ssize , nsimul = &nsimul , nparam = &nparam  ;
+       /* %if &printlogstats = 1 %then */ %put  Creating bootstrap sample sample_s = &sample_s , sample_r = &sample_r , blb_b = &BLB_b ,  seed = &seed , ssize=&ssize , nsimul = &nsimul , nparam = &nparam  ;
        /* %if &printlogstats = 1 %then %put    ; */
 
         %*Generating random sample of ids to be used in bootstrap sample; 
