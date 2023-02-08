@@ -304,7 +304,7 @@ options mautosource minoperator ;
 	BLB_b =  ,
 	BLB_s = ,
 	BLB_r = ,
-
+    use_disjoint_blb_samples = 0 ,
 	monitor_time = 0 
     );
 
@@ -500,7 +500,6 @@ options mautosource minoperator ;
                 %GOTO exit;
             %end;
        %end; 
-
        %if %bquote(&intervname)= %then %do;
              %PUT ERROR ;
              %put TO RUN THE GFORMULA WITH  ONLY PART OF THE BOOTSTRAP ;
@@ -628,6 +627,20 @@ options mautosource minoperator ;
     %if %eval(&nparam - &ssize ) > 0 %then %do;
           %put ERROR: NPARAM SHOULD BE LESS THAN THE SAMPLE SIZE ;
           %goto exit ;
+   %end;
+
+   %if &bootstrap_method = 1 AND &use_disjoint_blb_samples = 1 AND &BLB_s > 0 %then %do ;
+   		%if %eval(&BLB_s * &BLB_b ) > &ssize %then %do;
+			%let max_blb_s = %sysevalf(&ssize / &BLB_b) ;
+			%let blb_s_orig = BLB_s ;
+			%let BLB_s = %sysfunc(int(&max_blb_s));
+			%PUT -----------------------------;
+			%PUT BLB_S CHANGED FROM &BLB_s_orig TO &BLB_s SO THAT THE TOTAL NUMBER OF SUBJECTS SELECTED ;
+			%PUT FOR ALL BLB_S * BLB_S SAMPLES IS LESS THAN &ssize. TOTAL IS NOW %eval(&BLB_s * &BLB_r ) ;
+			%PUT -----------------------------;
+
+
+		%end;
    %end;
 
     %*Exiting in case of error;

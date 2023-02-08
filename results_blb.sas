@@ -268,7 +268,12 @@ run ;
           title6 "Observed mean= %sysevalf(&obspm) ";
      %end;
      title7 "Data= &data, Sample size= &ssize, Monte Carlo sample size= &nsimul ";
-     title8 "Number of bootstrap samples using Bag of Little Bootstraps method with &BLB_s samples of size &BLB_b, each with &BLB_r samples of size &nsimul";
+	 %if &use_disjoint_blb_samples = 0 %then %do;
+     	title8 "Number of bootstrap samples using Bag of Little Bootstraps method with &BLB_s samples of size &BLB_b, each with &BLB_r samples of size &nsimul";
+	 %end;
+	 %else %if &use_disjoint_blb_samples = 1 %then %do;
+     	title8 "Number of bootstrap samples using Bag of Little Bootstraps method with &BLB_s disjoint samples of size &BLB_b, each with &BLB_r samples of size &nsimul";
+	 %end;
      title9 "Reference intervention is &refint";
 
      proc print data=finfin noobs label double; 

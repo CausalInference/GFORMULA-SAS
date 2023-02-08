@@ -65,9 +65,9 @@
 	    run;
 	%end;
 
-proc means data = param(where = (&time = 0)) n sum ;
-var BLB_counts ;
-run;
+*proc means data = param(where = (&time = 0)) n sum ;
+*var BLB_counts ;
+*run;
 
        * reset the outcome and covariate bounds to that models and simulated 
         values depend on what would be the observed bounds ;
@@ -290,16 +290,45 @@ run;
 		%if &sample_start = 0 %then %let sample_start = 1 ;
 
         %if &BLB_s > 0  AND  &BLB_r > 0 %then %do; 
+		    %if &use_disjoint_blb_samples = 0 %then %do;
+				proc surveyselect data = tmpids(keep =newid ) out = step1 (rename = (replicate = sample_si))
+	   			method = srs 
+	   			sampsize = &BLB_b 
+	   			reps = &BLB_s 
+				seed = &seed 
+	   			noprint 
+	   				;
+				run ;
 
-			proc surveyselect data = tmpids(keep =newid ) out = step1 (rename = (replicate = sample_si))
-	   		method = srs 
-	   		sampsize = &BLB_b 
-	   		reps = &BLB_s 
-			seed = &seed 
-	   		noprint 
-	   			;
-			run ;
+			%end;
+			%else %if &use_disjoint_blb_samples = 1 %then %do;
+				data _disjoint0_ ;
+				set tmpids (keep = newid );
+				call streaminit(&seed);
+				x = rand('uniform');
+				run;
 
+				proc sort data = _disjoint0_ ;
+				by x ;
+				run;
+				                
+				data _disjoint1_;
+				set _disjoint0_ ;
+				%do ii = 1 %to &BLB_s ;
+					if %eval((&ii - 1 ) * &BLB_b + 1) <= _N_ <= %eval(&ii * &BLB_b ) then sample_si = &ii ;;
+				%end;
+                if sample_si ne . then output ;
+                run;
+
+				data step1 ;
+				set _disjoint1_ (keep = newid sample_si );
+				run;
+
+				proc sort data = _disjoint1_ (keep = newid sample_si) out = step1 ;
+				by sample_si newid ;
+				run;
+
+            %end;
 			proc surveyselect data = step1 
 	  		out=step2 (drop = ExpectedHits SamplingWeight rename = (replicate = sample_rj 
 	                                                                numberhits = BLB_count0))
