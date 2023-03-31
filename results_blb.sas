@@ -274,6 +274,9 @@ run ;
 	 %else %if &use_disjoint_blb_samples = 1 %then %do;
      	title8 "Number of bootstrap samples using Bag of Little Bootstraps method with &BLB_s disjoint samples of size &BLB_b, each with &BLB_r samples of size &nsimul";
 	 %end;
+	 %if &bootstrap_method = 2 %then %do;
+			title8 "Number of bootstrap samples using Bag of Little Bootstraps method using &BLB_s samples of size &BLB_r with adaptive selection of r using &bsample_counter bootstrap samples"; 
+	 %end;
      title9 "Reference intervention is &refint";
 
      proc print data=finfin noobs label double; 
@@ -330,3 +333,99 @@ run;
 
 %mend ;
 
+%macro check_rconvergence (sample = 1) ;
+/*
+sample = the sth collection of bootstrap samples being tested for convergence. Data holds all previously run samples 
+
+*/
+
+data test_s ; run ;
+
+     %*Generating reference cumulative incidence;        
+	     data _ref_s ;
+	     set interv&refint._all (where = (_sample_s = &sample   )); /*change jgy*/
+	     %if &outctype=binsurv %then   pDref=pD;
+	     %else pDref=s&outc ;;
+	     keep _sample_r pDref;
+	     run;
+
+		%local i rindex ;
+
+		
+	                 
+	    %let pd = pd ;
+	    %if &outctype ^= binsurv %then %let pd = s&outc ;
+
+
+	     %do i = 1 %to &BLB_r_trend ;
+
+	       
+	          data rsubset&i; 
+	          set interv&refint._all (where = (_sample_s = &sample and _sample_r <= %eval(&rend - (&i - 1) )) ) ;
+			  keep &pd  _sample_r _sample_s ;
+	          run;
+
+	          %*Calculating bootstrap mean, variance and confidence intervals;
+	          proc univariate data=rsubset&i noprint;
+	          where _sample_r ne 0;
+	          var &pd ;
+	          output out = temp&i	        
+	          pctlpre = &pd._ 
+	          pctlname = llim95 ulim95  pctlpts = 2.5 97.5;
+	          run;
+				
+			  data temp&i;
+			  set temp&i ;
+			  test_sample = %eval(&rend - (&i - 1)) ;
+			  run;
+
+			  %if &i = 1 %then %do;
+			  	data test_s ;
+				set temp&i;
+				run;
+			  %end;
+			  %else %do;
+			  	data test_s ;
+			  	set test_s temp&i ;			  
+			  	run;
+			  %end;
+     	%end;
+
+  
+
+
+	proc sort data = test_s ;
+	by descending test_sample ;
+	run;
+
+	data test_s ;
+	set test_s ;
+	retain ref_llimit ref_ulimit ;
+	if test_sample = &rend then do ;
+		ref_llimit = pd_llim95 ;
+		ref_ulimit = pd_ulim95 ;
+	end;
+	test_llimit = abs((pd_llim95 - ref_llimit)/ref_llimit) ;
+	test_ulimit = abs((pd_ulim95 - ref_ulimit)/ref_ulimit) ;
+	run;
+
+	proc means data = test_s noprint;
+	var test_llimit test_ulimit ;
+	output out = test_s2 sum(test_llimit test_ulimit)= ;
+	run;
+
+	data test_s2 ;
+	set test_s2 ;
+	conv_check = test_llimit + test_ulimit ;
+	if conv_check > &BLB_r_epsilon then converged  = 0 ;
+	else converged = 1 ;
+	call symput('rconverged',compress(converged));
+	rename _freq_ = trend ;	
+	put _all_ ;
+	run;
+
+/*	%let rconverged = 1 ; */
+
+
+
+%mend ;

@@ -7,7 +7,7 @@
 
     %if &sample_start = 0 %then %let bsample = 0 ;
 
-    %if &bootstrap_method = 1 %then %do;
+    %if &bootstrap_method > 0 %then %do;
 		%let sample_r = 0 ;
 		%let sample_s = 0 ;
 	%end;
@@ -23,7 +23,7 @@
         %*Generating samples;
 
 		%if &printlogstats = 1 AND &bootstrap_method = 0 %then %put  before sample =   &bsample   seed = &seed ;
-		%if &printlogstats = 1 AND &bootstrap_method = 1 %then %put  before sample =   (&sample_s , &sample_r ) ,  seed = &seed ;
+		%if &printlogstats = 1 AND &bootstrap_method > 0 %then %put  before sample =   (&sample_s , &sample_r ) ,  seed = &seed ;
 
 		%if &printlogstats = 1 %then %put  ;
 
@@ -37,7 +37,7 @@
 		    _sample_ = 0 ;
 			bootstrap_counts = 1 ;
 		%end;
-		%else %if &bootstrap_method = 1 %then %do;
+		%else %if &bootstrap_method > 0 %then %do;
 		    _sample_r = 0 ;
 			_sample_s = 0 ;
 			BLB_counts = 1 ;
@@ -55,7 +55,7 @@
 			    _sample_ = 0 ;
 				bootstrap_counts = 1 ;
 			%end;
-			%else %if &bootstrap_method = 1 %then %do;
+			%else %if &bootstrap_method > 0 %then %do;
 			   _sample_r = 0 ;
 			   _sample_s = 0 ;
 				BLB_counts = 1 ;
@@ -75,7 +75,7 @@
              %if &bootstrap_method = 0 %then %do;
 			 	_sample_ = 0 ;
 			 %end;
-			 %else %if &bootstrap_method = 1 %then %do;
+			 %else %if &bootstrap_method > 0 %then %do;
 			 	_sample_s = 0 ;
 				_sample_r = 0 ;
              %end;
@@ -84,7 +84,7 @@
 					%if &bootstrap_method = 0 %then %do;
 						bootstrap_counts = 1 ;
 					%end;
-					%else %if &bootstrap_method = 1 %then %do;
+					%else %if &bootstrap_method > 0 %then %do;
 						BLB_counts = 1 ;
 					%end;
                 	output ;
@@ -97,7 +97,7 @@
 				%if &bootstrap_method = 0 %then %do;
 					bootstrap_counts = numberhits ;
 				%end;
-				%else %if &bootstrap_method = 1 %then %do;
+				%else %if &bootstrap_method > 0 %then %do;
 					BLB_counts = numberhits ;
 				%end;
 				drop numberhits ;
@@ -126,7 +126,7 @@
 
         data _betar_ ;
         set _beta_  (where = ( %if &bootstrap_method = 0 %then _sample_=&bsample ;
-                               %else %if &bootstrap_method = 1 %then _sample_r = &sample_r and _sample_s = &sample_s ;)) ;
+                               %else %if &bootstrap_method > 0 %then _sample_r = &sample_r and _sample_s = &sample_s ;)) ;
         run;
 
         data _seedr_ ;
@@ -134,7 +134,7 @@
 		%if &bootstrap_method = 0 %then %do ;
         	_sample_ = &bsample ;
 		%end;
-		%else %if &bootstrap_method = 1 %then %do;
+		%else %if &bootstrap_method > 0 %then %do;
 			_sample_s = &sample_s ;
 			_sample_r = &sample_r ;
 		%end;
@@ -242,7 +242,7 @@
                 %if &bootstrap_method = 0 %then %do;
 				     _sample_ = 0 ;
 				%end;
-				%else %if &bootstrap_method = 1 %then %do;
+				%else %if &bootstrap_method > 0 %then %do;
 					_sample_r = 0 ;
 					_sample_s = 0 ;
 				%end;
@@ -251,7 +251,7 @@
                 int2="Natural course";
                 n=_FREQ_;
                 keep int int2 %if &bootstrap_method = 0 %then _sample_ ;
-                              %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+                              %else %if &bootstrap_method > 0 %then _sample_s _sample_r ;
                        n   intervened averinterv 
                 %if &outctype=binsurv %then %do;
                     pd
@@ -298,14 +298,14 @@
                         %if &bootstrap_method = 0 %then %do;
 				     		_sample_ = 0 ;
 						%end;
-						%else %if &bootstrap_method = 1 %then %do;
+						%else %if &bootstrap_method > 0 %then %do;
 							_sample_r = 0 ;
 							_sample_s = 0 ;
 						%end;
                         surv0 = 1;
                         n = _freq_ ;
                         keep  int int2 %if &bootstrap_method = 0 %then _sample_ ;
-                              %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+                              %else %if &bootstrap_method > 0 %then _sample_s _sample_r ;
                             n  surv0
                         %do n = 1 %to &timepoints;
                             risk&n surv&n compevent&n  
@@ -344,12 +344,12 @@
                         %if &bootstrap_method = 0 %then %do;
 				     		_sample_ = 0 ;
 						%end;
-						%else %if &bootstrap_method = 1 %then %do;
+						%else %if &bootstrap_method > 0 %then %do;
 							_sample_r = 0 ;
 							_sample_s = 0 ;
 						%end;                                        
                         keep  int int2 %if &bootstrap_method = 0 %then _sample_ ;
-                                       %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+                                       %else %if &bootstrap_method > 0 %then _sample_s _sample_r ;
                                 s&outc  ;
                     run;
                 %end; 

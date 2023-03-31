@@ -122,12 +122,12 @@
 		%if &bootstrap_method = 0 %then %do ;
 			_sample_ = &bsample ;
 		%end;
-		%else %if &bootstrap_method = 1 %then %do;
+		%else %if &bootstrap_method > 0 %then %do;
          	_sample_r = &sample_r ;
 		 	_sample_s = &sample_s ;
 		%end;
         keep %if &bootstrap_method = 0 %then _sample_ ;
-             %else %if &bootstrap_method = 1 %then _sample_r _sample_s ;
+             %else %if &bootstrap_method > 0 %then _sample_r _sample_s ;
               %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3  %then  &outc._min &outc._max ;
                 %do i = 0 %to &ncov ; 
                     %if &&cov&i.otype=3 or &&cov&i.otype=4 or &&cov&i.otype=6 or &&cov&i.otype=7   or &&cov&i.otype = -1  %then &&cov&i.._min &&cov&i.._max ;
@@ -160,7 +160,7 @@
 		%if &bootstrap_method = 0 %then %do;
 			_sample_ = &bsample ;
 		%end;
-		%else %if &bootstrap_method = 1 %then %do;
+		%else %if &bootstrap_method > 0 %then %do;
         	_sample_r = &sample_r  ; 
 			_sample_s = &sample_s ;
 		%end;
@@ -173,7 +173,7 @@
         	do _copy0_ = 1 to BLB_count0;
 			    
 			    %if &bootstrap_method = 0 %then bootstrap_counts = 1 ;;
-				%if &bootstrap_method = 1 %then BLB_counts = 1 ;;
+				%if &bootstrap_method > 0  %then BLB_counts = 1 ;;
                 output ;
         	end;
         	drop BLB_count0 _copy0_ ;
@@ -198,7 +198,7 @@
 			 
         		do _copy0_ = 1 to BLB_count0  ;
 				   	%if &bootstrap_method = 0 %then bootstrap_counts = 1 ;;
-				    %if &bootstrap_method = 1 %then BLB_counts = 1 ;;
+				    %if &bootstrap_method > 0  %then BLB_counts = 1 ;;
                 	output ;
         		end;
         		drop BLB_count0 _copy0_ ;
@@ -215,7 +215,7 @@
 			%if &use_bootstrap_counts = 0 %then %do;
             	data simul ;
             	set simul_tmp ;
-				%if &bootstrap_method = 1 %then %do;
+				%if &bootstrap_method > 0 %then %do;
             		_sample_r = &sample_r ;
 					_sample_s = &sample_s ;
 				 %end;
@@ -224,7 +224,7 @@
 				 %end;
              	do _copy_ = 1 to numberhits ;
 				    %if &bootstrap_method = 0 %then bootstrap_counts = 1 ;;
-				    %if &bootstrap_method = 1 %then BLB_counts = 1 ;;;
+				    %if &bootstrap_method > 0 %then BLB_counts = 1 ;;;
                     output ;
              	end;				
              	drop _copy_ numberhits ;
@@ -334,426 +334,474 @@
 	                                                                numberhits = BLB_count0))
 	  		method = urs 
 	  		sampsize = &ssize 
-	  		reps = &BLB_r 
-			seed = %eval(&seed * &seed )
+			%if &bootstrap_method = 1 %then reps = &BLB_r ;
+			%else %if &bootstrap_method = 2 %then reps = &BLB_r_max ; 
+			%if &BLB_keep_seeds = 1 %then outseed ;
+			%if %bquote(&BLB_use_seeds)^= %then %do ;
+				seed = &BLB_use_seeds 
+			%end;
+			%else %do;
+				seed = %eval(&seed * &seed )
+			%end;
 	  		noprint 
 	 			;
 	  		strata sample_si ;
 			run;
 
-	 data step2b ;
-	 set step2 ;
-	 run;
+			%if &BLB_keep_seeds = 1 %then %do;
+				data _blb_seeds_;
+				set step2(keep = sample_si InitialSeed );
+				by sample_si ;
+				if first.sample_si ;
+				run;
 
-    %*Looping over bootstrap samples;
-
-    %let bsample = 0 ;
-    %do sample_s = 1 %to &BLB_s;
-        %if (&outputs ^= yes or %eval(&sample_s) ^= 0) %then %do;
-               %let ods_logit = ods select none ;
-               %let ods_reg = ods select none ;
-               %let ods_qlim = ods select none ;
-        %end;
-
-		%do sample_r = 1 %to &BLB_r ;
-			%let bsample = %eval(&bsample + 1 );
-        		%*Generating samples;
-
-				%if &printlogstats = 1 %then %put  before sample =  ( &sample_s , &sample_r )   seed = &seed ;
-				%if &printlogstats = 1 %then %put  ;
-
-		        %samples_blb(sample_s = &sample_s , sample_r = &sample_r ); 
+				data step2 ;
+				set step2 (drop = InitialSeed );
+				run;
+			%end;
 
 
-			%if &sample_r = &sample_check and &sample_s = 1  %then %do;
-				data param2 ; set param ; run ;
-				data simul2 ; set simul ; run ;
-			 %end; 
-		        %*Estimating parameters;
-		        %if &usebetadata = 0 %then %do;            
-		                %if &uselabelc = 0  and &uselabelo = 0 %then options nolabel ;;
-		                %parameters;     
-		                options &label_orig ;  
+    		%*Looping over bootstrap samples;
+
+    		%let bsample = 0 ;
+			%local rstart rend adaptive_iteration rconverged ;
+    		%do sample_s = 1 %to &BLB_s;
+        		%if (&outputs ^= yes or %eval(&sample_s) ^= 0) %then %do;
+               		%let ods_logit = ods select none ;
+               		%let ods_reg = ods select none ;
+               		%let ods_qlim = ods select none ;
+        		%end;
+
+
+				%if &bootstrap_method = 1 %then %do;
+					%let rstart = 1 ;
+					%let rend = &BLB_r ;
+					%let adaptive_iteration = 1 ;
+					%let rconverged = 1 ;
+				%end ;
+        		%else %if &bootstrap_method = 2 %then %do;
+					%let rstart = 1 ;
+					%let rend = &BLB_r_start ;
+					%let adaptive_iteration = 1 ;
+            		%let rconverged = 0 ;
+				%end;
+
+				%do %until ( &rconverged = 1 ); /* the do until always runs one iteration and checks condtion at end of loop */
+
+					%do sample_r = &rstart  %to &rend  ;
+						%let bsample = %eval(&bsample + 1 );
+						%let bsample_counter = %eval(&bsample_counter + 1 );
+        				%*Generating samples;
+
+						%if &printlogstats = 1 %then %put  before sample =  ( &sample_s , &sample_r )   seed = &seed ;
+						%if &printlogstats = 1 %then %put  ;
+
+		        		%samples_blb(sample_s = &sample_s , sample_r = &sample_r ); 
+
+
 						%if &sample_r = &sample_check and &sample_s = 1  %then %do;
 							data param2 ; set param ; run ;
 							data simul2 ; set simul ; run ;
+			 			%end; 
+		        		%*Estimating parameters;
+		        		%if &usebetadata = 0 %then %do;            
+		                	%if &uselabelc = 0  and &uselabelo = 0 %then options nolabel ;;
+		                	%parameters;     
+		                	options &label_orig ;  
+							%if &sample_r = &sample_check and &sample_s = 1  %then %do;
+								data param2 ; set param ; run ;
+								data simul2 ; set simul ; run ;
 						
-			 			%end;  
-		        %end;
+			 				%end;  
+		        		%end;
 
-		        %else %do; /*feb2013*/
-
-		            data _beta_;
-		            set &betadata;
-		            run;
-
-		        %end;   
+		        		%else %do; /*feb2013*/
+		            		data _beta_;
+		            		set &betadata;
+		            		run;
+		        		%end;   
 
  
-	        ods select all ; 
+	        			ods select all ; 
 
-	        data _betar_ ;
-	        set _beta_  (where = ( _sample_r = &sample_r and _sample_s = &sample_s )) ;
-	        run;
+	        			data _betar_ ;
+	        			set _beta_  (where = ( _sample_r = &sample_r and _sample_s = &sample_s )) ;
+	        			run;
 
-	        data _seedr_ ;
-	        _seedr_ = %eval(&seed);
-	        _sample_r = &sample_r ;
-			_sample_s = &sample_s ;
-	        run;
+	        			data _seedr_ ;
+	        			_seedr_ = %eval(&seed);
+	        			_sample_r = &sample_r ;
+						_sample_s = &sample_s ;
+	        			run;
 
-       		%if &created_dataviews = 0  %then %do;
-	             /* initialize data views for interventions */
+       					%if &created_dataviews = 0  %then %do;
+	             			/* initialize data views for interventions */
 
-	             %if &runnc = 1 %then %do;
-	                 %interv_init(intno=0, intlabel='Natural course' ); 
-	             %end;   
+	             			%if &runnc = 1 %then %do;
+	                 			%interv_init(intno=0, intlabel='Natural course' ); 
+	             			%end;   
 	        
 
-	             %do intnum = 1 %to &numint;
-	                %interv_init(&&interv&intnum);
-	             %end;             
+	             			%do intnum = 1 %to &numint;
+	                			%interv_init(&&interv&intnum);
+	             			%end;             
  
-				 %let created_dataviews = 1 ;
-        	%end;            
+				 			%let created_dataviews = 1 ;
+        				%end;            
        
-	        %if &hazardratio = 1 %then %do;
-	             %if &sample_s = 0 %then  %createhazard ;
-	             %else %if &bootstrap_hazard = 1 %then %createhazard ;
-	        %end;
+	        			%if &hazardratio = 1 %then %do;
+	             			%if &sample_s = 0 %then  %createhazard ;
+	             			%else %if &bootstrap_hazard = 1 %then %createhazard ;
+	        			%end;
 
-        	%if &runnc = 1 %then %do;  /*** for natural course results ***/
-            	%*No intervention cumulative incidence;
+        				%if &runnc = 1 %then %do;  /*** for natural course results ***/
+            				%*No intervention cumulative incidence;
 
-            	%if &sample_s = 0 AND  %bquote(&simuldata)^=  %then %do;
+            				%if &sample_s = 0 AND  %bquote(&simuldata)^=  %then %do;
 
-	                %*Outputting/creating  simulated dataset;
+	                			%*Outputting/creating  simulated dataset;
 
-	                data &simuldata ;
-	                set simulated0 ;
-	                run;
+	                			data &simuldata ;
+	                			set simulated0 ;
+	                			run;
               
-	                %if &testing = yes %then %do;
-	                     %do intcount = 0 %to &numint ;
-	                        data &savelib..simuldata&intcount  ;
-	                        set simulated&intcount ;
-	                        run;
-	                      %end;
-	                %end;
+	                			%if &testing = yes %then %do;
+	                     			%do intcount = 0 %to &numint ;
+	                        			data &savelib..simuldata&intcount  ;
+	                        			set simulated&intcount ;
+	                        			run;
+	                      			%end;
+	                			%end;
 
-	                %*Outputting the mean of covariates and probability of event;
-	                proc means data= &simuldata  mean min max ;                                                                      
-	                var %if &outctype = binsurv %then cuminc ;
-	                    intervened averinterv  
-	                    %if &outctype = binsurv %then %do;
-	                        %do j = 1 %to %eval(&timepoints);
-	                            s&outc.&j
-	                        %end;
-	                    %end;
-	                    %else &outc ;
-	                    %if &minimalistic = no %then %do;
-	                        %do i = 1 %to &ncov;
-	                            %do j = 1 %to %eval(&timepoints);
-	                                %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ;
-	                                s&&cov&i..&j
-									/**  %if &intno = 0  AND %bquote(&censor)^= %then %do ; ***/
-										ncs&&cov&i..&j %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j ;
-									/** %end;  ****/
-	                            %end;
-	                        %end; 
-	                    %end;
-	                    %if &outctype = binsurv %then %do;
-	                        %do n = 1 %to %eval(&timepoints) ;
-	                            cumincr&n cumsurvr&n cumcompeventr&n   
-	                        %end;
-	                    %end;
-	                ;
+	                			%*Outputting the mean of covariates and probability of event;
+	                			proc means data= &simuldata  mean min max ;                                                                      
+	                			var %if &outctype = binsurv %then cuminc ;
+	                    			intervened averinterv  
+	                    			%if &outctype = binsurv %then %do;
+	                        			%do j = 1 %to %eval(&timepoints);
+	                            			s&outc.&j
+	                        			%end;
+	                    			%end;
+	                    			%else &outc ;
+	                    			%if &minimalistic = no %then %do;
+	                        			%do i = 1 %to &ncov;
+	                            			%do j = 1 %to %eval(&timepoints);
+	                                			%if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ;
+	                                			s&&cov&i..&j
+												/**  %if &intno = 0  AND %bquote(&censor)^= %then %do ; ***/
+												ncs&&cov&i..&j %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j ;
+												/** %end;  ****/
+	                            			%end;
+	                        			%end; 
+	                    			%end;
+	                    			%if &outctype = binsurv %then %do;
+	                        			%do n = 1 %to %eval(&timepoints) ;
+	                            			cumincr&n cumsurvr&n cumcompeventr&n   
+	                        			%end;
+	                    			%end;
+	                				;
             
-                    output out=interv0 mean= %if &outctype = binsurv %then pd  ;
-                        intervened averinterv 
-                        %if &outctype = binsurv %then %do;
-                            %do j = 1 %to %eval(&timepoints);
-                                s&outc.&j
-                            %end;
-                        %end;
-                        %else s&outc ;
-                        %if &minimalistic = no %then %do;
-                            %do i = 1 %to &ncov;
-                                %do j = 1 %to %eval(&timepoints);
-                                    %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ;
-                                    s&&cov&i..&j
-									/** %if &intno = 0  AND %bquote(&censor)^=   %then  %do;  ***/
-										ncs&&cov&i..&j %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j ;
-									/** %end ;  **/
-                                %end;
-                            %end;  
-                        %end;
-                        %if &outctype = binsurv %then %do;
-                            %do n = 1 %to %eval(&timepoints) ;
-                                cumincr&n cumsurvr&n cumcompeventr&n  
-                            %end;
-                        %end;
-                        ;
+                    			output out=interv0 mean= %if &outctype = binsurv %then pd  ;
+                        			intervened averinterv 
+                        			%if &outctype = binsurv %then %do;
+                            			%do j = 1 %to %eval(&timepoints);
+                                			s&outc.&j
+                            			%end;
+                        			%end;
+                        			%else s&outc ;
+                        			%if &minimalistic = no %then %do;
+                            			%do i = 1 %to &ncov;
+                                			%do j = 1 %to %eval(&timepoints);
+                                    			%if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ;
+                                    			s&&cov&i..&j
+												/** %if &intno = 0  AND %bquote(&censor)^=   %then  %do;  ***/
+												ncs&&cov&i..&j %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j ;
+												/** %end ;  **/
+                                			%end;
+                            			%end;  
+                        			%end;
+                        			%if &outctype = binsurv %then %do;
+                            			%do n = 1 %to %eval(&timepoints) ;
+                                			cumincr&n cumsurvr&n cumcompeventr&n  
+                            			%end;
+                        			%end;
+                        			;
                     
-                    title "mean, min, max under intervention 0";
-	                run;
+                    			title "mean, min, max under intervention 0";
+	                			run;
 
 
-	                data interv0;
-	                set interv0;
-	                _sample_r = &sample_r;
-					_sample_s = &sample_s ;
-	                length int2 $70 ;
-	                int=0;
-	                int2="Natural course";
-	                n=_FREQ_;
-	                keep int int2 _sample_ n   intervened averinterv 
-	                %if &outctype=binsurv %then %do;
-	                    pd
-	                    %do j = 1 %to %eval(&timepoints);
-	                        s&outc.&j
-	                    %end;
-	                %end;
-	                %else s&outc ;
-	                 %if &minimalistic = no %then %do;
-	                    %do j = 1 %to %eval(&timepoints);
-	                        %do i = 1 %to &ncov;
-	                            %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ;
-	                            s&&cov&i..&j
-								/*** %if &intno = 0  AND %bquote(&censor)^=   %then  %do; ***/
-									ncs&&cov&i..&j %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j ;
-								/*** %end; ****/
-	                        %end;
-	                    %end;  
-	                %end;
-	                dataname ssize obsp 
-	                ;
-	                dataname = "&data";
-	                    ssize = &ssize ;
-	                    obsp = &obsp ;
-	                run;             
+	                			data interv0;
+	                			set interv0;
+	                			_sample_r = &sample_r;
+								_sample_s = &sample_s ;
+	                			length int2 $70 ;
+	                			int=0;
+	                			int2="Natural course";
+	                			n=_FREQ_;
+	                			keep int int2 _sample_ n   intervened averinterv 
+	                			%if &outctype=binsurv %then %do;
+	                    			pd
+	                    			%do j = 1 %to %eval(&timepoints);
+	                        			s&outc.&j
+	                    			%end;
+	                			%end;
+	                			%else s&outc ;
+	                 				%if &minimalistic = no %then %do;
+	                    				%do j = 1 %to %eval(&timepoints);
+	                        				%do i = 1 %to &ncov;
+	                            				%if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ;
+	                            				s&&cov&i..&j
+												/*** %if &intno = 0  AND %bquote(&censor)^=   %then  %do; ***/
+												ncs&&cov&i..&j %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j ;
+												/*** %end; ****/
+	                        				%end;
+	                    				%end;  
+	                				%end;
+	                			dataname ssize obsp 
+	                			;
+	                			dataname = "&data";
+	                    		ssize = &ssize ;
+	                    		obsp = &obsp ;
+	                			run;             
 
-                %if &outctype = binsurv %then %do;
+                				%if &outctype = binsurv %then %do;
 
-                   proc means data = &simuldata noprint ;
-                   var  %do n = 1 %to %eval(&timepoints);
-                        cumincr&n cumsurvr&n cumcompeventr&n 
-                    %end; ;
-                   output out = survprobs0 mean = %do n = 1 %to &timepoints; risk&n surv&n compevent&n  %end; ;
-                   run;
+                   					proc means data = &simuldata noprint ;
+                   					var  %do n = 1 %to %eval(&timepoints);
+                        					cumincr&n cumsurvr&n cumcompeventr&n 
+                    					%end; ;
+                   					output out = survprobs0 mean = %do n = 1 %to &timepoints; risk&n surv&n compevent&n  %end; ;
+                   					run;
 
-                    /* initialize survdata */
+                    				/* initialize survdata */
 
-                    data surv_tmp0 ;
-                        set survprobs0 ;
-                        length int2 $70 ;
-                        int = 0 ;
-                        int2 = "Natural course";
-                        _sample_r = &sample_r;
-						_sample_s = &sample_s ;
-                        surv0 = 1;
-                        n = _freq_ ;
-                        keep  int int2 _sample_r _sample_s n  surv0
-                        %do n = 1 %to &timepoints;
-                            risk&n surv&n compevent&n  
-                        %end;
-                    ;
-                    run;
+                    				data surv_tmp0 ;
+                        			set survprobs0 ;
+                        			length int2 $70 ;
+                        			int = 0 ;
+                        			int2 = "Natural course";
+                        			_sample_r = &sample_r;
+									_sample_s = &sample_s ;
+                        			surv0 = 1;
+                        			n = _freq_ ;
+                        			keep  int int2 _sample_r _sample_s n  surv0
+                        				%do n = 1 %to &timepoints;
+                            				risk&n surv&n compevent&n  
+                        				%end;
+                    					;
+                    				run;
 
 
 
-					data interv0 ;
-					merge interv0 surv_tmp0 (keep = surv1 - surv&timepoints );
-					array surv{&timepoints } ;
-					%do myi = 1 %to &ncov ;
-						array ncs&&cov&myi {&timepoints } ;
-						%if &&usevisitp&myi = 1 %then array ncs&&cov&myi.randomvisitp { &timepoints } ; ;
-					%end;
+									data interv0 ;
+									merge interv0 surv_tmp0 (keep = surv1 - surv&timepoints );
+									array surv{&timepoints } ;
+									%do myi = 1 %to &ncov ;
+										array ncs&&cov&myi {&timepoints } ;
+										%if &&usevisitp&myi = 1 %then array ncs&&cov&myi.randomvisitp { &timepoints } ; ;
+									%end;
 
-    				do j = 2 to &timepoints ; 
-	    				%do myi = 1 %to &ncov ;
-							ncs&&cov&myi [j ] = ncs&&cov&myi [ j ] / surv[j - 1 ] ; * should this be j or j-1;
-							%if &&usevisitp&myi = 1 %then ncs&&cov&myi.randomvisitp [ j ] = ncs&&cov&myi.randomvisitp [ j ] / surv[j - 1] ;;
-						%end;
-     				end;
-	 				drop j ;
-     				run;
-                %end;   
-                %else %do;
+				    				do j = 2 to &timepoints ; 
+					    				%do myi = 1 %to &ncov ;
+											ncs&&cov&myi [j ] = ncs&&cov&myi [ j ] / surv[j - 1 ] ; * should this be j or j-1;
+											%if &&usevisitp&myi = 1 %then ncs&&cov&myi.randomvisitp [ j ] = ncs&&cov&myi.randomvisitp [ j ] / surv[j - 1] ;;
+										%end;
+				     				end;
+					 				drop j ;
+				     				run;
+                				%end;   
+                				%else %do;
 
-                        /* initialize survdata */
+                        			/* initialize survdata */
 
-                    data surv_tmp0 ;
-                        set interv0 ;
-                        length int2 $70 ;
-                        int = 0 ;
-                        int2 = "Natural course";
-                        _sample_r = &sample_r;
-						_sample_s = &sample_s ;                                        
-                        keep  int int2 _sample_r _sample_s  s&outc  ;
-                    run;
-                %end; 
-            %end;  /* end of saving simuldata , needed outside of interv and interv_init macros */
-            %else %do;                   
-                %interv (intno=0 , intlabel='Natural course'); /* do not need to save simulated data set */                                 
-            %end;   
+                    				data surv_tmp0 ;
+			                        set interv0 ;
+			                        length int2 $70 ;
+			                        int = 0 ;
+			                        int2 = "Natural course";
+			                        _sample_r = &sample_r;
+									_sample_s = &sample_s ;                                        
+			                        keep  int int2 _sample_r _sample_s  s&outc  ;
+			                    	run;
+                				%end; 
+            				%end;  /* end of saving simuldata , needed outside of interv and interv_init macros */
+            				%else %do;                   
+                				%interv (intno=0 , intlabel='Natural course'); /* do not need to save simulated data set */                                 
+            				%end;   
 
          
-                %if &sample_s = &sample_start AND &sample_r = 1 AND &chunked = 1  %then %do;  
-                    data &survdata ;
-                    set  surv_tmp0 ;
-                    run;
-                %end;
-                %else %do ;
-                    proc append base = &survdata data = surv_tmp0;
-                    run;
-                %end;
+			                %if &sample_s = &sample_start AND &sample_r = 1 AND &chunked = 1  %then %do;  
+			                    data &survdata ;
+			                    set  surv_tmp0 ;
+			                    run;
+			                %end;
+			                %else %do ;
+			                    proc append base = &survdata data = surv_tmp0;
+			                    run;
+			                %end;
            
-        %end ; /* run natural course = 1 **/
-        %*Looping over interventions;
+        				%end ; /* run natural course = 1 **/
+        				%*Looping over interventions;
 
 
-        %do intnum = 1 %to &numint;
-            %interv(&&interv&intnum);                    
-                %if &intnum = 1 AND &runnc = 0 AND &sample_s = &sample_start AND &sample_r = 1 AND &chunked = 1 %then %do;
-                      data &survdata ;
-                      set surv_tmp&intnum ;
-                      run;
-                %end;
-                %else %do;
-                    proc append base = &survdata data = surv_tmp&intnum ;
-                    run;
-                %end;            
-        %end;
+				        %do intnum = 1 %to &numint;
+				            %interv(&&interv&intnum);                    
+				                %if &intnum = 1 AND &runnc = 0 AND &sample_s = &sample_start AND &sample_r = 1 AND &chunked = 1 %then %do;
+				                      data &survdata ;
+				                      set surv_tmp&intnum ;
+				                      run;
+				                %end;
+				                %else %do;
+				                    proc append base = &survdata data = surv_tmp&intnum ;
+				                    run;
+				                %end;            
+				        %end;
 
-        %*Outputing intervention results into temporary data sets ;
+				        %*Outputing intervention results into temporary data sets ;
 
-        %let intstart = 0 ;
-        %if &runnc = 0 %then %let intstart = 1;
+				        %let intstart = 0 ;
+				        %if &runnc = 0 %then %let intstart = 1;
 
-        %if %eval(&sample_s) = &sample_start and &sample_r = 1 and &chunked = 1 %then %do;  
-           
-            %do int = &intstart %to %eval(&numint);
-                
-                data interv&int._all;
-                    set interv&int;
-                run;
-            %end;
-        %end;
-        %else %do;
-            %do int = &intstart %to %eval(&numint);
-                proc append base = interv&int._all data = interv&int;
-                run;
-            %end;
-        %end;
+				        %if %eval(&sample_s) = &sample_start and &sample_r = 1 and &chunked = 1 %then %do;  
+				           
+				            %do int = &intstart %to %eval(&numint);
+				                
+				                data interv&int._all;
+				                    set interv&int;
+				                run;
+				            %end;
+				        %end;
+				        %else %do;
+				            %do int = &intstart %to %eval(&numint);
+				                proc append base = interv&int._all data = interv&int;
+				                run;
+				            %end;
+				        %end;
 
-        %if &chunked = 1 %then %do;
-             /* save all interventions into a permanent data set for each chunk */
-             %if &sample_s = &sample_start and &sample_r = 1 and &chunked = 1  %then %do; 
+				        %if &chunked = 1 %then %do;
+				             /* save all interventions into a permanent data set for each chunk */
+				             %if &sample_s = &sample_start and &sample_r = 1 and &chunked = 1  %then %do; 
 
-                  /* save interventions */
-                  %if &runnc = 1 %then %do;
-                     data &intervdata ; 
-                     set interv0 ;
-                     run;
-                  %end;
-                  %else %do;
-                      data &intervdata ;
-                      set interv1; 
-                      run;
-                  %end;
-                   
-                  %do int = %eval(&intstart +1) %to &numint ;
-                      *proc append base = &intervdata    data = interv&int ;
-                      *run;
-		      data &intervdata ;
-		      set &intervdata interv&int ;
-		      run;
-                  %end;  
-             %end;
-             %else %do;
-                  %do int = &intstart %to &numint ;
-                      *proc append base = &intervdata    data = interv&int  ;
-                      *run;
-		      data &intervdata ;
-		      set &intervdata interv&int ;
-		      run;
-                  %end; 
-             %end;
-        %end;
+				                  /* save interventions */
+				                  %if &runnc = 1 %then %do;
+				                     data &intervdata ; 
+				                     set interv0 ;
+				                     run;
+				                  %end;
+				                  %else %do;
+				                      data &intervdata ;
+				                      set interv1; 
+				                      run;
+				                  %end;
+				                   
+				                  %do int = %eval(&intstart +1) %to &numint ;
+				                      *proc append base = &intervdata    data = interv&int ;
+				                      *run;
+						      			data &intervdata ;
+						      			set &intervdata interv&int ;
+						      			run;
+                  				 %end;  
+             				%end;
+				            %else %do;
+				                  %do int = &intstart %to &numint ;
+				                      *proc append base = &intervdata    data = interv&int  ;
+				                      *run;
+						      		data &intervdata ;
+						      		set &intervdata interv&int ;
+						      		run;
+				                 %end; 
+				            %end;
+        				%end;
  
-        %if &printlogstats = 1 %then %put  sample_s = &sample_s , sample_r = &sample_r  , seed = &seed  ;
+        				%if &printlogstats = 1 %then %put  sample_s = &sample_s , sample_r = &sample_r  , seed = &seed  ;
 
-        %let seed = %eval(&seed+3);
+        				%let seed = %eval(&seed+3);
 
 
-       proc datasets library = work nolist ;
-        delete _betar_ _seedr_   %if &sample_r > 0 and &sample_s > 0 %then _simulsample_ ; param simul  _covbounds_ 
-               %if &runnc = 1 %then surv_tmp0 ;
-               %do i = 1 %to &numint ; surv_tmp&i %end;
-               ;
-        quit;
+       					proc datasets library = work nolist ;
+        				delete _betar_ _seedr_   %if &sample_r > 0 and &sample_s > 0 %then _simulsample_ ; param simul  _covbounds_ 
+               				%if &runnc = 1 %then surv_tmp0 ;
+               				%do i = 1 %to &numint ; surv_tmp&i %end;
+               				;
+        				quit;
    
-    %end;
- %end;
+    				%end; /* end of r */
 
+
+					%if &bootstrap_method = 2 %then %do;
+						/* check convergence of method */
+    					%check_rconvergence (sample = &sample_s ); /* will use variables from current macro */
+    					%if &rconverged = 0 %then %do;
+							%let adaptive_iteration = %eval(&adaptive_iteration + 1 );
+        					%let rstart = %eval(&rend + 1) ;
+        					%let rend = %eval(&rend + &BLB_r_delta );
+							%if &rend > &BLB_r_max %then %let rend = &BLB_r_max ;
+							%if &rstart > &BLB_r_max %then %let rconverged = 1 ;
+    					%end;
+
+
+					%end ;
+ 				%end; /* end of do until converged  */
+
+			%end ; /* end of s loop */
     
- %end;
+ 		%end; /* end of if blb_s > 0 and bls_r > 0  */
 
 
-     %if &runnc = 1 OR (&runnc = 0 AND &numint > 0 AND &refint > 0 ) %then %do;
-        %if &chunked = 0 %then %do;
-           %*Summarizing final results;
-           %results_blb(blb_samples = &BLB_s );
-        %end;
-        %else %if &chunked = 1 AND &sample_start = 0 %then %do;
-           %local visitlist ;
-           %let visitlist = ;
-           %do i = 1 %to &ncov;
-              %if &&usevisitp&i = 1 %then %let visitlist = &visitlist &i ;
-           %end;
-           %bootstrap_results(
-               bootlib = &savelib,
-               bootname = &intervname ,
-               outc = &outc ,
-               outctype = &outctype,
-               compevent = &compevent ,
-               censor = &censor ,
-               check_cov_models = &check_cov_models,
-               covmeandata = &covmeanname0 ,
-               ncov = &ncov,
-               usevisitp = &visitlist ,
-               survdata=&survdata,
-               observed_surv = &observed_surv,
-               print_cov_means = &print_cov_means,
-               savecovmean = 0,
-               bootstrap_hazard = 0,
-               hazardratio=&hazardratio,
-               hazardname = &hazardname0 ,
-               intcomp = &intcomp ,
-               time = &time ,
-               timepoints = &timepoints,
-               numparts = 1,
-               samplestart = 0 ,
-               sampleend = &sample_end,
-               numboot = &sample_end,
-               numint = &numint ,
-               refint = &refint ,
-               rungraphs = &rungraphs ,
-               graphfile = &graphfile,
-               resultsdata = &resultsdata,
-               runnc = &runnc ,              
-               titledata= &titledata,
-               title1= &title1,
-               title2= &title2,
-               title3= &title3,
-               tsize = &tsize,
-               printlogstats = &printlogstats
-               );
-              
-           
-       %end;
-    %end;
+	    %if &runnc = 1 OR (&runnc = 0 AND &numint > 0 AND &refint > 0 ) %then %do;
+	        %if &chunked = 0 %then %do;
+	           %*Summarizing final results;
+	           %results_blb(blb_samples = &BLB_s );
+	        %end;
+	        %else %if &chunked = 1 AND &sample_start = 0 %then %do;
+	           %local visitlist ;
+	           %let visitlist = ;
+	           %do i = 1 %to &ncov;
+	              %if &&usevisitp&i = 1 %then %let visitlist = &visitlist &i ;
+	           %end;
+	           %bootstrap_results(
+	               bootlib = &savelib,
+	               bootname = &intervname ,
+	               outc = &outc ,
+	               outctype = &outctype,
+	               compevent = &compevent ,
+	               censor = &censor ,
+	               check_cov_models = &check_cov_models,
+	               covmeandata = &covmeanname0 ,
+	               ncov = &ncov,
+	               usevisitp = &visitlist ,
+	               survdata=&survdata,
+	               observed_surv = &observed_surv,
+	               print_cov_means = &print_cov_means,
+	               savecovmean = 0,
+	               bootstrap_hazard = 0,
+	               hazardratio=&hazardratio,
+	               hazardname = &hazardname0 ,
+	               intcomp = &intcomp ,
+	               time = &time ,
+	               timepoints = &timepoints,
+	               numparts = 1,
+	               samplestart = 0 ,
+	               sampleend = &sample_end,
+	               numboot = &sample_end,
+	               numint = &numint ,
+	               refint = &refint ,
+	               rungraphs = &rungraphs ,
+	               graphfile = &graphfile,
+	               resultsdata = &resultsdata,
+	               runnc = &runnc ,              
+	               titledata= &titledata,
+	               title1= &title1,
+	               title2= &title2,
+	               title3= &title3,
+	               tsize = &tsize,
+	               printlogstats = &printlogstats
+	               );
+	              
+	           
+	       %end;
+	  %end;
 %mend ;
 
 

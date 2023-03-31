@@ -298,6 +298,7 @@ options mautosource minoperator ;
     minimalistic = no, /* only keep results for outcome variables */
     testing = no    ,   /* keep each simulated data set for each intervention. will be named savelib.simulated&intno */
 	bootstrap_method = 0 ,
+	use_samples_orig = 1 ,
 	use_bootstrap_counts = 0 ,
 	expand_param_counts = 1 ,
 	expand_simul_counts = 1 ,
@@ -305,6 +306,14 @@ options mautosource minoperator ;
 	BLB_s = ,
 	BLB_r = ,
     use_disjoint_blb_samples = 0 ,
+	BLB_r_start = 20 , /* for adaptive blb method */
+	BLB_r_max = 50 ,
+    BLB_r_delta = 5 ,
+	BLB_r_trend = 10 ,
+    BLB_r_Epsilon = 0.05 , 
+	BLB_keep_seeds = 0 ,/* save seeds used in selecting the r-samples */
+	BLB_use_seeds = , /* data for storing seeds from previous run */
+
 	monitor_time = 0 
     );
 
@@ -318,7 +327,7 @@ options mautosource minoperator ;
           cov0moddatausermacro cov0setblvar cov0simusermacro cov0barray cov0sarray cov0randomvisitp cov0visitpmaxgap cov0visitpwherem
           cov0visitpcount cov0visitpelse  newsimulkeeplist;
     %local covlist ;
-	%local bootstrap_counts sample_r sample_s created_dataviews  ;
+	%local bootstrap_counts sample_r sample_s created_dataviews bsample_counter ;
 	%let created_dataviews = 0 ;
     %local anytsswitch1 anylagcumavg ; /* any ptype equal to tsswitch1 for creating spline variables */
     %let anytsswitch1 = 0 ;
@@ -364,8 +373,14 @@ options mautosource minoperator ;
 
 
 	
-	%if &bootstrap_method = 0 %then %let bootstrap_counts = bootstrap_counts ;
-	%else %if &bootstrap_method = 1 %then %let bootstrap_counts = BLB_counts ;
+	%if &bootstrap_method = 0 %then %do;
+		%let bootstrap_counts = bootstrap_counts ;
+		%let bsample_counter = &nsamples ;
+	%end;
+	%else %if &bootstrap_method > 0 %then %do;
+		%let bootstrap_counts = BLB_counts ;
+		%let bsample_counter = 0 ;
+	%end;
 
     %let uselabelo = 0 ;
     %let uselabelc = 0 ;
@@ -541,7 +556,8 @@ options mautosource minoperator ;
     %let seed_list = &seed ;
     %let seed_holder  =  &seed ;
 	%if &bootstrap_method = 0 %then %let number_seeds = &nsamples ;
-	%else %if &bootstrap_method = 1 %then %let number_seeds = %eval(&BLB_r * &BLB_s ) ;
+	%else %if &bootstrap_method = 1  %then %let number_seeds = %eval(&BLB_r * &BLB_s ) ;
+	%else %if &bootstrap_method = 2 %then %let number_seeds = %eval(&BLB_r_max * &BLB_s );
     %do i = 1 %to &number_seeds  ;
        %let seed =%eval(&seed + 3) ;
        %let seed_list = &seed_list &seed ;
@@ -629,7 +645,7 @@ options mautosource minoperator ;
           %goto exit ;
    %end;
 
-   %if &bootstrap_method = 1 AND &use_disjoint_blb_samples = 1 AND &BLB_s > 0 %then %do ;
+   %if &bootstrap_method > 0 AND &use_disjoint_blb_samples = 1 AND &BLB_s > 0 %then %do ;
    		%if %eval(&BLB_s * &BLB_b ) > &ssize %then %do;
 			%let max_blb_s = %sysevalf(&ssize / &BLB_b) ;
 			%let blb_s_orig = BLB_s ;
@@ -664,7 +680,7 @@ options mautosource minoperator ;
 	put "End time for base sample : " _end= nldatm.;
     elaps = _end - _start;
     put ">>> Total run time for base sample (processing data not included ) : " elaps= time9.;
-	%if   ((&bootstrap_method = 0 AND &nsamples > 0 ) OR (&bootstrap_method = 1 AND &BLB_s > 0 AND &BLB_r > 0 )) %then %do; 
+	%if   ((&bootstrap_method = 0 AND &nsamples > 0 ) OR (&bootstrap_method > 0 AND &BLB_s > 0 AND &BLB_r > 0 )) %then %do; 
     	tm = datetime();	 
 		put"Start time for bootstraps :" tm= nldatm.;
     	call symput('start_time_bootstraps', put(tm, z15.));
@@ -675,14 +691,15 @@ options mautosource minoperator ;
 	%if &bootstrap_method = 0  %then %do;
 		%bootstrap_normal ;
 	%end;
-	%else %if &bootstrap_method = 1 AND &BLB_s > 0 %then %do;
+	%else %if &bootstrap_method > 0 AND &BLB_s > 0 %then %do;
 		%bootstrap_blb ;
 	%end;
 	
-%if &monitor_time = 1 AND ((&bootstrap_method = 0 AND &nsamples > 0 ) OR (&bootstrap_method = 1 AND &BLB_s > 0 AND &BLB_r > 0 )) %then %do; 
+%if &monitor_time = 1 AND ((&bootstrap_method = 0 AND &nsamples > 0 ) OR (&bootstrap_method > 0 AND &BLB_s > 0 AND &BLB_r > 0 )) %then %do; 
     %local _ns_ ;
     %if &bootstrap_method = 0 %then %let _ns_ = %eval(&nsamples ) ;
-	%else %if &bootstrap_method = 1 %then %let _ns_ = %eval(&BLB_s * &BLB_r ) ;
+	%else %if &bootstrap_method = 1  %then %let _ns_ = %eval(&BLB_s * &BLB_r ) ;
+	%else %if &bootstrap_method = 2 %then %let _ns_ = %eval(&BLB_s * &BLB_r_max ) ;
 	data _null_;
     _start = &start_time_bootstraps ;
     _end = datetime();
@@ -1453,13 +1470,13 @@ data step2a ; set step2 ; run;
         %if &bootstrap_method = 0 %then %do;
 			_sample_ = 0 ;
 		%end;
-		%else %if &bootstrap_method = 1 %then %do;
+		%else %if &bootstrap_method > 0  %then %do;
 			_sample_r = 0 ;
 			_sample_s = 0 ;
 		%end;
 
         keep  %if &bootstrap_method = 0 %then _sample_ ;
-              %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+              %else %if &bootstrap_method > 0 %then _sample_s _sample_r ;
                %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3  %then  &outc._min &outc._max ;
                 %do i = 0 %to &ncov ; 
                     %if &&cov&i.otype=3 or &&cov&i.otype=4 or &&cov&i.otype=6 or &&cov&i.otype=7   or &&cov&i.otype = -1  %then &&cov&i.._min &&cov&i.._max ;
@@ -2076,7 +2093,7 @@ data step2a ; set step2 ; run;
         %if &bootstrap_method = 0 %then %do;
             _sample_=&bsample;
 		%end;
-		%else %if &bootstrap_method = 1 %then %do;
+		%else %if &bootstrap_method > 0 %then %do;
 			 _sample_s = &sample_s ;
 			_sample_r = &sample_r ;
 		%end;
@@ -2086,7 +2103,7 @@ data step2a ; set step2 ; run;
             abeta(i)=avar(i);
             end;
         keep %if &bootstrap_method = 0 %then _sample_ ;
-             %else %if &bootstrap_method = 1 %then _sample_r _sample_s ; 
+             %else %if &bootstrap_method > 0 %then _sample_r _sample_s ; 
               boutc00-boutc&dimoutc;
         run;
    %end;
@@ -2115,7 +2132,7 @@ data step2a ; set step2 ; run;
     %if &bootstrap_method = 0 %then %do;
         _sample_=&bsample;
 	%end;
-	%else %if &bootstrap_method = 1 %then %do;
+	%else %if &bootstrap_method > 0 %then %do;
 		_sample_s = &sample_s ;
 		_sample_r = &sample_r ;
 	%end;
@@ -2125,7 +2142,7 @@ data step2a ; set step2 ; run;
             abeta(i)=avar(i);
             end;
         keep %if &bootstrap_method = 0 %then _sample_ ;
-			 %else %if &bootstrap_method = 0 %then _sample_s _sample_r ;
+			 %else %if &bootstrap_method > 0 %then _sample_s _sample_r ;
             boutc00-boutc&dimoutc;
         run;
 
@@ -2157,7 +2174,7 @@ data step2a ; set step2 ; run;
         %if &bootstrap_method = 0 %then %do;
             _sample_=&bsample;
 		%end;
-		%else %if &bootstrap_method = 1 %then %do;
+		%else %if &bootstrap_method > 0 %then %do;
 		 	_sample_s = &sample_s ;
 			_sample_r = &sample_r ;
 		%end;
@@ -2168,7 +2185,7 @@ data step2a ; set step2 ; run;
            end;
         se&outc=_rmse_;
         keep %if &bootstrap_method = 0 %then _sample_ ;
-              %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+              %else %if &bootstrap_method > 0 %then _sample_s _sample_r ;
              boutc00-boutc&dimoutc se&outc;
     run;
 
@@ -2228,7 +2245,7 @@ data step2a ; set step2 ; run;
 			%if &bootstrap_method = 0 %then %do;
             	_sample_=&bsample;
 			%end;
-			%else %if &bootstrap_method = 1 %then %do;
+			%else %if &bootstrap_method > 0 %then %do;
 			 	_sample_s = &sample_s ;
 				_sample_r = &sample_r ;
 			%end;
@@ -2239,7 +2256,7 @@ data step2a ; set step2 ; run;
             end;
             se&outc=_Sigma;
             keep %if &bootstrap_method = 0 %then _sample_ ;
-                  %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+                  %else %if &bootstrap_method > 0 %then _sample_s _sample_r ;
                    boutc00-boutc&dimoutc se&outc;
             run;
           
@@ -2273,7 +2290,7 @@ data step2a ; set step2 ; run;
         	%if &bootstrap_method = 0 %then %do;
             	_sample_=&bsample;
 			%end;
-			%else %if &bootstrap_method = 1 %then %do;
+			%else %if &bootstrap_method > 0 %then %do;
 			 	_sample_s = &sample_s ;
 				_sample_r = &sample_r ;
 			%end;
@@ -2284,7 +2301,7 @@ data step2a ; set step2 ; run;
            end;
         se&outc=_Sigma;
         keep %if &bootstrap_method = 0 %then _sample_ ;
-             %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+             %else %if &bootstrap_method > 0 %then _sample_s _sample_r ;
               boutc00-boutc&dimoutc se&outc;
     run;
 
@@ -2309,7 +2326,7 @@ data step2a ; set step2 ; run;
             	%if &bootstrap_method = 0 %then %do;
             	_sample_=&bsample;
 			%end;
-			%else %if &bootstrap_method = 1 %then %do;
+			%else %if &bootstrap_method > 0 %then %do;
 			 	_sample_s = &sample_s ;
 				_sample_r = &sample_r ;
 			%end;
@@ -2319,7 +2336,7 @@ data step2a ; set step2 ; run;
                 abeta(i)=avar(i);
                 end;
             keep %if &bootstrap_method = 0 %then _sample_ ;
-  			      %else %if &bootstrap_method = 1 %then _sample_r _sample_s ;
+  			      %else %if &bootstrap_method > 0 %then _sample_r _sample_s ;
                   bcompevent00-bcompevent&dimcompevent;
         run;
 
@@ -2509,7 +2526,7 @@ data step2a ; set step2 ; run;
             	%if &bootstrap_method = 0 %then %do;
             	_sample_=&bsample;
 			%end;
-			%else %if &bootstrap_method = 1 %then %do;
+			%else %if &bootstrap_method > 0 %then %do;
 			 	_sample_s = &sample_s ;
 				_sample_r = &sample_r ;
 			%end;
@@ -2519,7 +2536,7 @@ data step2a ; set step2 ; run;
                 abeta(j)=avar(j); 
             end;
             keep %if &bootstrap_method = 0 %then _sample_ ;
-                 %else %if &bootstrap_method = 1 %then _sample_r _sample_s ;
+                 %else %if &bootstrap_method > 0 %then _sample_r _sample_s ;
                 bvar&i.visitp_00-bvar&i.visitp_&&dimvar&i;          
             run;
 
@@ -2712,7 +2729,7 @@ data step2a ; set step2 ; run;
                 %if &bootstrap_method = 0 %then %do;
             		_sample_=&bsample;
 				%end;
-				%else %if &bootstrap_method = 1 %then %do;
+				%else %if &bootstrap_method > 0 %then %do;
 			 		_sample_s = &sample_s ;
 					_sample_r = &sample_r ;
 				%end;
@@ -2723,7 +2740,7 @@ data step2a ; set step2 ; run;
                         se&&cov&i=_rmse_;
                         %end;
                     keep %if &bootstrap_method = 0 %then _sample_ ;
-                         %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+                         %else %if &bootstrap_method > 0 %then _sample_s _sample_r ;
                          bvar&i._00-bvar&i._&&dimvar&i 
                         %if &&cov&i.otype=3 %then %do;
                         se&&cov&i
@@ -2736,7 +2753,7 @@ data step2a ; set step2 ; run;
                data &&cov&i;
                merge &&cov&i.randomvisitp &&cov&i;
                by 	%if &bootstrap_method = 0 %then _sample_;
-                	%else %if &bootstrap_method = 1 %then _sample_s  _sample_r;
+                	%else %if &bootstrap_method > 0 %then _sample_s  _sample_r;
 			      ;
                run;
 
@@ -2753,7 +2770,7 @@ data step2a ; set step2 ; run;
                     %if &bootstrap_method = 0 %then %do;
             			_sample_=&bsample;
 					%end;
-					%else %if &bootstrap_method = 1 %then %do;
+					%else %if &bootstrap_method > 0 %then %do;
 			 			_sample_s = &sample_s ;
 						_sample_r = &sample_r ;
 					%end;
@@ -2761,7 +2778,7 @@ data step2a ; set step2 ; run;
                     array abeta bvar&i.z0_00-bvar&i.z0_&&dimvar&i;
                     do j=1 to dim(avar); abeta(j)=avar(j); end;
                         keep %if &bootstrap_method = 0 %then _sample_ ;
-                            %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+                            %else %if &bootstrap_method > 0 %then _sample_s _sample_r ;
                            bvar&i.z0_00-bvar&i.z0_&&dimvar&i;
                 run;
 
@@ -2771,7 +2788,7 @@ data step2a ; set step2 ; run;
                     %if &bootstrap_method = 0 %then %do;
             			_sample_=&bsample;
 					%end;
-					%else %if &bootstrap_method = 1 %then %do;
+					%else %if &bootstrap_method > 0 %then %do;
 			 			_sample_s = &sample_s ;
 						_sample_r = &sample_r ;
 					%end;
@@ -2779,7 +2796,7 @@ data step2a ; set step2 ; run;
                     array abeta bvar&i.z1_00-bvar&i.z1_&&dimvar&i;
                     do j=1 to dim(avar); abeta(j)=avar(j); end;
                         keep %if &bootstrap_method = 0 %then _sample_ ;
-                              %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+                              %else %if &bootstrap_method >  %then _sample_s _sample_r ;
                          bvar&i.z1_00-bvar&i.z1_&&dimvar&i;
                 run;
 
@@ -2791,7 +2808,7 @@ data step2a ; set step2 ; run;
                     %if &bootstrap_method = 0 %then %do;
             	   		_sample_=&bsample;
 					%end;
-					%else %if &bootstrap_method = 1 %then %do;
+					%else %if &bootstrap_method > 0  %then %do;
 			 			_sample_s = &sample_s ;
 						_sample_r = &sample_r ;
 					%end;
@@ -2799,7 +2816,7 @@ data step2a ; set step2 ; run;
                     array abeta bvar&i.z_00-bvar&i.z_&&dimvar&i;
                     do j=1 to dim(avar); abeta(j)=avar(j); end;
                         keep %if &bootstrap_method = 0 %then _sample_ ;
-                              %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+                              %else %if &bootstrap_method > 0  %then _sample_s _sample_r ;
                         bvar&i.z_00-bvar&i.z_&&dimvar&i;
                 run;
                 %end;
@@ -2809,7 +2826,7 @@ data step2a ; set step2 ; run;
                 %if &bootstrap_method = 0 %then %do;
             		_sample_=&bsample;
 				%end;
-				%else %if &bootstrap_method = 1 %then %do;
+				%else %if &bootstrap_method > 0  %then %do;
 			 		_sample_s = &sample_s ;
 					_sample_r = &sample_r ;
 				%end;
@@ -2818,7 +2835,7 @@ data step2a ; set step2 ; run;
                 do j=1 to dim(avar); abeta(j)=avar(j); end;
                     se&&cov&i=_rmse_;
                     keep %if &bootstrap_method = 0 %then _sample_ ;
-                         %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+                         %else %if &bootstrap_method > 0  %then _sample_s _sample_r ;
                       bvar&i._00-bvar&i._&&dimvar&i se&&cov&i;
             run;
             data &&cov&i;
@@ -2829,7 +2846,7 @@ data step2a ; set step2 ; run;
                     merge &&cov&i z&&cov&i;
                     %end;
                 by %if &bootstrap_method = 0 %then _sample_ ;
-				   %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+				   %else %if &bootstrap_method > 0  %then _sample_s _sample_r ;
 				    ;
             run;
 
@@ -2839,7 +2856,7 @@ data step2a ; set step2 ; run;
                data &&cov&i;
                merge &&cov&i.randomvisitp &&cov&i;
                by %if &bootstrap_method = 0 %then _sample_ ;
-                   %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+                   %else %if &bootstrap_method > 0  %then _sample_s _sample_r ;
                 ;
                run;
 
@@ -2855,7 +2872,7 @@ data step2a ; set step2 ; run;
                     %if &bootstrap_method = 0 %then %do;
             			_sample_=&bsample;
 					%end;
-					%else %if &bootstrap_method = 1 %then %do;
+					%else %if &bootstrap_method > 0  %then %do;
 			 			_sample_s = &sample_s ;
 						_sample_r = &sample_r ;
 					%end;
@@ -2863,14 +2880,14 @@ data step2a ; set step2 ; run;
                     array abeta_&l bvar&i._&l._00-bvar&i._&l._&&dimvar&i;
                     do j=1 to dim(avar_&l); abeta_&l.(j)=avar_&l.(j); end;
                         keep %if &bootstrap_method = 0 %then _sample_ ;
-                            %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+                            %else %if &bootstrap_method > 0  %then _sample_s _sample_r ;
                            bvar&i._&l._00-bvar&i._&l._&&dimvar&i;
                 run;
                 %end;
             data &&cov&i;
                 merge %do l = 1 %to %eval(&&cov&i.lev - 1); &&cov&i.._&l %end; ;
                 by %if &bootstrap_method = 0 %then _sample_ ;
-                    %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+                    %else %if &bootstrap_method > 0  %then _sample_s _sample_r ;
                         ;
             run;
 
@@ -2881,7 +2898,7 @@ data step2a ; set step2 ; run;
                data &&cov&i;
                merge &&cov&i.randomvisitp &&cov&i;
                by %if &bootstrap_method = 0 %then _sample_ ;
-                    %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;;
+                    %else %if &bootstrap_method > 0  %then _sample_s _sample_r ;;
                run;
 
             %end; 
@@ -2894,7 +2911,7 @@ data step2a ; set step2 ; run;
                 %if &bootstrap_method = 0 %then %do;
             		_sample_=&bsample;
 				%end;
-				%else %if &bootstrap_method = 1 %then %do;
+				%else %if &bootstrap_method > 0  %then %do;
 			 		_sample_s = &sample_s ;
 					_sample_r = &sample_r ;
 				%end;
@@ -2905,7 +2922,7 @@ data step2a ; set step2 ; run;
                         se&&cov&i=_Sigma;
                         
                     keep %if &bootstrap_method = 0 %then _sample_ ;
-                    %else %if &bootstrap_method = 1 %then _sample_s _sample_r ; 
+                    %else %if &bootstrap_method > 0  %then _sample_s _sample_r ; 
                         bvar&i._00-bvar&i._&&dimvar&i 
                         
                         se&&cov&i
@@ -2919,7 +2936,7 @@ data step2a ; set step2 ; run;
                data &&cov&i;
                merge &&cov&i.randomvisitp &&cov&i;
                by %if &bootstrap_method = 0 %then _sample_ ;
-                    %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;;
+                    %else %if &bootstrap_method > 0  %then _sample_s _sample_r ;;
                run;
 
             %end; 
@@ -2957,7 +2974,7 @@ data step2a ; set step2 ; run;
                     %end;
                     ;
           by %if &bootstrap_method = 0 %then _sample_ ;
-                    %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;;               
+                    %else %if &bootstrap_method > 0  %then _sample_s _sample_r ;;               
     	 run;
 
     proc append base=_beta_ data=samplebetas;
@@ -2965,7 +2982,7 @@ data step2a ; set step2 ; run;
        
     proc sort data=_beta_; 
     by %if &bootstrap_method = 0 %then _sample_ ;
-                    %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;;
+                    %else %if &bootstrap_method > 0  %then _sample_s _sample_r ;;
     run;
     
 
@@ -2993,7 +3010,7 @@ data step2a ; set step2 ; run;
 		  		%if &bsample = &sample_start %then %let dataholder = &covmeanname ;  
           		%else %let dataholder = _cov_mean_tmp ; 
 		  %end ;
-		  %else %if &bootstrap_method = 1 %then %do;
+		  %else %if &bootstrap_method > 0  %then %do;
 		  		%if &sample_s = 0  and &sample_r = 0 %then %let dataholder = &covmeanname ;
 				%else %let dataholder = _cov_mean_tmp ;
 		  %end;
@@ -3001,7 +3018,7 @@ data step2a ; set step2 ; run;
           proc sql ;
             create table &dataholder  as
             select  %if &bootstrap_method = 0 %then &bsample as _sample_ , ;
-                    %else %if &bootstrap_method = 1 %then &sample_r as _sample_r , &sample_s as _sample_s, ; 
+                    %else %if &bootstrap_method > 0  %then &sample_r as _sample_r , &sample_s as _sample_s, ; 
                 &time as _time_ , 
                 %if &outctype = binsurv %then %do;
                       max(sum(&outc),0) as e,
@@ -3051,7 +3068,7 @@ data step2a ; set step2 ; run;
 	  %end;
         
 	    
-        %if (&bootstrap_method = 0 and &bsample > &sample_start ) OR (&bootstrap_method = 1 and &sample_s > 0 )   %then %do;
+        %if (&bootstrap_method = 0 and &bsample > &sample_start ) OR (&bootstrap_method > 0  and &sample_s > 0 )   %then %do;
            proc append base = &covmeanname data = _cov_mean_tmp  ;
            run;
 
@@ -3120,7 +3137,6 @@ data step2a ; set step2 ; run;
           intchg1 = ,          
           intusermacro1= , 
         
-
           intvar2 = , inttype2 = , inttimes2 = (-1), intpr2 = 1, intcov2 = ,
           intmean2 = , intsd2 = , intvalue2 = , intmin2 =. , intmax2 =. , intchg2 = ,
           intusermacro2=,
@@ -3374,7 +3390,7 @@ data step2a ; set step2 ; run;
 			%if &bootstrap_method = 0 %then %do;
             	_sample_ = &bsample;
 			%end;
-			%else %if &bootstrap_method = 1 %then %do;
+			%else %if &bootstrap_method > 0  %then %do;
 			  	_sample_r = &sample_r;
 				_sample_s = &sample_s ;
 			%end;
@@ -3383,7 +3399,7 @@ data step2a ; set step2 ; run;
             int2=&intlabel;
             n=_FREQ_;
             keep int int2  %if &bootstrap_method = 0 %then  _sample_ ;
-                           %else %if &bootstrap_method = 1 %then _sample_r _sample_s ; 
+                           %else %if &bootstrap_method > 0  %then _sample_r _sample_s ; 
                             n 
                            %if &outctype=binsurv %then %do;
                                         pd 
@@ -3421,7 +3437,7 @@ data step2a ; set step2 ; run;
                 %if &bootstrap_method = 0 %then %do;
             		_sample_ = &bsample;
 				%end;
-				%else %if &bootstrap_method = 1 %then %do;
+				%else %if &bootstrap_method > 0  %then %do;
 			  		_sample_r = &sample_r;
 					_sample_s = &sample_s ;
 				%end;
@@ -3430,7 +3446,7 @@ data step2a ; set step2 ; run;
                 n = _freq_ ;
                 surv0 = 1 ;
                 keep  int int2 %if &bootstrap_method = 0 %then  _sample_ ;
-                                %else %if &bootstrap_method = 1 %then _sample_r _sample_s ;
+                                %else %if &bootstrap_method > 0  %then _sample_r _sample_s ;
                    n surv0
                    %do n = 1 %to %eval(&timepoints);
                        risk&n surv&n compevent&n   
@@ -3447,7 +3463,7 @@ data step2a ; set step2 ; run;
               set interv&intno ;
               
               keep  %if &bootstrap_method = 0 %then  _sample_ ;
-                    %else %if &bootstrap_method = 1 %then _sample_r _sample_s ; 
+                    %else %if &bootstrap_method > 0  %then _sample_r _sample_s ; 
                     s&outc int int2  ;
               run;
           %end; 
@@ -3593,7 +3609,7 @@ data step2a ; set step2 ; run;
   
     data simul ;
     set simul (keep =   %if &bootstrap_method = 0 %then  _sample_ ;
-                        %else %if &bootstrap_method = 1 %then _sample_r _sample_s ;
+                        %else %if &bootstrap_method > 0  %then _sample_r _sample_s ;
                         &newsimulkeeplist &bootstrap_counts );
     run;
 
@@ -3699,7 +3715,7 @@ intusermacro7=,
                     %if &hazardratio = 1 %then   _calchazard_   ; 
                       end=_end_;
         by %if &bootstrap_method = 0 %then _sample_ ;
-		   %else %if &bootstrap_method = 1 %then _sample_s _sample_r ; ;
+		   %else %if &bootstrap_method > 0  %then _sample_s _sample_r ; ;
         call streaminit(_seedr_);
         drop _seedr_ ; 
 
@@ -4614,7 +4630,6 @@ intusermacro7=,
      %if &printlogstats = 1 %then %put ;
 
      %*Printing results;
-
      %if &outctype=binsurv or &outctype=bineofu %then %do;    
           title4 'PREDICTED RISK UNDER SEVERAL INTERVENTIONS';
      %end;
@@ -5878,7 +5893,6 @@ not the time-varying covariates, which are handled below in %interactionsb*/
                %if &printlogstats = 1 %then %put  &vrbl._I&iota = &&&vrbl._I&iota;    
             %end;
         %end; /*iota*/
-
     %end; /*if there are interactions*/
     %else %do;
        %let &vrbl.ninterx = 0;
@@ -7476,7 +7490,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
        filename mygraphs "&mywork./graphs.pdf";
    
     proc sql noprint ;
-    select count(distinct &time) as mtime into :nperiods from &covmean ; * add in distinct time for testing when bootstrap_method = 1 ;
+    select count(distinct &time) as mtime into :nperiods from &covmean ; * add in distinct time for testing when bootstrap_method > 0  ;
     select min(&time)   as mintime into :mintime from &covmean ;      
     quit;
 
@@ -7705,7 +7719,7 @@ set _cont  ( where = ( substr(name,1,1)='s'
         data _estncrsk ;
         set _datass ( keep = risk1 - risk&nperiods int 
 			%if &bootstrap_method = 0 %then _sample_ where = (_sample_ = 0 and int = 0)) ;
-			%else %if &bootstrap_method = 1 %then _sample_s _sample_r where = (_sample_s = 0 and _sample_r = 0 and int = 0)) ;
+			%else %if &bootstrap_method > 0  %then _sample_s _sample_r where = (_sample_s = 0 and _sample_r = 0 and int = 0)) ;
 			;
         array risk{&nperiods} ;
         &time = 0 ;
@@ -7730,7 +7744,7 @@ set _cont  ( where = ( substr(name,1,1)='s'
             data _bsss ;
             set _datass ( keep = risk1 - risk&nperiods int 
 				%if &bootstrap_method = 0 %then _sample_  where = (_sample_ > 0 and int = 0) ;
-				%else %if &bootstrap_method = 1 %then _sample_s _sample_r where = (_sample_s > 0 and int = 0 ) ;
+				%else %if &bootstrap_method > 0  %then _sample_s _sample_r where = (_sample_s > 0 and int = 0 ) ;
 				)  ;
             drop int ;
             run;
@@ -7739,14 +7753,14 @@ set _cont  ( where = ( substr(name,1,1)='s'
             data _ncss ;
             set _dataos (keep = obrisk&mintime - obrisk%eval(&mintime + &nperiods - 1)
 				%if &bootstrap_method = 0 %then _sample_ where = (_sample_ > 0) ;
-				%else %if &bootstrap_method = 1 %then _sample_s _sample_r where = (_sample_s > 0 ) ;
+				%else %if &bootstrap_method > 0  %then _sample_s _sample_r where = (_sample_s > 0 ) ;
 			);
             run;
 
             data _bsres ;
             merge _bsss _ncss ;
             %if &bootstrap_method = 0 %then by _sample_ ;
-			%else %if &bootstrap_method = 1 %then by _sample_s _sample_r ;
+			%else %if &bootstrap_method > 0  %then by _sample_s _sample_r ;
 			   ;
             array obrisk{&nperiods} obrisk&mintime - obrisk%eval(&mintime+&nperiods-1) ;
             array risk{&nperiods} risk1 - risk&nperiods ;
@@ -7781,7 +7795,7 @@ set _cont  ( where = ( substr(name,1,1)='s'
 	            keep &time lb ub ;
 	            run;
 		   %end;
-		   %else %if &bootstrap_method = 1 %then %do;
+		   %else %if &bootstrap_method > 0  %then %do;
 
 				data mybsres ;
 				set _bsres ;
@@ -7820,7 +7834,7 @@ set _cont  ( where = ( substr(name,1,1)='s'
         data _estobsrisk ;
         set _dataos (keep = obrisk&mintime - obrisk%eval(&mintime+&nperiods-1)
             %if &bootstrap_method = 0 %then _sample_ where = (_sample_ = 0));
-			%else %if &bootstrap_method = 1 %then _sample_s _sample_r where = (_sample_s = 0 and _sample_r = 0)) ;;
+			%else %if &bootstrap_method > 0  %then _sample_s _sample_r where = (_sample_s = 0 and _sample_r = 0)) ;;
         array obrisk{&nperiods} obrisk&mintime - obrisk%eval(&mintime+&nperiods-1) ;
          &time = 0 ;
         obs = 0 ;
@@ -7955,13 +7969,13 @@ set _cont  ( where = ( substr(name,1,1)='s'
         end;
         keep  estobsdeath1 - estobsdeath&nperiods 
 			%if &bootstrap_method = 0 %then _sample_ ;
-			%else %if &bootstrap_method = 1 %then _sample_s _sample_r ;;
+			%else %if &bootstrap_method > 0  %then _sample_s _sample_r ;;
         run;
 
 
         data _estncdeath ;
         set _datass (keep = %if &bootstrap_method = 0 %then _sample_ ;
-                          %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+                          %else %if &bootstrap_method > 0  %then _sample_s _sample_r ;
                          compevent1 - compevent&nperiods int where = (   int = 0 ));
         drop  int ;
         run;
@@ -7972,20 +7986,20 @@ set _cont  ( where = ( substr(name,1,1)='s'
             data _forgraph3  ;
             merge _estobssurv   _estncdeath  ;
             by  %if &bootstrap_method = 0 %then _sample_ ;
-			    %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+			    %else %if &bootstrap_method > 0  %then _sample_s _sample_r ;
 				;
             array death{&nperiods} estobsdeath1 - estobsdeath&nperiods  ;
             array cdeath{&nperiods} compevent1 - compevent&nperiods ;
             array riskdiff{&nperiods} ;
 
             %if &bootstrap_method = 0 %then if _sample_ > 0 ;
-			%else %if &bootstrap_method = 1 %then if _sample_s > 0 and _sample_r > 0 ;
+			%else %if &bootstrap_method > 0  %then if _sample_s > 0 and _sample_r > 0 ;
 			   ;
             do &time = 1 to &nperiods ;     
                riskdiff[&time] = death[&time] - cdeath[&time] ;      
             end;
             keep %if &bootstrap_method = 0 %then _sample_  ;
-                 %else %if &bootstrap_method = 1 %then _sample_s _sample_r ;
+                 %else %if &bootstrap_method > 0  %then _sample_s _sample_r ;
                 riskdiff1 - riskdiff&nperiods ;
             run;
 
@@ -8003,7 +8017,7 @@ set _cont  ( where = ( substr(name,1,1)='s'
 	     
             %end;
 
-			%else %if &bootstrap_method = 1 %then %do ;
+			%else %if &bootstrap_method > 0  %then %do ;
 
 			    %let mylist = ;
 				%do i = 1 %to &nperiods ;
@@ -8030,10 +8044,10 @@ set _cont  ( where = ( substr(name,1,1)='s'
 
         data _graph3  ;
         merge _estobssurv(where = ( %if &bootstrap_method = 0 %then _sample_ = 0 ; 
-                                    %else %if &bootstrap_method = 1 %then _sample_s = 0 and _sample_r = 0 ;
+                                    %else %if &bootstrap_method > 0  %then _sample_s = 0 and _sample_r = 0 ;
                                 )) 
              _estncdeath(where = (        %if &bootstrap_method = 0 %then _sample_ = 0 ; 
-                                    %else %if &bootstrap_method = 1 %then _sample_s = 0 and _sample_r = 0 ;))  
+                                    %else %if &bootstrap_method > 0  %then _sample_s = 0 and _sample_r = 0 ;))  
              %if &frombootstrap = 1 %then _sdgraph4 ; ;
         %if &frombootstrap = 1 %then %do ;
             array  pctlb{&nperiods} ;
@@ -8262,7 +8276,7 @@ set _cont  ( where = ( substr(name,1,1)='s'
 	  %if &bootstrap_method = 0 %then %do;
       _sample_ = &bsample ;
 	  %end;
-	  %else %if &bootstrap_method = 1 %then %do;
+	  %else %if &bootstrap_method > 0  %then %do;
 	  	_sample_r = &sample_r ;
 		_sample_s = &sample_s ;
 	  %end;
@@ -8294,7 +8308,7 @@ set _cont  ( where = ( substr(name,1,1)='s'
       %if &bootstrap_method = 0 %then %do;
       	_sample_ = &bsample ;
 	  %end;
-	  %else %if &bootstrap_method = 1 %then %do;
+	  %else %if &bootstrap_method > 0  %then %do;
 	  	_sample_r = &sample_r ;
 		_sample_s = &sample_s ;
 	  %end;
@@ -8336,7 +8350,7 @@ set _cont  ( where = ( substr(name,1,1)='s'
      %if &bootstrap_method = 0 %then %do;
       _sample_ = &bsample ;
 	  %end;
-	  %else %if &bootstrap_method = 1 %then %do;
+	  %else %if &bootstrap_method > 0  %then %do;
 	  	_sample_r = &sample_r ;
 		_sample_s = &sample_s ;
 	  %end;
