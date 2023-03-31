@@ -311,6 +311,7 @@ options mautosource minoperator ;
     BLB_r_delta = 5 ,
 	BLB_r_trend = 10 ,
     BLB_r_Epsilon = 0.05 , 
+	BLB_r_test_method = 1 ,
 	BLB_keep_seeds = 0 ,/* save seeds used in selecting the r-samples */
 	BLB_use_seeds = , /* data for storing seeds from previous run */
 
@@ -1409,7 +1410,6 @@ data step2a ; set step2 ; run;
     proc sort data=_orig_;
         by &id;
     run;
-
     proc sort data=&data out=_inputd_;
     by &id descending &time;
     run;

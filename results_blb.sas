@@ -275,7 +275,7 @@ run ;
      	title8 "Number of bootstrap samples using Bag of Little Bootstraps method with &BLB_s disjoint samples of size &BLB_b, each with &BLB_r samples of size &nsimul";
 	 %end;
 	 %if &bootstrap_method = 2 %then %do;
-			title8 "Number of bootstrap samples using Bag of Little Bootstraps method using &BLB_s samples of size &BLB_r with adaptive selection of r using &bsample_counter bootstrap samples"; 
+			title8 "Number of bootstrap samples using Bag of Little Bootstraps method using &BLB_s samples of size &BLB_b with adaptive selection of r using &bsample_counter bootstrap samples"; 
 	 %end;
      title9 "Reference intervention is &refint";
 
@@ -409,20 +409,41 @@ data test_s ; run ;
 	test_ulimit = abs((pd_ulim95 - ref_ulimit)/ref_ulimit) ;
 	run;
 
-	proc means data = test_s noprint;
-	var test_llimit test_ulimit ;
-	output out = test_s2 sum(test_llimit test_ulimit)= ;
-	run;
+	%if &BLB_r_test_method = 1 %then %do;
+		proc means data = test_s noprint;
+		var test_llimit test_ulimit ;
+		output out = test_s2 sum(test_llimit test_ulimit)= ;
+		run;
 
-	data test_s2 ;
-	set test_s2 ;
-	conv_check = test_llimit + test_ulimit ;
-	if conv_check > &BLB_r_epsilon then converged  = 0 ;
-	else converged = 1 ;
-	call symput('rconverged',compress(converged));
-	rename _freq_ = trend ;	
-	put _all_ ;
-	run;
+		data test_s2 ;
+		set test_s2 ;
+		conv_check = test_llimit + test_ulimit ;
+		if conv_check > &BLB_r_epsilon then converged  = 0 ;
+		else converged = 1 ;
+		call symput('rconverged',compress(converged));
+		rename _freq_ = trend ;	
+		put _all_ ;
+		run;
+	%end;
+	%else %if &BLB_r_test_method = 2 %then %do;
+		data test_s ;
+		set test_s end = _end_ ;
+		retain maxcheck  ;
+        if _n_ = 1 then do;
+            
+			 maxcheck = -1 ;
+		end;
+		check = 0.5 * (test_llimit + test_ulimit ) ;
+		maxcheck = max(maxcheck,check);
+        
+		if _end_ then do ;
+		    if maxcheck > &BLB_r_epsilon then converged = 0 ;
+			else converged = 1 ;
+		    put maxcheck= converged= ;
+			call symput('rconverged',compress(converged));
+		end;
+		run;
+	%end;
 
 /*	%let rconverged = 1 ; */
 
