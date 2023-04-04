@@ -369,7 +369,9 @@ data test_s ; run ;
 	          proc univariate data=rsubset&i noprint;
 	          where _sample_r ne 0;
 	          var &pd ;
-	          output out = temp&i	        
+	          output out = temp&i	 
+			  mean = &pd._mean 
+	          std =  &pd._std   
 	          pctlpre = &pd._ 
 	          pctlname = llim95 ulim95  pctlpts = 2.5 97.5;
 	          run;
@@ -400,13 +402,17 @@ data test_s ; run ;
 
 	data test_s ;
 	set test_s ;
-	retain ref_llimit ref_ulimit ;
+	retain ref_llimit ref_ulimit ref_mean ref_std ;
 	if test_sample = &rend then do ;
 		ref_llimit = pd_llim95 ;
 		ref_ulimit = pd_ulim95 ;
+		ref_mean   = pd_mean;
+		ref_std    = pd_std ;
 	end;
 	test_llimit = abs((pd_llim95 - ref_llimit)/ref_llimit) ;
 	test_ulimit = abs((pd_ulim95 - ref_ulimit)/ref_ulimit) ;
+	test_mean = abs((pd_mean - ref_mean)/ref_mean );
+	test_std = abs((pd_std - ref_std )/ref_std );
 	run;
 
 	%if &BLB_r_test_method = 1 %then %do;
@@ -434,6 +440,25 @@ data test_s ; run ;
 			 maxcheck = -1 ;
 		end;
 		check = 0.5 * (test_llimit + test_ulimit ) ;
+		maxcheck = max(maxcheck,check);
+        
+		if _end_ then do ;
+		    if maxcheck > &BLB_r_epsilon then converged = 0 ;
+			else converged = 1 ;
+		    put maxcheck= converged= ;
+			call symput('rconverged',compress(converged));
+		end;
+		run;
+	%end;
+	%else %if &BLB_r_test_method = 3 %then %do;
+		data test_s ;
+		set test_s end = _end_ ;
+		retain maxcheck  ;
+        if _n_ = 1 then do;
+            
+			 maxcheck = -1 ;
+		end;
+		check = 0.5 * (test_mean + test_std ) ;
 		maxcheck = max(maxcheck,check);
         
 		if _end_ then do ;
