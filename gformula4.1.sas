@@ -781,13 +781,16 @@ options mautosource minoperator ;
 	  		out=step2 (drop = ExpectedHits SamplingWeight rename = (replicate = sample_rj 
 	                                                                numberhits = BLB_count0))
 	  		method = urs 
-	  		sampsize = &ssize 
+	  		sampsize = &nsimul 
 	  		reps = &BLB_r 
 			seed = %eval(&seed * &seed )
+		
 	  		noprint 
 	 			;
 	  		strata sample_si ;
 			run;
+
+			%let seed = %eval(&seed * &seed ) ;
 
 data step2a ; set step2 ; run;
 
@@ -8502,7 +8505,11 @@ set _cont  ( where = ( substr(name,1,1)='s'
 	            output ;
 	        end;
 		%end;
-		%if &expand_param_counts = 0 %then rename BLB_count0 = BLB_counts ;;
+		%if &expand_param_counts = 0 %then %do;
+			%if &bootstrap_method > 0 %then rename BLB_count0 = BLB_counts ;;
+			%if &bootstrap_method = 0 %then rename BLB_count0 = bootstrap_counts ;;
+		%end;
+
         %if %bquote(&droplist )^= %then  drop &droplist ;;
               ;
         run;
@@ -8795,7 +8802,8 @@ set _cont  ( where = ( substr(name,1,1)='s'
 	  		sampsize = &nsimul  
 			%if &bootstrap_method = 1 %then reps = &BLB_r ;
 			%else %if &bootstrap_method = 2 %then reps = &BLB_r_max ; 
-			%if &BLB_keep_seeds = 1 %then outseed ;
+			/* %if &BLB_keep_seeds = 1 %then outseed ;*/
+			outseed 
 			%if %bquote(&BLB_use_seeds)^= %then %do ;
 				seed = &BLB_use_seeds 
 			%end;
@@ -8807,17 +8815,17 @@ set _cont  ( where = ( substr(name,1,1)='s'
 	  		strata sample_si ;
 			run;
 
-			%if &BLB_keep_seeds = 1 %then %do;
-				data _blb_seeds_;
-				set step2(keep = sample_si InitialSeed );
-				by sample_si ;
-				if first.sample_si ;
-				run;
+		
+			data _blb_seeds_;
+			set step2(keep = sample_si InitialSeed );
+			by sample_si ;
+			if first.sample_si ;
+			run;
 
-				data step2 ;
-				set step2 (drop = InitialSeed );
-				run;
-			%end;
+			data step2 ;
+			set step2 (drop = InitialSeed );
+			run;
+			
 
 
     		%*Looping over bootstrap samples;
@@ -8862,6 +8870,13 @@ set _cont  ( where = ( substr(name,1,1)='s'
 	            		%let rconverged = 0 ;
 					%end;
 
+
+					data _null_ ;
+					set _blb_seeds_ (where = (sample_si = &sample_s )) ;
+					call symput('seed',left(InitialSeed));
+					put "starting r loop with " _all_ ;
+					run;
+
 					%do %until ( &rconverged = 1 ); /* the do until always runs one iteration and checks condtion at end of loop */
 
 						%do sample_r = &rstart  %to &rend  ;
@@ -8873,6 +8888,7 @@ set _cont  ( where = ( substr(name,1,1)='s'
 							%if &printlogstats = 1 %then %put  ;
 
 			        		%samples_blb(sample_s = &sample_s , sample_r = &sample_r ); 
+
 
 
 							%if &sample_r = &sample_check and &sample_s = 1  %then %do;
