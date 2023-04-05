@@ -1,10 +1,6 @@
 /*Example: outctype=binsurv*/
 
-%include '/proj/sas_macros/gformula/master_branch/new_censoring/GFORMULA-SAS/gformula4_0_blb_testing.sas';
-%include '/proj/sas_macros/gformula/master_branch/new_censoring/GFORMULA-SAS/bootstrap_blb_version0.sas';
-%include '/proj/sas_macros/gformula/master_branch/new_censoring/GFORMULA-SAS/base_sample.sas';
-%include '/proj/sas_macros/gformula/master_branch/new_censoring/GFORMULA-SAS/results_blb.sas';
-%include '/proj/sas_macros/gformula/master_branch/new_censoring/GFORMULA-SAS/for_covmeans_graphs.sas';
+%include '/proj/sas_macros/gformula/master_branch/new_censoring/GFORMULA-SAS/gformula4.1.sas';
 
 options linesize=88 pagesize=54;
 
@@ -35,7 +31,7 @@ options notes;
 
         call streaminit(5027);
 
-        do i=1 to 1000;
+        do i=1 to 10000;
             baseage = int( 35 + 25*rand('uniform'));
 
             array ahbp(18);
@@ -143,12 +139,13 @@ run;
 options ls = 120 ;
 **GFORMULA Call;
 title 'GFORMULA SAMPLE';
-options mprint mprintnest notes spool ;
+options mprint mprintnest notes spool mlogic ;
 options nomlogic ;
 options nonotes nomprint ;
 
 %let use_samples_orig = 1 ;
 %let sample_check = -1 ;
+%let BLB_s_start = 1 ; 
 
 %gformula(
 data= sample,
@@ -172,17 +169,33 @@ cov2  = act,    cov2otype  = 4, cov2ptype = lag2cub, cov2randomvisitp = visit_ac
 hazardratio = 0 , 
 bootstrap_hazard = 0 ,
 intcomp = 0 1 ,
-seed= 9458, numint=1,
-nsimul = 1000 ,
-bootstrap_method =1,
-nsamples = 50 ,
-BLB_b = 700 ,
+seed= 9458, numint=0,
+bootstrap_method =2,
+nsamples = 2 ,
+BLB_b = 1000 ,
 BLB_s = 5 /* for outter loop */,
 BLB_r = 5, /* for inner loop, takes place of nsamples */
 
-rungraphs = 1,
+BLB_s_start = 5 ,
+BLB_s_max = 10 ,
+BLB_s_delta = 3 ,
+BLB_s_trend = 3 ,
+BLB_s_epsilon = 0.01,
+BLB_s_test_method  = 4,
+
+
+BLB_r_start = 10 ,
+BLB_r_max = 30 ,
+BLB_r_delta = 10 ,
+BLB_r_trend = 15 ,
+BLB_r_epsilon = 0.01,
+BLB_r_test_method  = 4 ,
+BLB_use_seeds = ,
+rungraphs = 0,
 print_cov_means = 0,
-printlogstats = 0  
+printlogstats = 0,
+expand_param_counts = 1 ,
+expand_simul_counts = 1  
 );
 
 
