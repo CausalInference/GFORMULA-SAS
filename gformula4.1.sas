@@ -8758,6 +8758,9 @@ set _cont  ( where = ( substr(name,1,1)='s'
 
 			%end;
 			%else %if &use_disjoint_blb_samples = 1 %then %do;
+				%local BLB_s_last ii ;
+				%let BLB_s_last = &BLB_s ;
+				%if &bootstrap_method = 2 %then %let BLB_s_last = &BLB_s_max ;
 				data _disjoint0_ ;
 				set tmpids (keep = newid );
 				call streaminit(&seed);
@@ -8770,7 +8773,7 @@ set _cont  ( where = ( substr(name,1,1)='s'
 				                
 				data _disjoint1_;
 				set _disjoint0_ ;
-				%do ii = 1 %to &BLB_s ;
+				%do ii = 1 %to &BLB_s_last ;
 					if %eval((&ii - 1 ) * &BLB_b + 1) <= _N_ <= %eval(&ii * &BLB_b ) then sample_si = &ii ;;
 				%end;
                 if sample_si ne . then output ;
@@ -10748,6 +10751,25 @@ sample = the sth collection of bootstrap samples being tested for convergence. D
 			 maxcheck = -1 ;
 		end;
 		check =   test_std    ;
+		maxcheck = max(maxcheck,check);
+        
+		if _end_ then do ;
+		    if maxcheck > &BLB_s_epsilon then converged = 0 ;
+			else converged = 1 ;
+		    put   maxcheck= converged= ;
+			call symput('sconverged',compress(converged));
+		end;
+		run;
+	%end;
+	%else %if &BLB_s_test_method = 5 %then %do;
+		data test_s ;
+		set test_s end = _end_ ;
+		retain maxcheck  ;
+        if _n_ = 1 then do;
+            
+			 maxcheck = -1 ;
+		end;
+		check =   test_mean    ;
 		maxcheck = max(maxcheck,check);
         
 		if _end_ then do ;
