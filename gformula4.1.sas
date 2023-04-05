@@ -2,7 +2,7 @@
   
 GFORMULA SAS MACRO
 
-Authors: Roger W. Logan, Jessica  G. Young, Sarah L. Taubman, Yu-Han Chiu, Sally Picciotto, Goodarz Danaei, Miguel A. Hern·n
+Authors: Roger W. Logan, Jessica  G. Young, Sarah L. Taubman, Yu-Han Chiu, Sally Picciotto, Goodarz Danaei, Miguel A. Hern√°n
 
 
 Version April 2023. This version includes additions and fixes for the inclusion of the Bag-of-little-bootstraps
@@ -781,7 +781,7 @@ options mautosource minoperator ;
 	  		out=step2 (drop = ExpectedHits SamplingWeight rename = (replicate = sample_rj 
 	                                                                numberhits = BLB_count0))
 	  		method = urs 
-	  		sampsize = &ssize 
+	  		sampsize = &nsimul 
 	  		reps = &BLB_r 
 			seed = %eval(&seed * &seed )
 	  		noprint 
