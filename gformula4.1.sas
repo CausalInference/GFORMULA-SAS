@@ -8792,7 +8792,7 @@ set _cont  ( where = ( substr(name,1,1)='s'
 	  		out=step2 (drop = ExpectedHits SamplingWeight rename = (replicate = sample_rj 
 	                                                                numberhits = BLB_count0))
 	  		method = urs 
-	  		sampsize = &ssize 
+	  		sampsize = &nsimul  
 			%if &bootstrap_method = 1 %then reps = &BLB_r ;
 			%else %if &bootstrap_method = 2 %then reps = &BLB_r_max ; 
 			%if &BLB_keep_seeds = 1 %then outseed ;
