@@ -8827,7 +8827,7 @@ set _cont  ( where = ( substr(name,1,1)='s'
 			%local sstart send sconverged ;
 
 			%if &bootstrap_method = 1 %then %do;
-					%let BLB_s_start = 1 ;
+					%let sstart = 1 ;
 					%let send = &BLB_s ;
 					%let adaptive_iteration = 1 ;
 					%let sconverged = 1 ;
