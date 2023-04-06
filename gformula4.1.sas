@@ -9266,7 +9266,13 @@ set _cont  ( where = ( substr(name,1,1)='s'
 	    %if &runnc = 1 OR (&runnc = 0 AND &numint > 0 AND &refint > 0 ) %then %do;
 	        %if &chunked = 0 %then %do;
 	           %*Summarizing final results;
-	           %results_blb(blb_samples = &BLB_s );
+			   %if &bootstrap_method = 1 %then %do;
+	           		%results_blb(blb_samples = &BLB_s );
+			   %end;
+			   %else %if &bootstrap_method = 2 %then %do;
+                    /* in the adaptive method the number of s samples run is the value of send */
+					%results_blb(blb_samples = &send );
+			   %end;
 	        %end;
 	        %else %if &chunked = 1 AND &sample_start = 0 %then %do;
 	           %local visitlist ;
