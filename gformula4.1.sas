@@ -323,7 +323,7 @@ options mautosource minoperator ;
 	BLB_r_trend = 10 ,
     BLB_r_Epsilon = 0.05 , 
 	BLB_r_test_method = 1 ,
-	BLB_keep_seeds = 0 ,/* save seeds used in selecting the r-samples */
+	
 	BLB_use_seeds = , /* data for storing seeds from previous run */
 
 	monitor_time = 0 
@@ -2451,6 +2451,10 @@ data step2a ; set step2 ; run;
 				call symput('maxipw',trim(left(_maxipw_)));
 				call symput('maxipwl1',trim(left(_maxipwl1_)));
 				run;
+
+				proc datasets library = work nolist ;
+				delete _p99_ ;
+				quit ;
 			%end;
 			%else %do;
 				%let maxipwl1 = &maxipw ;
@@ -7825,9 +7829,9 @@ set _cont  ( where = ( substr(name,1,1)='s'
 		   %end;
 		   %else %if &bootstrap_method > 0  %then %do;
 
-				data mybsres ;
-				set _bsres ;
-				run;
+			*	data mybsres ;
+			*	set _bsres ;
+			*	run;
 		   	
          
 			
@@ -7838,12 +7842,12 @@ set _cont  ( where = ( substr(name,1,1)='s'
 
 				
 
-				data datain ;
+				data _bsres_gt_0 ;
 				set _bsres (where = (_sample_s > 0  ));
 				run;
 			
 
-				%blb_pct_helper( datain = datain , varlistin = &mylist , dataout = _tmp3_) ;
+				%blb_pct_helper( datain = _bsres_gt_0 , varlistin = &mylist , dataout = _tmp3_) ;
 
 				data _bsstd2 ;
 	            set _tmp3_ ;
@@ -7856,6 +7860,9 @@ set _cont  ( where = ( substr(name,1,1)='s'
 	            keep &time lb ub ;
 	            run;
 
+				proc datasets library = work nolist ;
+				delete _bsres_gt_0 _tmp3_ ;
+				quit;
 			%end;
 		%end;
 
@@ -9266,13 +9273,9 @@ set _cont  ( where = ( substr(name,1,1)='s'
 	    %if &runnc = 1 OR (&runnc = 0 AND &numint > 0 AND &refint > 0 ) %then %do;
 	        %if &chunked = 0 %then %do;
 	           %*Summarizing final results;
-			   %if &bootstrap_method = 1 %then %do;
-	           		%results_blb(blb_samples = &BLB_s );
-			   %end;
-			   %else %if &bootstrap_method = 2 %then %do;
-                    /* in the adaptive method the number of s samples run is the value of send */
-					%results_blb(blb_samples = &send );
-			   %end;
+			   
+	           	%results_blb;
+			   
 	        %end;
 	        %else %if &chunked = 1 AND &sample_start = 0 %then %do;
 	           %local visitlist ;
@@ -9980,6 +9983,10 @@ set _cont  ( where = ( substr(name,1,1)='s'
 			set res_s  _cov_std2 ;
 			if _sample_s > . ;
 			run;
+
+			proc datasets library = work nolist ;
+			delete _cov_std2 ;
+			quit;
 	        %end;
 
  		%end; /* sample loop */
@@ -10089,6 +10096,7 @@ set _cont  ( where = ( substr(name,1,1)='s'
 		            %let useboot = 0 ;
 					%if &bootstrap_method = 0 and &nsamples > 0 %then %let useboot = 1 ;
 					%if &bootstrap_method = 1 and &BLB_s > 0 and &BLB_r > 0 %then %let useboot = 1 ;
+					%if &bootstrap_method = 2 and &BLB_s_start > 0 and &BLB_r_start > 0 %then %let useboot = 1 ;
  
                     
                     %construct_graphs(
@@ -10110,15 +10118,26 @@ set _cont  ( where = ( substr(name,1,1)='s'
           %end;
 
 		 
+		  proc datasets library = work nolist ;
+		  delete &covmeandata._test &covmeanname._s _diff_mean_0 cov_results res_s 
+			%if &outctype = binsurv %then _observed_surv_s  cuminc ;
+            ;
+		  quit;
    /*  %end; */
 
 %mend ;
 
 
-%macro results_blb (blb_samples = 1 );
+%macro results_blb ;
 /* blb_samples is BLB_s, the number of outer samples of size BLB_b used in
    bootstrap samples */
 /*****/
+
+
+%local blb_samples ;
+proc sql noprint ;
+select max(_sample_s) as blb_samples into: blb_samples from interv&refint._all ;
+quit;
 
 %if (&check_cov_models = 1 OR &rungraphs = 1  ) AND &runnc = 1 %then %do;
     /* following macro includes the first parts of the results macro */
@@ -10135,6 +10154,10 @@ set _cont  ( where = ( substr(name,1,1)='s'
 
 /* for each sample of size BLB_b of BLB_s samples (outer limit ) use one 
 	 loop of the results macro and then average over the BLB_s subsets */
+
+
+  
+
 
 	 %do sample = 1 %to &blb_samples ;
 
@@ -10213,11 +10236,7 @@ set _cont  ( where = ( substr(name,1,1)='s'
 			  run;
 
 
-	          %*Deleting no longer needed datasets;
-	        *  proc datasets library=work nolist; 
-	        *  delete  interv&i interv&i._all temp&i;
-	        *  quit;
-
+	        
      	%end;
 
 
@@ -10240,7 +10259,10 @@ set _cont  ( where = ( substr(name,1,1)='s'
 				set _inthrstat_s temp_inthrstat_ ;
 				if _sample_s ne . ;
 				run;
-
+         
+			  proc datasets library = work nolist ;
+			  delete temp_inthrstat_ ;
+			  quit;
 
 
 	     %end;
@@ -10303,7 +10325,11 @@ run ;
           if int=. then int=&i;
           run;
 
-		  
+		    %*Deleting no longer needed datasets;
+	          proc datasets library=work nolist; 
+	          delete  interv&i interv&i._all temp&i interv_base&i ;
+	          quit;
+
          
      %end;
 
@@ -10326,7 +10352,13 @@ run ;
 
 	             %let hrub = %sysfunc(compress(&hrub));
 	             %let hrlb = %sysfunc(compress(&hrlb));
+
+				 proc datasets library = work nolist ;
+				 delete _inthrstat_s ;
+				 quit;
 	 %end;
+
+
 
  	data fin;
     merge fin fin_results;
@@ -10408,7 +10440,139 @@ run ;
      %end;
      run;
 
+	 %if &outctype = binsurv %then %do;
+       data ausc (keep = _sample_r _sample_s int ausc&timepoints ) ;
+          set &survdata (keep = int _sample_r _sample_s surv0 - surv&timepoints ) ;
+          array surv{*} surv1 - surv&timepoints ;
+          array ausc{*} ausc1 -  ausc&timepoints ;
+          ausc1 = surv0 ;  /* = 1 */
+          do i = 2 to  &timepoints ;
+               ausc[i]=ausc[i-1]+surv[i];   /* integral of survival curve */
+          end;
+          run;
+          proc transpose data=ausc out=drmst (drop= _NAME_) prefix=rmst;
+          var ausc&timepoints;
+          id int ;
+          by _sample_s _sample_r;
+          run;
 
+          data ausc ;
+          set ausc (where = (_sample_s = 0));
+          run;
+
+          data drmst ;
+          set drmst ;
+          array drmst{*} drmst&intstart - drmst&numint ;
+          array rmst{*} rmst&intstart - rmst&numint ;
+          do i = 1 to %eval(&numint + 1 - &intstart);
+               drmst[i] = rmst[i] - rmst&refint ;
+          end;
+          drop i ;
+          run;
+ 
+          proc univariate data=drmst (where = (_sample_s ne 0)) noprint;
+          
+          var drmst&intstart - drmst&numint ;
+          output out = drmst_stat
+          mean = %do myint=&intstart %to &numint ; drmst&myint._mean %end;
+          std =   %do myint=&intstart %to &numint ; drmst&myint._std %end;
+          pctlpre =  %do myint=&intstart %to &numint ; drmst&myint._ %end;
+          pctlname = llim95 ulim95  pctlpts = 2.5 97.5;
+		  by _sample_s ;
+          run;
+
+          proc univariate data=drmst (where = (_sample_s ne 0 )) noprint;          
+          var rmst&intstart - rmst&numint ;
+          output out = rmst_stat
+          mean = %do myint=&intstart %to &numint ;rmst&myint._mean %end;
+          std =   %do myint=&intstart %to &numint ; rmst&myint._std %end;
+          pctlpre =  %do myint=&intstart %to &numint ; rmst&myint._ %end;
+          pctlname = llim95 ulim95  pctlpts = 2.5 97.5;
+		  by _sample_s ;
+          run;
+
+
+		proc means data = drmst_stat noprint  ;
+		var %do myint=&intstart %to &numint ;
+                  drmst&myint._mean drmst&myint._std drmst&myint._llim95 drmst&myint._ulim95
+             %end;
+			 ;
+		output out = drmst_stat2 mean (%do myint=&intstart %to &numint ;
+                  drmst&myint._mean drmst&myint._std drmst&myint._llim95 drmst&myint._ulim95
+             %end; ) = ;
+		run;
+
+		
+		proc means data = rmst_stat noprint  ;
+		var %do myint=&intstart %to &numint ;
+                  rmst&myint._mean rmst&myint._std rmst&myint._llim95 rmst&myint._ulim95
+             %end;
+			 ;
+		output out = rmst_stat2 mean (%do myint=&intstart %to &numint ;
+                  rmst&myint._mean rmst&myint._std rmst&myint._llim95 rmst&myint._ulim95
+             %end; ) = ;
+		run;
+
+          %let prec = 0.001 ;
+/***/
+          data drmst_out ;
+          merge drmst (where = (_sample_s = 0))  drmst_stat2 rmst_stat2 ;
+          label rmst ='Restricted mean survival time';
+          label rmst_ub = 'Upper limit 95% CI';
+          label rmst_lb = 'Lower limit 95% CI';
+
+          label drmst ='Restricted mean survival time difference';
+          label drmst_ub = 'Upper limit 95% CI';
+          label drmst_lb = 'Lower limit 95% CI';
+
+
+          %do myint=&intstart %to &numint ;
+               int = &myint ;
+               rmst = round(rmst&myint,&prec) ;
+               rmst_mean = round(rmst&myint._mean, &prec ) ;
+               rmst_std = round(rmst&myint._std,&prec) ;
+               rmst_lb = round(rmst&myint._llim95,&prec) ;
+               rmst_ub = round(rmst&myint._ulim95,&prec) ;
+
+               drmst = round(drmst&myint,&prec) ;
+               drmst_mean = round(drmst&myint._mean,&prec) ;
+               drmst_std = round(drmst&myint._std,&prec) ;
+               drmst_lb = round(drmst&myint._llim95,&prec) ;
+               drmst_ub = round(drmst&myint._ulim95,&prec) ;
+
+               output ;
+          %end;
+
+          keep int rmst rmst_mean rmst_std rmst_lb rmst_ub  drmst drmst_mean drmst_std drmst_lb drmst_ub ;
+          run;
+
+
+          title4 "RESTRICTED MEAN SURVIVAL TIME AFTER &timepoints TIME POINTS";
+          title7 "Data= &data, Sample size= &ssize, Monte Carlo sample size= &nsimul";
+          %if &use_disjoint_blb_samples = 0 %then %do;
+     		title8 "Number of bootstrap samples using Bag of Little Bootstraps method with &BLB_s samples of size &BLB_b, each with &BLB_r samples of size &nsimul";
+	 	  %end;
+	      %else %if &use_disjoint_blb_samples = 1 %then %do;
+     	    title8 "Number of bootstrap samples using Bag of Little Bootstraps method with &BLB_s disjoint samples of size &BLB_b, each with &BLB_r samples of size &nsimul";
+	      %end;
+	      %if &bootstrap_method = 2 %then %do;
+			 title8 "Number of bootstrap samples using Bag of Little Bootstraps method using &BLB_s samples of size &BLB_b with adaptive selection of r using &bsample_counter bootstrap samples"; 
+	      %end;
+          title9 "Reference intervention is &refint";
+          proc print data = drmst_out noobs label double ;
+          var int rmst rmst_lb rmst_ub  drmst drmst_lb drmst_ub ;
+          run;
+ 
+
+	 %end;
+
+	 proc datasets library=work nolist; 
+     delete    _paramdata_  _simuldata_ _inputd_ _beta_  _ref_ _ref_s fin_s fin finfin fin_results 
+     %if &outctype = binsurv %then ausc drmst drmst_stat rmst_stat drmst_stat2 rmst_stat2 drmst_out  ;
+     %if &check_cov_models %then _diff_mean  _cov_std2 
+     %do ii = 0 %to &ncov ; _mean_&ii %if &&usevisitp&ii = 1 %then _mean_vp&ii ; %end ;
+      step1 step2  ;        
+     quit; 
 %mend ;
 
 
@@ -10446,6 +10610,10 @@ proc means data = _tmp2_ noprint ;
 var &varlisttmp ;
 output out = &dataout ( keep = &varlisttmp  ) mean( &varlisttmp  ) = ;
 run;
+
+proc datasets library = work nolist ;
+delete _tmp_ _tmp2_ ;
+quit ;
 
 %mend ;
 
@@ -10507,6 +10675,9 @@ data test_s ; run ;
 			  	set test_r temp&i ;			  
 			  	run;
 			  %end;
+			  proc datasets library = work nolist ;
+			  delete temp&i rsubset&i ;
+			  quit;
      	%end;
 
   
@@ -10529,16 +10700,19 @@ data test_s ; run ;
 	test_ulimit = abs((pd_ulim95 - ref_ulimit)/ref_ulimit) ;
 	test_mean = abs((pd_mean - ref_mean)/ref_mean );
 	test_std = abs((pd_std - ref_std )/ref_std );
+	%if &bootstrap_method = 2 AND &BLB_s_max = 1 %then %do;
+		if _n_ = 1 then put "percentile estimates using &rend samples " ref_llimit= ref_ulimit= ;
+	%end;
 	run;
 
 	%if &BLB_r_test_method = 1 %then %do;
 		proc means data = test_r noprint;
 		var test_llimit test_ulimit ;
-		output out = test_s2 sum(test_llimit test_ulimit)= ;
+		output out = test_r2 sum(test_llimit test_ulimit)= ;
 		run;
 
-		data test_s2 ;
-		set test_s2 ;
+		data test_r2 ;
+		set test_r2 ;
 		conv_check = test_llimit + test_ulimit ;
 		if conv_check > &BLB_r_epsilon then converged  = 0 ;
 		else converged = 1 ;
@@ -10607,7 +10781,9 @@ data test_s ; run ;
 
 /*	%let rconverged = 1 ; */
 
-
+proc datasets library = work nolist ;
+delete test_r %if &BLB_r_test_method = 1 %then test_r2 ;;
+quit;
 
 %mend ;
 %macro check_sconvergence (sample = 1) ;
@@ -10686,6 +10862,10 @@ sample = the sth collection of bootstrap samples being tested for convergence. D
 			  	set test_s temps&i ;			  
 			  	run;
 			  %end;
+
+			  proc datasets library = work nolist ;
+			  delete ssubset&i temps&i ;
+			  quit;
      	%end;
 
   
@@ -10802,4 +10982,8 @@ sample = the sth collection of bootstrap samples being tested for convergence. D
 		end;
 		run;
 	%end;
+
+	proc datasets library = work nolist ;
+	delete test_s %if &BLB_s_test_method = 1 %then test_s2 ;;
+	quit;
 %mend ;
