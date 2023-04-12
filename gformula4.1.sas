@@ -393,6 +393,12 @@ options mautosource minoperator ;
 		%let bootstrap_counts = BLB_counts ;
 		%let bsample_counter = 0 ;
 	%end;
+	%if &bootstrap_method = 1 %then %do;
+		%let BLB_s_start = 1 ;
+		%let BLB_s_max = &BLB_s ;
+		%let BLB_r_start = 1 ;
+		%let BLB_r_max = &BLB_r ;
+	%end;
 
     %let uselabelo = 0 ;
     %let uselabelc = 0 ;
@@ -482,7 +488,7 @@ options mautosource minoperator ;
     %else %let chunked = 1 ;
  
     /* rename saved data sets to contain first and last sample in the name */
-
+ 
     %if &chunked = 1 %then %do;
          /* rename the survival data if desired. need to consider the case where there
             is a libname. will change this to be the savelib variable */                           
@@ -501,7 +507,6 @@ options mautosource minoperator ;
                 %PUT INTERMEDIATE RESULTS IN A CONSISTENT WAY. ;
                  %GOTO exit;
             %end;
-
             %else %let survdata = survdata_all ;
         %end;
 
@@ -561,7 +566,7 @@ options mautosource minoperator ;
         %let hazardname = _inthr_ ;
                 
     %end;
-    
+	
     
     /* set starting seed for run */
 
@@ -647,6 +652,7 @@ options mautosource minoperator ;
     %*Preparing data;    
     %dataprep;
      
+
      
 
     %if %bquote(&nparam)= %then %let nparam=&ssize;
@@ -688,32 +694,35 @@ options mautosource minoperator ;
 
     %*Exiting in case of error;
     %exit:;
-  %if &monitor_time = 1 %then %do;
-    %local start_time_base_sample start_time_bootstraps  ;
+  	%if &monitor_time = 1 %then %do;
+    	%local start_time_base_sample start_time_bootstraps  ;
 		data _null_;
     	tm = datetime();	 
 		put tm= nldatm.;
     	call symput('start_time_base_sample', put(tm, z15.));
 		run;
 	%end; 
-%put before base_sample : seed = &seed ;
-	%base_sample ;
-%put after base_sample :  seed = &seed ;
 
-%if &monitor_time = 1 %then %do;    
-	data _null_;
-    _start = &start_time_base_sample;
-    _end = datetime();
-	put "End time for base sample : " _end= nldatm.;
-    elaps = _end - _start;
-    put ">>> Total run time for base sample (processing data not included ) : " elaps= time9.;
-	%if   ((&bootstrap_method = 0 AND &nsamples > 0 ) OR (&bootstrap_method > 0 AND &BLB_s > 0 AND &BLB_r > 0 )) %then %do; 
-    	tm = datetime();	 
-		put"Start time for bootstraps :" tm= nldatm.;
-    	call symput('start_time_bootstraps', put(tm, z15.));
+    %if &sample_start = 0 %then %do;
+		%put before base_sample : seed = &seed ;
+		%base_sample ;
+		%put after base_sample :  seed = &seed ;
 	%end;
-	run;
-%end;
+
+	%if &monitor_time = 1 %then %do;    
+		data _null_;
+	    _start = &start_time_base_sample;
+	    _end = datetime();
+		put "End time for base sample : " _end= nldatm.;
+	    elaps = _end - _start;
+	    put ">>> Total run time for base sample (processing data not included ) : " elaps= time9.;
+		%if   ((&bootstrap_method = 0 AND &nsamples > 0 ) OR (&bootstrap_method > 0 AND &BLB_s > 0 AND &BLB_r > 0 )) %then %do; 
+	    	tm = datetime();	 
+			put"Start time for bootstraps :" tm= nldatm.;
+	    	call symput('start_time_bootstraps', put(tm, z15.));
+		%end;
+		run;
+	%end;
 
 	%if &bootstrap_method = 0  %then %do;
 		%bootstrap_normal ;
@@ -4854,7 +4863,8 @@ intusermacro7=,
        title2= ,
        title3= ,
        tsize = 1,
-       printlogstats = 1
+       printlogstats = 1,
+	   bootstrap_method = 0 
        );
 
     
@@ -5063,7 +5073,24 @@ intusermacro7=,
       %end;
  
 
-      %results ;
+      %if &bootstrap_method = 0 %then %do;
+      	%results ;
+	  %end ;
+	  %else %do;
+	     proc sql noprint ;
+		 select max(_sample_s) as blb_s into: BLB_s from &survdata (where = (int=&refint));
+		 %if &bootstrap_method = 1 %then %do;
+		 select max(_sample_r ) as blb_r into: BLB_r from &survdata (where = (int = &refint and _sample_s > 0)) ;
+		 %end ;
+		 %else %if &bootstrap_method = 2 %then %do;
+			select count(_sample_r ) as blb_r into: bsample_counter from &survdata (where = (int = &refint and _sample_s > 0)) ;
+		 %end;
+		 quit;
+		 %let BLB_s = %sysfunc(left(&BLB_s));
+		 %if &bootstrap_method = 1 %then %let BLB_r = %sysfunc(left(&BLB_r));
+		 %if &bootstrap_method = 2 %then %let bsample_counter = %sysfunc(left(&bsample_counter));
+	  	%results_blb ;
+	  %end;
 
 %mend ;
 
@@ -7421,6 +7448,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
    
 
    RD = round(RD*100)/100;
+
    RD_mean = round(RD_mean*100)/100;
    RD_std  = round(RD_std*100)/100;
    
@@ -8750,11 +8778,15 @@ set _cont  ( where = ( substr(name,1,1)='s'
        /* as a first test we will generate ids for all samples used in BLB method */ 
 		
 
-		%local use_blb_sampling ;
+		%local use_blb_sampling  ran_basemodel;
 		%let use_blb_sampling = 1 ;
+		%let ran_basemodel = 0;
 		%if ((&bootstrap_method = 2 and &BLB_s_start = 1 AND &BLB_s_max = 1) or (&bootstrap_method = 1 and &BLB_s = 1)) AND &test_blb_using_samples_orig = 1
 			%then %let use_blb_sampling = 0 ;
-		%if &sample_start = 0 %then %let sample_start = 1 ;
+		%if &sample_start = 0 %then %do ;
+			%let sample_start = 1 ;   
+			%let ran_basemodel = 1 ;
+		%end;
 
         %if &BLB_s > 0  AND  &BLB_r > 0 %then %do; 
 			%if &use_blb_sampling = 1 %then %do;
@@ -8845,12 +8877,22 @@ set _cont  ( where = ( substr(name,1,1)='s'
 					%let send = &BLB_s ;
 					%let adaptive_iteration = 1 ;
 					%let sconverged = 1 ;
+					%if &chunked = 1 %then %do;
+						%let sstart = &sample_start ;
+						%let send = &sample_end ;
+					%end;
 			%end ;
         	%else %if &bootstrap_method = 2 %then %do;
 					%let sstart = 1 ;
 					%let send = &BLB_s_start ;
 					%let adaptive_iteration = 1 ;
             		%let sconverged = 0 ;
+					%if &chunked = 1 %then %do;
+						%let sstart = &sample_start ;
+						%let send = &sample_end ;
+						%let sconverged = 1 ;
+						%put IN ADAPTIVE METHOD WHEN RUNNING PROGRAM IN CHUNKS, ADAPTIVE METHOD FOR S IS TURNED OFF;
+					%end ;
 			%end;
 				
 
@@ -9155,7 +9197,7 @@ set _cont  ( where = ( substr(name,1,1)='s'
 	            				%end;   
 
 	         
-				                %if &sample_s = &sample_start AND &sample_r = 1 AND &chunked = 1  %then %do;  
+				                %if &sample_s = &sample_start AND &sample_r = 1 AND &chunked = 1 AND &ran_basemodel = 0   %then %do;  
 				                    data &survdata ;
 				                    set  surv_tmp0 ;
 				                    run;
@@ -9171,7 +9213,7 @@ set _cont  ( where = ( substr(name,1,1)='s'
 
 					        %do intnum = 1 %to &numint;
 					            %interv(&&interv&intnum);                    
-					                %if &intnum = 1 AND &runnc = 0 AND &sample_s = &sample_start AND &sample_r = 1 AND &chunked = 1 %then %do;
+					                %if &intnum = 1 AND &runnc = 0 AND &sample_s = &sample_start AND &sample_r = 1 AND &chunked = 1 AND &ran_basemodel = 0 %then %do;
 					                      data &survdata ;
 					                      set surv_tmp&intnum ;
 					                      run;
@@ -9187,12 +9229,12 @@ set _cont  ( where = ( substr(name,1,1)='s'
 					        %let intstart = 0 ;
 					        %if &runnc = 0 %then %let intstart = 1;
 
-					        %if %eval(&sample_s) = &sample_start and &sample_r = 1 and &chunked = 1 %then %do;  
+					        %if %eval(&sample_s) = &sample_start and &sample_r = 1 and &chunked = 1 AND &ran_basemodel = 0   %then %do;  
 					           
 					            %do int = &intstart %to %eval(&numint);
 					                
 					                data interv&int._all;
-					                    set interv&int;
+					                set interv&int;
 					                run;
 					            %end;
 					        %end;
@@ -9205,7 +9247,7 @@ set _cont  ( where = ( substr(name,1,1)='s'
 
 					        %if &chunked = 1 %then %do;
 					             /* save all interventions into a permanent data set for each chunk */
-					             %if &sample_s = &sample_start and &sample_r = 1 and &chunked = 1  %then %do; 
+					             %if &sample_s = &sample_start and &sample_r = 1 AND &ran_basemodel = 0    %then %do; 
 
 					                  /* save interventions */
 					                  %if &runnc = 1 %then %do;
@@ -9264,7 +9306,7 @@ set _cont  ( where = ( substr(name,1,1)='s'
 								%if &rend > &BLB_r_max %then %let rend = &BLB_r_max ;
 								%if &rstart > &BLB_r_max %then %do;
 									%let rconverged = 1 ;
-									%put STOPPING ADAPTIVE ITERATION  FOR S = &sample_s SINCE &rstart > &BLB_r_max ;
+									%put STOPPING ADAPTIVE ITERATION  FOR R = &sample_r SINCE &rstart > &BLB_r_max ;
 								%end ;
 	    					%end;
 
@@ -9302,7 +9344,7 @@ set _cont  ( where = ( substr(name,1,1)='s'
 	           	%results_blb;
 			   
 	        %end;
-	        %else %if &chunked = 1 AND &sample_start = 0 %then %do;
+	        %else %if &chunked = 1 AND &ran_basemodel = 1  %then %do;
 	           %local visitlist ;
 	           %let visitlist = ;
 	           %do i = 1 %to &ncov;
@@ -9344,7 +9386,8 @@ set _cont  ( where = ( substr(name,1,1)='s'
 	               title2= &title2,
 	               title3= &title3,
 	               tsize = &tsize,
-	               printlogstats = &printlogstats
+	               printlogstats = &printlogstats ,
+				   bootstrap_method = &bootstrap_method
 	               );
 	              
 	           
@@ -9358,9 +9401,10 @@ set _cont  ( where = ( substr(name,1,1)='s'
    want code for original data , no looping 
    for bsample = 0 
 ************/
-%put RUNNING BASE MODEL CODE FROM BASE_SAMPLE ;
+	%put RUNNING BASE MODEL CODE FROM BASE_SAMPLE ;
 
     %if &sample_start = 0 %then %let bsample = 0 ;
+	%else %let bsample = 1 ; /* place holder ??? */
 
     %if &bootstrap_method > 0 %then %do;
 		%let sample_r = 0 ;
