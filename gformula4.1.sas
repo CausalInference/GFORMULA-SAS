@@ -325,7 +325,7 @@ options mautosource minoperator ;
 	BLB_r_test_method = 1 ,
 	
 	BLB_use_seeds = , /* data for storing seeds from previous run */
-
+    test_blb_using_samples_orig = 0 ,
 	monitor_time = 0 
     );
 
@@ -792,7 +792,6 @@ options mautosource minoperator ;
 
 			%let seed = %eval(&seed * &seed ) ;
 
-data step2a ; set step2 ; run;
 
 
 %end;
@@ -8757,83 +8756,89 @@ set _cont  ( where = ( substr(name,1,1)='s'
        /* as a first test we will generate ids for all samples used in BLB method */ 
 		
 
+		%local use_blb_sampling ;
+		%let use_blb_sampling = 1 ;
+		%if ((&bootstrap_method = 2 and &BLB_s_start = 1 AND &BLB_s_max = 1) or (&bootstrap_method = 1 and &BLB_s = 1)) AND &test_blb_using_samples_orig = 1
+			%then %let use_blb_sampling = 0 ;
 		%if &sample_start = 0 %then %let sample_start = 1 ;
 
         %if &BLB_s > 0  AND  &BLB_r > 0 %then %do; 
-		    %if &use_disjoint_blb_samples = 0 %then %do;
-				proc surveyselect data = tmpids(keep =newid ) out = step1 (rename = (replicate = sample_si))
-	   			method = srs 
-	   			sampsize = &BLB_b 
-	   			reps = &BLB_s_max 
-				seed = &seed 
-	   			noprint 
-	   				;
-				run ;
+			%if &use_blb_sampling = 1 %then %do;
+			    %if &use_disjoint_blb_samples = 0 %then %do;
+					proc surveyselect data = tmpids(keep =newid ) out = step1 (rename = (replicate = sample_si))
+		   			method = srs 
+		   			sampsize = &BLB_b 
+		   			reps = &BLB_s_max 
+					seed = &seed 
+		   			noprint 
+		   				;
+					run ;
 
-			%end;
-			%else %if &use_disjoint_blb_samples = 1 %then %do;
-				%local BLB_s_last ii ;
-				%let BLB_s_last = &BLB_s ;
-				%if &bootstrap_method = 2 %then %let BLB_s_last = &BLB_s_max ;
-				data _disjoint0_ ;
-				set tmpids (keep = newid );
-				call streaminit(&seed);
-				x = rand('uniform');
-				run;
-
-				proc sort data = _disjoint0_ ;
-				by x ;
-				run;
-				                
-				data _disjoint1_;
-				set _disjoint0_ ;
-				%do ii = 1 %to &BLB_s_last ;
-					if %eval((&ii - 1 ) * &BLB_b + 1) <= _N_ <= %eval(&ii * &BLB_b ) then sample_si = &ii ;;
 				%end;
-                if sample_si ne . then output ;
-                run;
+				%else %if &use_disjoint_blb_samples = 1 %then %do;
+					%local BLB_s_last ii ;
+					%let BLB_s_last = &BLB_s ;
+					%if &bootstrap_method = 2 %then %let BLB_s_last = &BLB_s_max ;
+					data _disjoint0_ ;
+					set tmpids (keep = newid );
+					call streaminit(&seed);
+					x = rand('uniform');
+					run;
 
-				data step1 ;
-				set _disjoint1_ (keep = newid sample_si );
+					proc sort data = _disjoint0_ ;
+					by x ;
+					run;
+					                
+					data _disjoint1_;
+					set _disjoint0_ ;
+					%do ii = 1 %to &BLB_s_last ;
+						if %eval((&ii - 1 ) * &BLB_b + 1) <= _N_ <= %eval(&ii * &BLB_b ) then sample_si = &ii ;;
+					%end;
+	                if sample_si ne . then output ;
+	                run;
+
+					data step1 ;
+					set _disjoint1_ (keep = newid sample_si );
+					run;
+
+					proc sort data = _disjoint1_ (keep = newid sample_si) out = step1 ;
+					by sample_si newid ;
+					run;
+
+            	%end;
+				proc surveyselect data = step1 
+		  		out=step2 (drop = ExpectedHits SamplingWeight rename = (replicate = sample_rj 
+		                                                                numberhits = BLB_count0))
+		  		method = urs 
+		  		sampsize = &nsimul  
+				%if &bootstrap_method = 1 %then reps = &BLB_r ;
+				%else %if &bootstrap_method = 2 %then reps = &BLB_r_max ; 
+				/* %if &BLB_keep_seeds = 1 %then outseed ;*/
+				outseed 
+				%if %bquote(&BLB_use_seeds)^= %then %do ;
+					seed = &BLB_use_seeds 
+				%end;
+				%else %do;
+					seed = %eval(&seed * &seed )
+				%end;
+		  		noprint 
+		 			;
+		  		strata sample_si ;
 				run;
 
-				proc sort data = _disjoint1_ (keep = newid sample_si) out = step1 ;
-				by sample_si newid ;
+			
+				data _blb_seeds_;
+				set step2(keep = sample_si InitialSeed );
+				by sample_si ;
+				if first.sample_si ;
 				run;
 
-            %end;
-			proc surveyselect data = step1 
-	  		out=step2 (drop = ExpectedHits SamplingWeight rename = (replicate = sample_rj 
-	                                                                numberhits = BLB_count0))
-	  		method = urs 
-	  		sampsize = &nsimul  
-			%if &bootstrap_method = 1 %then reps = &BLB_r ;
-			%else %if &bootstrap_method = 2 %then reps = &BLB_r_max ; 
-			/* %if &BLB_keep_seeds = 1 %then outseed ;*/
-			outseed 
-			%if %bquote(&BLB_use_seeds)^= %then %do ;
-				seed = &BLB_use_seeds 
-			%end;
-			%else %do;
-				seed = %eval(&seed * &seed )
-			%end;
-	  		noprint 
-	 			;
-	  		strata sample_si ;
-			run;
-
-		
-			data _blb_seeds_;
-			set step2(keep = sample_si InitialSeed );
-			by sample_si ;
-			if first.sample_si ;
-			run;
-
-			data step2 ;
-			set step2 (drop = InitialSeed );
-			run;
+				data step2 ;
+				set step2 (drop = InitialSeed );
+				run;
 			
 
+			%end;
 
     		%*Looping over bootstrap samples;
 
@@ -8877,12 +8882,14 @@ set _cont  ( where = ( substr(name,1,1)='s'
 	            		%let rconverged = 0 ;
 					%end;
 
-
-					data _null_ ;
-					set _blb_seeds_ (where = (sample_si = &sample_s )) ;
-					call symput('seed',left(InitialSeed));
-					put "starting r loop with " _all_ ;
-					run;
+					%if &use_blb_sampling = 1 %then %do;
+						data _null_ ;
+						set _blb_seeds_ (where = (sample_si = &sample_s )) ;
+						call symput('seed',left(InitialSeed));
+						put "starting r loop with " _all_ ;
+						run;
+					%end;
+					%else %put starting r loop with seed = &seed ;
 
 					%do %until ( &rconverged = 1 ); /* the do until always runs one iteration and checks condtion at end of loop */
 
@@ -8894,8 +8901,35 @@ set _cont  ( where = ( substr(name,1,1)='s'
 							%if &printlogstats = 1 %then %put  before sample =  ( &sample_s , &sample_r )   seed = &seed ;
 							%if &printlogstats = 1 %then %put  ;
 
-			        		%samples_blb(sample_s = &sample_s , sample_r = &sample_r ); 
+							%if &use_blb_sampling = 1 %then %do ;
+			        			%samples_blb(sample_s = &sample_s , sample_r = &sample_r ); 
+							%end;
+							%else %do;
+								%samples ;
+								data param ;
+								set param (rename = ( bootstrap_counts = BLB_counts)) ;
+								sample_s = &sample_s ;
+								sample_r = &sample_r ;
+								run ;
 
+							    data simul ;
+								*set simul (drop = bootstrap_counts );
+								set simul (drop = _sample_ rename = (bootstrap_counts = BLB_counts) );
+								_sample_s = &sample_s ;
+								_sample_r = &sample_r ;
+								run;
+
+								proc contents data = simul ;
+								run;
+
+								data _covbounds_ ;
+								set _covbounds_ (drop = _sample_) ;
+								_sample_s = &sample_s ;
+								_sample_r = &sample_r ;
+								run;
+
+	
+							%end;
 
 
 							%if &sample_r = &sample_check and &sample_s = 1  %then %do;
