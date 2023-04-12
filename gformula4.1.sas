@@ -1961,11 +1961,6 @@ options mautosource minoperator ;
 	%end;
 
 
-	%if &expand_param_counts = 0 %then %do ;
-		proc means data = param (where = (&time = 0)) n sum ;
-		var bootstrap_counts ;
-		run;
-	 %end;
        * reset the outcome and covariate bounds to that models and simulated 
         values depend on what would be the observed bounds ;
 
@@ -7426,7 +7421,6 @@ not the time-varying covariates, which are handled below in %interactionsb*/
    
 
    RD = round(RD*100)/100;
-
    RD_mean = round(RD_mean*100)/100;
    RD_std  = round(RD_std*100)/100;
    
@@ -8917,9 +8911,6 @@ set _cont  ( where = ( substr(name,1,1)='s'
 								set simul (drop = _sample_ rename = (bootstrap_counts = BLB_counts) );
 								_sample_s = &sample_s ;
 								_sample_r = &sample_r ;
-								run;
-
-								proc contents data = simul ;
 								run;
 
 								data _covbounds_ ;
