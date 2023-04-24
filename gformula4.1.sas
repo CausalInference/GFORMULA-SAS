@@ -680,10 +680,10 @@ options mautosource minoperator ;
 		%else %if &bootstrap_method = 2 %then %do;
 			%if %eval(&BLB_s_max * &BLB_b ) > &ssize %then %do;
 				%let max_blb_s = %sysevalf(&ssize / &BLB_b) ;
-				%let blb_s_orig = BLB_s_max ;
+				%let blb_s_orig = &BLB_s_max ;
 				%let BLB_s_max = %sysfunc(int(&max_blb_s));
 				%PUT -----------------------------;
-				%PUT BLB_S_MAX CHANGED FROM &BLB_s_orig TO &_max SO THAT THE TOTAL NUMBER OF SUBJECTS SELECTED ;
+				%PUT BLB_S_MAX CHANGED FROM &BLB_s_orig TO &BLB_s_max SO THAT THE TOTAL NUMBER OF SUBJECTS SELECTED ;
 				%PUT FOR ALL BLB_S_MAX * BLB_B SAMPLES IS LESS THAN &ssize. MAXIMUM IS NOW %eval(&BLB_s_max * &BLB_r ) ;
 				%PUT -----------------------------;
 
@@ -832,10 +832,7 @@ options mautosource minoperator ;
                 %if &uselabelc = 0  and &uselabelo = 0 %then options nolabel ;;
                 %parameters;     
                 options &label_orig ;  
-				%if &bsample = &sample_check %then %do;
-					data param1 ; set param ; run ;
-					data simul1 ; set simul ; run ;				
-			 	%end; 
+			
         %end;
 
         %else %do; /*feb2013*/
@@ -8965,20 +8962,13 @@ set _cont  ( where = ( substr(name,1,1)='s'
 							%end;
 
 
-							%if &sample_r = &sample_check and &sample_s = 1  %then %do;
-								data param2 ; set param ; run ;
-								data simul2 ; set simul ; run ;
-				 			%end; 
+							 
 			        		%*Estimating parameters;
 			        		%if &usebetadata = 0 %then %do;            
 			                	%if &uselabelc = 0  and &uselabelo = 0 %then options nolabel ;;
 			                	%parameters;     
 			                	options &label_orig ;  
-								%if &sample_r = &sample_check and &sample_s = 1  %then %do;
-									data param2 ; set param ; run ;
-									data simul2 ; set simul ; run ;
-							
-				 				%end;  
+							 
 			        		%end;
 
 			        		%else %do; /*feb2013*/
@@ -9405,7 +9395,6 @@ set _cont  ( where = ( substr(name,1,1)='s'
 
     %if &sample_start = 0 %then %let bsample = 0 ;
 	%else %let bsample = 1 ; /* place holder ??? */
-
     %if &bootstrap_method > 0 %then %do;
 		%let sample_r = 0 ;
 		%let sample_s = 0 ;
@@ -10344,10 +10333,10 @@ run;
 
 
 
-%let mylist = pd_mean rr_mean rd_mean nnt_mean 
-              pd_std  rr_std  rd_std  nnt_std 
-              pd_llim95 rr_llim95 rd_llim95 nnt_llim95
-			  pd_ulim95 rr_ulim95 rd_ulim95 nnt_ulim95 ;
+%let mylist = &pd._mean rr_mean rd_mean nnt_mean 
+              &pd._std  rr_std  rd_std  nnt_std 
+              &pd._llim95 rr_llim95 rd_llim95 nnt_llim95
+			  &pd._ulim95 rr_ulim95 rd_ulim95 nnt_ulim95 ;
 
 proc means data = fin_s noprint ;
 var &mylist ;
@@ -10760,15 +10749,15 @@ data test_s ; run ;
 	set test_r ;
 	retain ref_llimit ref_ulimit ref_mean ref_std ;
 	if test_sample = &rend then do ;
-		ref_llimit = pd_llim95 ;
-		ref_ulimit = pd_ulim95 ;
-		ref_mean   = pd_mean;
-		ref_std    = pd_std ;
+		ref_llimit = &pd._llim95 ;
+		ref_ulimit = &pd._ulim95 ;
+		ref_mean   = &pd._mean;
+		ref_std    = &pd._std ;
 	end;
-	test_llimit = abs((pd_llim95 - ref_llimit)/ref_llimit) ;
-	test_ulimit = abs((pd_ulim95 - ref_ulimit)/ref_ulimit) ;
-	test_mean = abs((pd_mean - ref_mean)/ref_mean );
-	test_std = abs((pd_std - ref_std )/ref_std );
+	test_llimit = abs((&pd._llim95 - ref_llimit)/ref_llimit) ;
+	test_ulimit = abs((&pd._ulim95 - ref_ulimit)/ref_ulimit) ;
+	test_mean = abs((&pd._mean - ref_mean)/ref_mean );
+	test_std = abs((&pd._std - ref_std )/ref_std );
 	%if &bootstrap_method = 2 AND &BLB_s_max = 1 %then %do;
 		if _n_ = 1 then put "percentile estimates using &rend samples " ref_llimit= ref_ulimit= ;
 	%end;
@@ -10847,6 +10836,14 @@ data test_s ; run ;
 		end;
 		run;
 	%end;
+
+%if &rconverged = 1  or &rend = &BLB_r_max %then %do;
+	data _null_ ;
+	set test_r ; 
+	if _n_ = 1 then put "percentile estimates for sample &sample_s using &rend r-samples " ref_llimit= ref_ulimit= ;
+	run;
+
+%end ;
 
 /*	%let rconverged = 1 ; */
 
@@ -10948,15 +10945,16 @@ sample = the sth collection of bootstrap samples being tested for convergence. D
 	set test_s (rename = (&pd._pct025=&pd._llim95 &pd._pct975 = &pd._ulim95 )) ;
 	retain ref_llimit ref_ulimit ref_mean ref_std ;
 	if test_sample = &send then do ;
-		ref_llimit = pd_llim95 ;
-		ref_ulimit = pd_ulim95 ;
-		ref_mean   = pd_mean;
-		ref_std    = pd_std ;
+		ref_llimit = &pd._llim95 ;
+		ref_ulimit = &pd._ulim95 ;
+		ref_mean   = &pd._mean;
+		ref_std    = &pd._std ;
 	end;
-	test_llimit = abs((pd_llim95 - ref_llimit)/ref_llimit) ;
-	test_ulimit = abs((pd_ulim95 - ref_ulimit)/ref_ulimit) ;
-	test_mean = abs((pd_mean - ref_mean)/ref_mean );
-	test_std = abs((pd_std - ref_std )/ref_std );
+	test_llimit = abs((&pd._llim95 - ref_llimit)/ref_llimit) ;
+	test_ulimit = abs((&pd._ulim95 - ref_ulimit)/ref_ulimit) ;
+	test_mean = abs((&pd._mean - ref_mean)/ref_mean );
+	test_std = abs((&pd._std - ref_std )/ref_std );
+	if _n_ = 1 then put "using &send s-samples " ref_llimit= ref_ulimit= ref_mean= ref_std= ;
 	run;
 
 	%if &BLB_s_test_method = 1 %then %do;
