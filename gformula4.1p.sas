@@ -4,9 +4,13 @@ GFORMULA SAS MACRO
 
 Authors: Roger W. Logan, Jessica  G. Young, Sarah L. Taubman, Yu-Han Chiu, Sally Picciotto, Goodarz Danaei, Miguel A. Hernán
 
+
+Version April 2023. This version includes additions and fixes for the inclusion of the Bag-of-little-bootstraps
+method.
+-
 Version April 2022. This version includes additions and fixes for the inclusion of censoring in the calculation of the natural 
 course risks and means of covariates under the simulation of the natural course.
-
+-
 Version September 2021. This viersion includes fixes to rcspline macro for using negative knots and listpred for 
 including variabls of ptype cumavg twice in the model lists.
 
@@ -296,7 +300,44 @@ options mautosource minoperator ;
     usespline = 1,
     checkaddvars = 1,
     minimalistic = no, /* only keep results for outcome variables */
-    testing = no       /* keep each simulated data set for each intervention. will be named savelib.simulated&intno */
+    testing = no    ,   /* keep each simulated data set for each intervention. will be named savelib.simulated&intno */
+	bootstrap_method = 0 ,
+	use_samples_orig = 1 ,
+	use_bootstrap_counts = 0 ,
+	expand_param_counts = 1 ,
+	expand_simul_counts = 1 ,
+	BLB_b =  ,
+	BLB_s = ,
+	BLB_r = ,
+    use_disjoint_blb_samples = 0 ,
+
+	BLB_s_start = 3,
+	BLB_s_max = 10 ,
+	BLB_s_delta = 3,
+	BLB_s_trend = 3 ,
+	BLB_s_epsilon = 0.05,
+	BLB_s_test_method = 3 ,
+	BLB_r_start = 20 , /* for adaptive blb method */
+	BLB_r_max = 50 ,
+    BLB_r_delta = 5 ,
+	BLB_r_trend = 10 ,
+    BLB_r_Epsilon = 0.05 , 
+	BLB_r_test_method = 1 ,
+	
+	BLB_use_seeds = , /* data for storing seeds from previous run */
+    test_blb_using_samples_orig = 0 ,
+	monitor_time = 0 ,
+        run_remote = 0 ,   /* use sas connect to run some bootstraps remotely. alternative to chunking a run */
+        check_remote = 1, 
+        use_sascmd = 1,
+        localhost = 1 , 
+	nlocalhosts= 1,
+        DistLog =   distribute.log , /* name of file for remote log files when dist_debug=0 */
+        DistLst =   distribute.lst , /* name of file for remote list files when dist_debug=0 */
+        DIST_DETAIL = 1,     /* Print timing info from servers?          */
+        DIST_STATUS = 0,     /* Print periodic status lines for servers? */
+        DIST_DEBUG  = 0     /* Print debugging information              */
+
     );
 
 
@@ -309,6 +350,8 @@ options mautosource minoperator ;
           cov0moddatausermacro cov0setblvar cov0simusermacro cov0barray cov0sarray cov0randomvisitp cov0visitpmaxgap cov0visitpwherem
           cov0visitpcount cov0visitpelse  newsimulkeeplist;
     %local covlist ;
+	%local bootstrap_counts sample_r sample_s created_dataviews bsample_counter ;
+	%let created_dataviews = 0 ;
     %local anytsswitch1 anylagcumavg ; /* any ptype equal to tsswitch1 for creating spline variables */
     %let anytsswitch1 = 0 ;
     %let anylagcumavg = 0 ;
@@ -350,6 +393,23 @@ options mautosource minoperator ;
          %put ERROR: When not running the natural course analysis, refint must be different from 0;
          %goto exit;
     %end;
+
+
+	
+	%if &bootstrap_method = 0 %then %do;
+		%let bootstrap_counts = bootstrap_counts ;
+		%let bsample_counter = &nsamples ;
+	%end;
+	%else %if &bootstrap_method > 0 %then %do;
+		%let bootstrap_counts = BLB_counts ;
+		%let bsample_counter = 0 ;
+	%end;
+	%if &bootstrap_method = 1 %then %do;
+		%let BLB_s_start = 1 ;
+		%let BLB_s_max = &BLB_s ;
+		%let BLB_r_start = 1 ;
+		%let BLB_r_max = &BLB_r ;
+	%end;
 
     %let uselabelo = 0 ;
     %let uselabelc = 0 ;
@@ -439,7 +499,7 @@ options mautosource minoperator ;
     %else %let chunked = 1 ;
  
     /* rename saved data sets to contain first and last sample in the name */
-
+ 
     %if &chunked = 1 %then %do;
          /* rename the survival data if desired. need to consider the case where there
             is a libname. will change this to be the savelib variable */                           
@@ -458,7 +518,6 @@ options mautosource minoperator ;
                 %PUT INTERMEDIATE RESULTS IN A CONSISTENT WAY. ;
                  %GOTO exit;
             %end;
-
             %else %let survdata = survdata_all ;
         %end;
 
@@ -484,7 +543,6 @@ options mautosource minoperator ;
                 %GOTO exit;
             %end;
        %end; 
-
        %if %bquote(&intervname)= %then %do;
              %PUT ERROR ;
              %put TO RUN THE GFORMULA WITH  ONLY PART OF THE BOOTSTRAP ;
@@ -519,13 +577,16 @@ options mautosource minoperator ;
         %let hazardname = _inthr_ ;
                 
     %end;
-    
+	
     
     /* set starting seed for run */
 
     %let seed_list = &seed ;
     %let seed_holder  =  &seed ;
-    %do i = 1 %to &nsamples ;
+	%if &bootstrap_method = 0 %then %let number_seeds = &nsamples ;
+	%else %if &bootstrap_method = 1  %then %let number_seeds = %eval(&BLB_r * &BLB_s ) ;
+	%else %if &bootstrap_method = 2 %then %let number_seeds = %eval(&BLB_r_max * &BLB_s_max );
+    %do i = 1 %to &number_seeds  ;
        %let seed =%eval(&seed + 3) ;
        %let seed_list = &seed_list &seed ;
     %end;
@@ -602,6 +663,7 @@ options mautosource minoperator ;
     %*Preparing data;    
     %dataprep;
      
+
      
 
     %if %bquote(&nparam)= %then %let nparam=&ssize;
@@ -612,8 +674,154 @@ options mautosource minoperator ;
           %goto exit ;
    %end;
 
+   %if &bootstrap_method > 0 AND &use_disjoint_blb_samples = 1 AND &BLB_s > 0 %then %do ;
+        %if &bootstrap_method = 1 %then %do;
+   		%if %eval(&BLB_s * &BLB_b ) > &ssize %then %do;
+			%let max_blb_s = %sysevalf(&ssize / &BLB_b) ;
+			%let blb_s_orig = BLB_s ;
+			%let BLB_s = %sysfunc(int(&max_blb_s));
+			%PUT -----------------------------;
+			%PUT BLB_S CHANGED FROM &BLB_s_orig TO &BLB_s SO THAT THE TOTAL NUMBER OF SUBJECTS SELECTED ;
+			%PUT FOR ALL BLB_S * BLB_S SAMPLES IS LESS THAN &ssize. TOTAL IS NOW %eval(&BLB_s * &BLB_r ) ;
+			%PUT -----------------------------;
+
+
+		%end;
+		%end;
+		%else %if &bootstrap_method = 2 %then %do;
+			%if %eval(&BLB_s_max * &BLB_b ) > &ssize %then %do;
+				%let max_blb_s = %sysevalf(&ssize / &BLB_b) ;
+				%let blb_s_orig = &BLB_s_max ;
+				%let BLB_s_max = %sysfunc(int(&max_blb_s));
+				%PUT -----------------------------;
+				%PUT BLB_S_MAX CHANGED FROM &BLB_s_orig TO &BLB_s_max SO THAT THE TOTAL NUMBER OF SUBJECTS SELECTED ;
+				%PUT FOR ALL BLB_S_MAX * BLB_B SAMPLES IS LESS THAN &ssize. MAXIMUM IS NOW %eval(&BLB_s_max * &BLB_r ) ;
+				%PUT -----------------------------;
+
+			%end;
+
+		%end;
+   %end;
+
+    %*Exiting in case of error;
+    %exit:;
+  	%if &monitor_time = 1 %then %do;
+    	%local start_time_base_sample start_time_bootstraps  ;
+		data _null_;
+    	tm = datetime();	 
+		put tm= nldatm.;
+    	call symput('start_time_base_sample', put(tm, z15.));
+		run;
+	%end; 
+
+    %if &sample_start = 0 %then %do;
+		%put before base_sample : seed = &seed ;
+		%base_sample ;
+		%put after base_sample :  seed = &seed ;
+	%end;
+
+	%if &monitor_time = 1 %then %do;    
+		data _null_;
+	    _start = &start_time_base_sample;
+	    _end = datetime();
+		put "End time for base sample : " _end= nldatm.;
+	    elaps = _end - _start;
+	    put ">>> Total run time for base sample (processing data not included ) : " elaps= time9.;
+		%if   ((&bootstrap_method = 0 AND &nsamples > 0 ) OR (&bootstrap_method > 0 AND &BLB_s > 0 AND &BLB_r > 0 )) %then %do; 
+	    	tm = datetime();	 
+			put"Start time for bootstraps :" tm= nldatm.;
+	    	call symput('start_time_bootstraps', put(tm, z15.));
+		%end;
+		run;
+	%end;
+
+	%if &bootstrap_method = 0  AND &run_remote = 0  %then %do;
+		%bootstrap_normal ;
+	%end;
+       %else %if &bootstrap_method = 0 AND &run_remote = 1 %then %do;
+                %remote_loop ;
+        %end;
+	%else %if &bootstrap_method > 0 AND &BLB_s > 0 %then %do;
+		%bootstrap_blb ;
+	%end;
+	
+%if &monitor_time = 1 AND ((&bootstrap_method = 0 AND &nsamples > 0 ) OR (&bootstrap_method > 0 AND &BLB_s > 0 AND &BLB_r > 0 )) %then %do; 
+    %local _ns_ ;
+    %if &bootstrap_method = 0 %then %let _ns_ = %eval(&nsamples ) ;
+	%else %if &bootstrap_method = 1  %then %let _ns_ = %eval(&BLB_s * &BLB_r ) ;
+	%else %if &bootstrap_method = 2 %then %let _ns_ = %eval(&BLB_s * &BLB_r_max ) ;
+	data _null_;
+    _start = &start_time_bootstraps ;
+    _end = datetime();
+	put _end= nldatm.;
+    elaps = _end - _start;
+    put ">>> Total run time for &_ns_ bootstrap samples : " elaps= time9.;
+	_start_base = &start_time_base_sample ;
+	elaps = _end - _start_base ;
+	put ">>> Total run time for %eval(&_ns_+ 1)  samples : " elaps= time9.;
+	run;
+ %end;
+
+ %put after bootstrap_code : seed = &seed ;
+
+	
+    proc datasets library = work memtype = (data view)  nolist ;
+    delete tmpids _calchazard_ %if &runnc = 1 %then simulated0 ;
+            %do i = 1 %to &numint ; simulated&i %end; ;
+    quit;
+
+   /* clean up any global variables created in interaction macros */
+    %remove_created_global ;
+
+%mend gformula;
+/****/
+%macro bootstrap_normal ;
+
     %*Looping over bootstrap samples;
-    %do bsample = &sample_start %to &sample_end;
+
+   /* the base sample is done outside this macro . Will start the loop after base sample*/ 
+
+   %if &sample_start = 0 %then %let loop_start = 1 ;
+   %else %let loop_start = &sample_start ;
+
+
+%if &use_samples_orig = 0 %then %do;
+	        %let BLB_b = &ssize ;
+			%let BLB_s = 1 ;
+			%let BLB_r = &nsamples ;
+
+
+			proc surveyselect data = tmpids(keep =newid ) out = step1 (rename = (replicate = sample_si))
+	   		method = srs 
+	   		sampsize = &BLB_b 
+	   		reps = &BLB_s 
+			seed = &seed 
+	   		noprint 
+	   			;
+			run ;
+
+			proc surveyselect data = step1 
+	  		out=step2 (drop = ExpectedHits SamplingWeight rename = (replicate = sample_rj 
+	                                                                numberhits = BLB_count0))
+	  		method = urs 
+	  		sampsize = &nsimul 
+	  		reps = &BLB_r 
+			seed = %eval(&seed * &seed )
+		
+	  		noprint 
+	 			;
+	  		strata sample_si ;
+			run;
+
+			%let seed = %eval(&seed * &seed ) ;
+
+
+
+%end;
+
+
+    %do bsample = &loop_start %to &sample_end;
+	    %put inside bootstrap_normal, bsample = &bsample ;
         %if (&outputs ^= yes or %eval(&bsample) ^= 0) %then %do;
                %let ods_logit = ods select none ;
                %let ods_reg = ods select none ;
@@ -624,12 +832,21 @@ options mautosource minoperator ;
 %if &printlogstats = 1 %then %put  before sample = &bsample seed = &seed ;
 %if &printlogstats = 1 %then %put  ;
 
-        %samples;    
+        %if &use_samples_orig = 1 %then %do;
+        	%samples;    
+		%end ;
+	   %if &use_samples_orig = 0 %then %do;
+			%samples_blb (sample_s = 1 , sample_r = &bsample );
+
+			
+		%end;
+
         %*Estimating parameters;
         %if &usebetadata = 0 %then %do;            
                 %if &uselabelc = 0  and &uselabelo = 0 %then options nolabel ;;
                 %parameters;     
-                options &label_orig ;      
+                options &label_orig ;  
+			
         %end;
 
         %else %do; /*feb2013*/
@@ -652,8 +869,10 @@ options mautosource minoperator ;
         _sample_ = &bsample ;
         run;
 
-       %if &bsample = &sample_start  %then %do;
+		/* check this line when running with chunks */
+       %if &bsample = &sample_start  AND &created_dataviews = 0  %then %do;
              /* initialize data views for interventions */
+	        
 
              %if &runnc = 1 %then %do;
                  %interv_init(intno=0, intlabel='Natural course' ); 
@@ -662,7 +881,9 @@ options mautosource minoperator ;
 
              %do intnum = 1 %to &numint;
                 %interv_init(&&interv&intnum);
-             %end;             
+             %end;  
+
+             %let created_dataviews = 1 ; 
 
         %end;            
        
@@ -844,7 +1065,10 @@ options mautosource minoperator ;
                 %interv (intno=0 , intlabel='Natural course'); /* do not need to save simulated data set */                                 
             %end;   
 
-         
+         /*** this statement is not correct, when the base sample was already run */
+		 /*** not testing with chunking so this submacro starts with sample_start = 1 */
+		/*** for testing we will change the bsample = sample_start if condition to fail ***/
+
                 %if &bsample = &sample_start %then %do;  
                     data &survdata ;
                     set  surv_tmp0 ;
@@ -857,6 +1081,8 @@ options mautosource minoperator ;
            
         %end ; /* run natural course = 1 **/
         %*Looping over interventions;
+
+
 
         %do intnum = 1 %to &numint;
             %interv(&&interv&intnum);                    
@@ -939,6 +1165,8 @@ options mautosource minoperator ;
                ;
         quit;
    
+
+
     %end;
 
 
@@ -995,19 +1223,7 @@ options mautosource minoperator ;
            
        %end;
     %end;
-    proc datasets library = work memtype = (data view)  nolist ;
-    delete tmpids _calchazard_ %if &runnc = 1 %then simulated0 ;
-            %do i = 1 %to &numint ; simulated&i %end; ;
-    quit;
-
-   /* clean up any global variables created in interaction macros */
-    %remove_created_global ;
-
-    %*Exiting in case of error;
-    %exit:;
-   
-     
-%mend gformula;
+%mend bootstrap_normal ;
 /***/
 %macro createfixedcov ;
    %local i j k fixedcov1 fixedcov2  fixedcov3  covlist word testword nfixed incovlist ;
@@ -1242,7 +1458,6 @@ options mautosource minoperator ;
     proc sort data=_orig_;
         by &id;
     run;
-
     proc sort data=&data out=_inputd_;
     by &id descending &time;
     run;
@@ -1300,8 +1515,17 @@ options mautosource minoperator ;
                     call symput("outcmax",trim(left(&outc._max)) );
                     end;
         %end;
-        _sample_ = 0 ;
-        keep  _sample_ %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3  %then  &outc._min &outc._max ;
+        %if &bootstrap_method = 0 %then %do;
+			_sample_ = 0 ;
+		%end;
+		%else %if &bootstrap_method > 0  %then %do;
+			_sample_r = 0 ;
+			_sample_s = 0 ;
+		%end;
+
+        keep  %if &bootstrap_method = 0 %then _sample_ ;
+              %else %if &bootstrap_method > 0 %then _sample_s _sample_r ;
+               %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3  %then  &outc._min &outc._max ;
                 %do i = 0 %to &ncov ; 
                     %if &&cov&i.otype=3 or &&cov&i.otype=4 or &&cov&i.otype=6 or &&cov&i.otype=7   or &&cov&i.otype = -1  %then &&cov&i.._min &&cov&i.._max ;
                 %end ;
@@ -1660,6 +1884,7 @@ options mautosource minoperator ;
         data param;
         set _paramdata_;
         _sample_ = 0;
+		bootstrap_counts = 1 ;
         run;
         
        %let subseed = %eval(2*&seed);
@@ -1668,6 +1893,7 @@ options mautosource minoperator ;
             data simul;
             set _simuldata_;
             _sample_ = 0;
+			bootstrap_counts = 1 ;
             run;
         %end;
         %else %do;
@@ -1722,19 +1948,26 @@ options mautosource minoperator ;
 
   
     * add in the variable numberhits for the number of times a subject is selected into the bootstrap sample ;
-    data param ;
+    	data param ;
         merge _paramdata_ (in= p) _paramsample_;
         by newid ;
         if numberhits > 0 ; *delete those not selected into sample ;
-        do _copy_ = 1 to numberhits ; * make numberhits copies of each remaining subject ;
-            output ;
-        end;
+		%if &expand_param_counts = 1 %then %do;
+			bootstrap_counts = 1 ;
+	        do _copy_ = 1 to numberhits ; * make numberhits copies of each remaining subject ;
+	            output ;
+
+	        end;		 
+		%end;
+		%else %do;
+		   bootstrap_counts = numberhits ;
+		%end;
         drop numberhits 
-             %if %bquote(&censor) = %then _copy_ ; ;
+             %if %bquote(&censor) = AND &expand_param_counts = 1  %then _copy_ ; ;
         run;
 
 
-	%if %bquote(&censor) ^= %then %do;
+	%if %bquote(&censor) ^= AND &expand_param_counts = 1   %then %do;
 		proc sort data = param ;
 		by newid _copy_ &time ;
 		run;
@@ -1833,6 +2066,7 @@ options mautosource minoperator ;
         data simul ;
         set simul ;
         do _copy0_ = 1 to numberhits ;
+		        bootstrap_counts = 1 ;
                 output ;
         end;
         drop numberhits _copy0_ ;
@@ -1892,18 +2126,28 @@ options mautosource minoperator ;
         &ods_logit ;
         %if %bquote(&outcwherem )^= %then where  &outcwherem    ;;
         model &outc = &outcpred  %if &uselabelo = 1 %then / parmlabel ; ;
+		freq &bootstrap_counts ;
         weight _weight_ ;
+		run;
         
         data outc;
         set outc;
         if _type_='PARMS';
-        _sample_ = &bsample;
+        %if &bootstrap_method = 0 %then %do;
+            _sample_=&bsample;
+		%end;
+		%else %if &bootstrap_method > 0 %then %do;
+			 _sample_s = &sample_s ;
+			_sample_r = &sample_r ;
+		%end;
         array avar intercept &outcpred;
         array abeta boutc00-boutc&dimoutc;
         do i=1 to dim(avar);
             abeta(i)=avar(i);
             end;
-        keep _sample_ boutc00-boutc&dimoutc;
+        keep %if &bootstrap_method = 0 %then _sample_ ;
+             %else %if &bootstrap_method > 0 %then _sample_r _sample_s ; 
+              boutc00-boutc&dimoutc;
         run;
    %end;
 
@@ -1921,19 +2165,28 @@ options mautosource minoperator ;
     &ods_logit ;
     %if %bquote(&outcwherem )^= %then where  &outcwherem    ;;
     model &outc = &outcpred  %if &uselabelo = 1 %then / parmlabel ; ;
+	freq &bootstrap_counts ;
     weight _weight_ ;
     run;
     
     data outc;
     set outc;
     if _type_='PARMS';
-     _sample_ = &bsample;
+    %if &bootstrap_method = 0 %then %do;
+        _sample_=&bsample;
+	%end;
+	%else %if &bootstrap_method > 0 %then %do;
+		_sample_s = &sample_s ;
+		_sample_r = &sample_r ;
+	%end;
         array avar intercept &outcpred;
         array abeta boutc00-boutc&dimoutc;
         do i=1 to dim(avar);
             abeta(i)=avar(i);
             end;
-        keep _sample_ boutc00-boutc&dimoutc;
+        keep %if &bootstrap_method = 0 %then _sample_ ;
+			 %else %if &bootstrap_method > 0 %then _sample_s _sample_r ;
+            boutc00-boutc&dimoutc;
         run;
 
 
@@ -1954,19 +2207,29 @@ options mautosource minoperator ;
         &ods_reg ;
          %if %bquote(&outcwherem )^= %then where  &outcwherem    ;;
         model &outc=&outcpred;
+		freq &bootstrap_counts ;
         weight _weight_ ;
+    run;
 
     data outc;
         set outc;
         if _type_="PARMS";
-        _sample_=&bsample;
+        %if &bootstrap_method = 0 %then %do;
+            _sample_=&bsample;
+		%end;
+		%else %if &bootstrap_method > 0 %then %do;
+		 	_sample_s = &sample_s ;
+			_sample_r = &sample_r ;
+		%end;
         array avar intercept &outcpred;
         array abeta boutc00-boutc&dimoutc;
         do i=1 to dim(avar);
            abeta(i)=avar(i);
            end;
         se&outc=_rmse_;
-        keep _sample_ boutc00-boutc&dimoutc se&outc;
+        keep %if &bootstrap_method = 0 %then _sample_ ;
+              %else %if &bootstrap_method > 0 %then _sample_s _sample_r ;
+             boutc00-boutc&dimoutc se&outc;
     run;
 
 
@@ -2015,20 +2278,29 @@ options mautosource minoperator ;
                 &ods_qlim ;   
                 %if %bquote(&outcwherem )^= %then where  &outcwherem    ;; 
                 model  &outc=&outcpred /  truncated (lb=  %sysfunc(compress(&outcmin))  ub= %sysfunc(compress(&outcmax)) );
+				freq &bootstrap_counts ;
                 weight _weight_ ;
             run; ;
             
             data outc;
             set outc; 
             if _type_="PARM";
-            _sample_=&bsample;
+			%if &bootstrap_method = 0 %then %do;
+            	_sample_=&bsample;
+			%end;
+			%else %if &bootstrap_method > 0 %then %do;
+			 	_sample_s = &sample_s ;
+				_sample_r = &sample_r ;
+			%end;
             array avar intercept &outcpred;
             array abeta boutc00-boutc&dimoutc;
             do i=1 to dim(avar);
                abeta(i)=avar(i);
             end;
             se&outc=_Sigma;
-            keep _sample_ boutc00-boutc&dimoutc se&outc;
+            keep %if &bootstrap_method = 0 %then _sample_ ;
+                  %else %if &bootstrap_method > 0 %then _sample_s _sample_r ;
+                   boutc00-boutc&dimoutc se&outc;
             run;
           
             proc datasets library = work nolist ;
@@ -2051,20 +2323,29 @@ options mautosource minoperator ;
                 &ods_qlim ;    
                 %if %bquote(&outcwherem )^= %then where  &outcwherem    ;; 
                 model  &outc=&outcpred  /  censored (lb=  %sysfunc(compress(&outcmin))  ub= %sysfunc(compress(&outcmax)) );
+				freq &bootstrap_counts ;
                 weight _weight_ ;
             run; 
 
            data outc;
            set outc;
            if _type_="PARM";
-        _sample_=&bsample;
+        	%if &bootstrap_method = 0 %then %do;
+            	_sample_=&bsample;
+			%end;
+			%else %if &bootstrap_method > 0 %then %do;
+			 	_sample_s = &sample_s ;
+				_sample_r = &sample_r ;
+			%end;
         array avar intercept &outcpred;
         array abeta boutc00-boutc&dimoutc;
         do i=1 to dim(avar);
            abeta(i)=avar(i);
            end;
         se&outc=_Sigma;
-        keep _sample_ boutc00-boutc&dimoutc se&outc;
+        keep %if &bootstrap_method = 0 %then _sample_ ;
+             %else %if &bootstrap_method > 0 %then _sample_s _sample_r ;
+              boutc00-boutc&dimoutc se&outc;
     run;
 
     proc datasets library = work nolist ;
@@ -2079,18 +2360,27 @@ options mautosource minoperator ;
         proc logistic descending data=param outest=compevent ;
             &ods_logit ;
              %if %bquote(&compeventwherem )^= %then where  &compeventwherem    ;;
-            model &compevent = &compeventpred %if &uselabelo = 1 %then / parmlabel ;;		
+            model &compevent = &compeventpred %if &uselabelo = 1 %then / parmlabel ;;
+			freq &bootstrap_counts ;	
             run;
         data compevent;
             set compevent;
             if _type_='PARMS';
-            _sample_ = &bsample;
+            	%if &bootstrap_method = 0 %then %do;
+            	_sample_=&bsample;
+			%end;
+			%else %if &bootstrap_method > 0 %then %do;
+			 	_sample_s = &sample_s ;
+				_sample_r = &sample_r ;
+			%end;
             array avar intercept &compeventpred;
             array abeta bcompevent00-bcompevent&dimcompevent;
             do i=1 to dim(avar);
                 abeta(i)=avar(i);
                 end;
-            keep _sample_ bcompevent00-bcompevent&dimcompevent;
+            keep %if &bootstrap_method = 0 %then _sample_ ;
+  			      %else %if &bootstrap_method > 0 %then _sample_r _sample_s ;
+                  bcompevent00-bcompevent&dimcompevent;
         run;
 
     %end;
@@ -2109,16 +2399,17 @@ options mautosource minoperator ;
             &ods_logit ;
              %if %bquote(&censorwherem )^= %then where  &censorwherem    ;;
             model &censor = &censorpred %if &uselabelo = 1 %then / parmlabel ;;
-			output out=_censor_ (keep = newid &time &censor &compevent  &outc pC_d  &covlisttmp ) pred = pC_d ;
+			output out=_censor_ (keep = newid &time &censor &compevent  &outc pC_d  &covlisttmp &bootstrap_counts ) pred = pC_d ;
+			freq &bootstrap_counts ;
             run;
-
 			%if &compevent_cens = 1  %then %do;
 
 			 	proc logistic descending data=param  ;
             	&ods_logit ;
              	%if %bquote(&censorwherem )^= %then where  &censorwherem    ;;
             	model &compevent = &censorpred %if &uselabelo = 1 %then / parmlabel ;;
-				output out=_&compevent._ (keep = newid &time &compevent &outc pCE_d ) pred = pCE_d ;
+			    freq &bootstrap_counts ;
+				output out=_&compevent._ (keep = newid &time &compevent &outc &bootstrap_counts pCE_d ) pred = pCE_d ;
             	run;
 			%end;
 
@@ -2144,7 +2435,7 @@ options mautosource minoperator ;
 				
 				if &compevent = 0 then _wtCE_ = _wtCE_ * (1/(1-pCE_d));
 				else _wtCE_ = _wtCE_ * 0; /* compevent = 1 or missing */
-				keep  newid &time &compevent _wtCE_ _wtCEl1_ ; 
+				keep  newid &time &compevent _wtCE_ _wtCEl1_ &bootstrap_counts ; 
 				run;
 	
 				data _censor_ ;
@@ -2152,18 +2443,20 @@ options mautosource minoperator ;
 				by newid &time ;
 				_wt_ = _wtC_ * _wtCE_ ;
 				_wtl1_ = _wtCl1_ * _wtCEl1_ ;
-				keep &time _wt_ _wtl1_ &covlisttmp &outc &compevent ;
+				keep &time _wt_ _wtl1_ &covlisttmp &outc &compevent &bootstrap_counts ;
 				run;
 			%end;
 
 			proc univariate data = _censor_ ;
 			var _wt_ ;
+			freq &bootstrap_counts ;
 			run;
 
 			%if %upcase(%substr(&maxipw ,1,1)) = P %then %do; 
 
 				proc means data = _censor_ &maxipw ;
 				var _wt_ _wtl1_;
+				freq &bootstrap_counts ;
 				output out = _p99_ (keep = _maxipw_ _maxipwl1_) &maxipw (_wt_ _wtl1_ ) = _maxipw_ _maxipwl1_   ;
 				run;
 
@@ -2172,6 +2465,10 @@ options mautosource minoperator ;
 				call symput('maxipw',trim(left(_maxipw_)));
 				call symput('maxipwl1',trim(left(_maxipwl1_)));
 				run;
+
+				proc datasets library = work nolist ;
+				delete _p99_ ;
+				quit ;
 			%end;
 			%else %do;
 				%let maxipwl1 = &maxipw ;
@@ -2190,6 +2487,7 @@ options mautosource minoperator ;
 			class &time ;
 			var &outc  %if %bquote(&compevent) ^= AND &compevent_cens = 0 %then &compevent ;;
 			types &time ;
+			freq &bootstrap_counts ;
 			weight _wt_ ;
 			%if &outctype=binsurv %then %do ;
 				output out = forwtY (keep = &time meanoutc %if %bquote(&compevent) ^= AND &compevent_cens = 0 %then meancompevent ;) 
@@ -2197,7 +2495,8 @@ options mautosource minoperator ;
        				meanoutc %if %bquote(&compevent) ^= AND &compevent_cens = 0 %then meancompevent ; ;
 			%end;
 			%else %do ;
-				output out = forwtY (keep = &time &outc )   mean( &outc ) = &outc  ;
+				output out = forwtY (keep = &time &outc %if %bquote(&compevent) ^= %then meancompevent ;) mean( &outc &compevent) = &outc 
+			 	%if %bquote(&compevent) ^= AND &compevent_cens = 0 %then meancompevent ; ;
 			%end;
 			run;
 			*calculate E[L_k * (1-Y_k) &W_{k-1} ] / E[(1-Y_k)*W_{k-1}]
@@ -2206,6 +2505,7 @@ options mautosource minoperator ;
 			class &time ;
 			var &covlisttmp ;
 			types &time ;
+			freq &bootstrap_counts ;
 			weight _wtl1_ ;
 			%if &outctype=binsurv %then %do ;
 				output out = forwtCov (keep = &time &covlisttmp) mean( &covlisttmp) = &covlisttmp ;
@@ -2255,12 +2555,13 @@ options mautosource minoperator ;
 
 
             proc logistic descending
-                data=param(keep =  _weight_ &outc &compevent   &time &&cov&i.randomvisitp &&cov&i.array 
+                data=param(keep =  _weight_ &outc &compevent   &time &&cov&i.randomvisitp &&cov&i.array &bootstrap_counts 
                 &wherevars  /* ts_last_&&cov&i.._l1  this should be included in &&cov&i.array */ )
                 outest=&&cov&i.randomvisitp
                 %if (&outputs ^= yes or %eval(&bsample) ^= 0) %then noprint ; ;
             where &time > 0  and &time not in ( &&cov&i.skip) and  %unquote(&&cov&i.visitpwherem)  and ts_last_&&cov&i.._l1 ne &&cov&i.visitpmaxgap  ;;
             model &&cov&i.randomvisitp = &&cov&i.array %if &uselabelc = 1 %then / parmlabel ;;
+			freq &bootstrap_counts ;
             weight _weight_ ;
             run;
 
@@ -2269,33 +2570,44 @@ options mautosource minoperator ;
             data &&cov&i.randomvisitp;
             set &&cov&i.randomvisitp;
             if _type_='PARMS';
-            _sample_ = &bsample;
+            	%if &bootstrap_method = 0 %then %do;
+            	_sample_=&bsample;
+			%end;
+			%else %if &bootstrap_method > 0 %then %do;
+			 	_sample_s = &sample_s ;
+				_sample_r = &sample_r ;
+			%end;
             array avar intercept &&cov&i.array;          
             array abeta bvar&i.visitp_00-bvar&i.visitp_&&dimvar&i;
             do j=1 to dim(avar); 
                 abeta(j)=avar(j); 
             end;
-            keep _sample_ bvar&i.visitp_00-bvar&i.visitp_&&dimvar&i;          
+            keep %if &bootstrap_method = 0 %then _sample_ ;
+                 %else %if &bootstrap_method > 0 %then _sample_r _sample_s ;
+                bvar&i.visitp_00-bvar&i.visitp_&&dimvar&i;          
             run;
 
        %end;
+
         %if &&cov&i.otype=1 %then %do;
             proc logistic descending
-                data=param(keep = _weight_ &outc &compevent   &time &&cov&i  &&cov&i.randomvisitp  &&cov&i.array &wherevars )
+                data=param(keep = _weight_ &bootstrap_counts &outc &compevent   &time &&cov&i  &&cov&i.randomvisitp  &&cov&i.array &wherevars  )
                 outest=&&cov&i ;
                 &ods_logit ;
                 where &time > 0  and %unquote(&&cov&i.wherem) and &time not in (&&cov&i.skip) %if &&usevisitp&i = 1 %then and &&cov&i.randomvisitp = 1 ;  ;
                 model &&cov&i = &&cov&i.array %if &uselabelc = 1 %then / parmlabel ;;
+				freq &bootstrap_counts ;
                 weight _weight_ ;
             run;
         %end;
         %else %if &&cov&i.otype=2 %then %do;
             proc logistic descending
-                data=param(keep = _weight_ &outc &compevent   &time &&cov&i  &&cov&i.randomvisitp &&cov&i.array &&cov&i.._l1 &wherevars )
+                data=param(keep = _weight_ &bootstrap_counts &outc &compevent   &time &&cov&i  &&cov&i.randomvisitp &&cov&i.array &&cov&i.._l1 &wherevars )
                 outest=&&cov&i ;
                 &ods_logit;
                 where &time > 0  and %unquote(&&cov&i.wherem) and &&cov&i.._l1=0 and &time not in (&&cov&i.skip)   %if &&usevisitp&i = 1 %then and &&cov&i.randomvisitp = 1 ; ;
                 model &&cov&i = &&cov&i.array %if &uselabelc = 1 %then / parmlabel ;;
+				freq &bootstrap_counts ;
                 weight _weight_ ;
             run;
         %end;
@@ -2303,11 +2615,12 @@ options mautosource minoperator ;
         %else %if &&cov&i.otype=3 %then %do;
             /* continuous out type will generate values within recorded range : attempt at truncated normal */
             proc reg
-                data=param(keep =  _weight_ &outc &compevent   &time &&cov&i  &&cov&i.randomvisitp &&cov&i.array &wherevars )
+                data=param(keep =  _weight_ &bootstrap_counts &outc &compevent   &time &&cov&i  &&cov&i.randomvisitp &&cov&i.array &wherevars )
                 outest=&&cov&i ;
                 &ods_reg ;
                 where &time > 0  and %unquote(&&cov&i.wherem) and &time not in (&&cov&i.skip)  %if &&usevisitp&i = 1 %then and &&cov&i.randomvisitp = 1 ; ;
                 model &&cov&i = &&cov&i.array;
+				freq &bootstrap_counts ;
                 weight _weight_ ;
             run;
             %end; 
@@ -2315,50 +2628,54 @@ options mautosource minoperator ;
         %else %if &&cov&i.otype=4 %then %do;
             %if %bquote(&&cov&i.class)^= %then %do;
                 proc logistic descending 
-                    data=param(keep =  _weight_ &outc &compevent   &time z&&cov&i   &&cov&i.randomvisitp &&cov&i.array &&cov&i.class &wherevars )
+                    data=param(keep =  _weight_ &bootstrap_counts  &outc &compevent   &time z&&cov&i   &&cov&i.randomvisitp &&cov&i.array &&cov&i.class &wherevars )
                     outest=c0_z&&cov&i ;
                     &ods_logit ;
                     where &time > 0  and %unquote(&&cov&i.wherem) and
                         &time not in (&&cov&i.skip)
                         and &&cov&i.class = 0   %if &&usevisitp&i = 1 %then and &&cov&i.randomvisitp = 1 ; ;
                     model z&&cov&i = &&cov&i.array %if &uselabelc = 1 %then / parmlabel ;;
+					freq &bootstrap_counts ;
                     weight _weight_ ;
                 run;
                 proc logistic descending 
-                    data=param(keep =  _weight_ &outc &compevent   &time z&&cov&i  &&cov&i.randomvisitp &&cov&i.array &&cov&i.class &wherevars )
+                    data=param(keep =  _weight_ &bootstrap_counts &outc &compevent   &time z&&cov&i  &&cov&i.randomvisitp &&cov&i.array &&cov&i.class &wherevars )
                     outest=c1_z&&cov&i ;
                     &ods_logit ;
                     where &time > 0  and %unquote(&&cov&i.wherem) and
                         &time not in (&&cov&i.skip)
                         and &&cov&i.class ^= 0   %if &&usevisitp&i = 1 %then and &&cov&i.randomvisitp = 1 ; ;
                     model z&&cov&i = &&cov&i.array  %if &uselabelc = 1 %then / parmlabel ; ;
+					freq &bootstrap_counts ;
                     weight _weight_ ;
                 run;
              %end;
              %else %do;
                 proc logistic descending 
-                    data=param(keep =  _weight_ &outc &compevent   &time z&&cov&i  &&cov&i.randomvisitp &&cov&i.array &wherevars )
+                    data=param(keep =  _weight_ &bootstrap_counts &outc &compevent   &time z&&cov&i  &&cov&i.randomvisitp &&cov&i.array &wherevars )
                     outest=z&&cov&i ;
                     &ods_logit ;
                     where &time > 0  and %unquote(&&cov&i.wherem) and &time not in (&&cov&i.skip)   %if &&usevisitp&i = 1 %then and &&cov&i.randomvisitp = 1 ; ;
                     model z&&cov&i = &&cov&i.array %if &uselabelc = 1 %then / parmlabel ;;
+					freq &bootstrap_counts ;
                     weight _weight_ ;
                 run;
              %end;
         
             proc reg
-                data=param(keep =  _weight_ &outc &compevent   &time z&&cov&i l&&cov&i  &&cov&i.randomvisitp  &&cov&i.array &wherevars )
+                data=param(keep =  _weight_ &bootstrap_counts  &outc &compevent   &time z&&cov&i l&&cov&i  &&cov&i.randomvisitp  &&cov&i.array &wherevars )
                 outest=&&cov&i ;
                 &ods_reg ;
                 where &time > 0  and %unquote(&&cov&i.wherem) and z&&cov&i=1 and &time not in (&&cov&i.skip)  %if &&usevisitp&i = 1 %then and &&cov&i.randomvisitp = 1 ; ;
                 model l&&cov&i = &&cov&i.array;
+				freq &bootstrap_counts ;
                 weight _weight_ ;
             run;
         %end;
 
         %else %if &&cov&i.otype=5 %then %do;
             %do lev = 1 %to %eval(&&cov&i.lev-1);
-                proc logistic descending data=param(keep =  _weight_ &outc &compevent   &time &wherevars   &&cov&i.randomvisitp
+                proc logistic descending data=param(keep =  _weight_ &bootstrap_counts &outc &compevent   &time &wherevars   &&cov&i.randomvisitp
                     &&cov&i.._&lev &&cov&i.array
                     %do lowerlev = 1 %to %eval(&lev-1);
                         &&cov&i.._&lowerlev
@@ -2373,6 +2690,7 @@ options mautosource minoperator ;
                                %if &&usevisitp&i = 1 %then and &&cov&i.randomvisitp = 1 ; 
                                 ;
                         model &&cov&i.._&lev = &&cov&i.array %if &uselabelc = 1 %then / parmlabel ;;
+						freq &bootstrap_counts ;
                         weight _weight_ ;
                 run;
                 %end;
@@ -2409,11 +2727,12 @@ options mautosource minoperator ;
            &&cov&i.._min = &&cov&i.min ;
            &&cov&i.._max = &&cov&i.max ;
            run;
-            proc qlim   data=param(keep =  _weight_ &outc &compevent   &time &&cov&i  &&cov&i.randomvisitp &&cov&i.array &wherevars )
+            proc qlim   data=param(keep =  _weight_ &bootstrap_counts &outc &compevent   &time &&cov&i  &&cov&i.randomvisitp &&cov&i.array &wherevars )
                 outest=&&cov&i  ;
                 &ods_qlim ; 
                 where &time > 0  and %unquote(&&cov&i.wherem) and &time not in (&&cov&i.skip)  %if &&usevisitp&i = 1 %then and &&cov&i.randomvisitp = 1 ; ;
                 model &&cov&i = &&cov&i.array  /  truncated (lb=  %sysfunc(compress(&&cov&i.min))  ub= %sysfunc(compress(&&cov&i.max)) );
+				freq &bootstrap_counts ;
                 weight _weight_ ;
             run; ;
             
@@ -2423,11 +2742,12 @@ options mautosource minoperator ;
           %else %if  &&cov&i.otype = 7 %then %do ;
                /*  tobit density, similar to what is being done using otype = 3   */
         
-              proc qlim   data=param(keep =  _weight_ &outc &compevent   &time &&cov&i  &&cov&i.randomvisitp &&cov&i.array &wherevars )
+              proc qlim   data=param(keep =  _weight_ &bootstrap_counts &outc &compevent   &time &&cov&i  &&cov&i.randomvisitp &&cov&i.array &wherevars )
                 outest=&&cov&i  ;
                 &ods_qlim ;
                 where &time > 0  and %unquote(&&cov&i.wherem) and &time not in (&&cov&i.skip)  %if &&usevisitp&i = 1 %then and &&cov&i.randomvisitp = 1 ; ;
                 model &&cov&i = &&cov&i.array  /  censored (lb=  %sysfunc(compress(&&cov&i.min))  ub= %sysfunc(compress(&&cov&i.max)) );
+				freq &bootstrap_counts ;
                 weight _weight_ ;
             run; 
             
@@ -2453,14 +2773,22 @@ options mautosource minoperator ;
             data &&cov&i;
                 set &&cov&i;
                 if _type_='PARMS';
-                _sample_ = &bsample;
+                %if &bootstrap_method = 0 %then %do;
+            		_sample_=&bsample;
+				%end;
+				%else %if &bootstrap_method > 0 %then %do;
+			 		_sample_s = &sample_s ;
+					_sample_r = &sample_r ;
+				%end;
                 array avar intercept &&cov&i.array;       
                 array abeta bvar&i._00-bvar&i._&&dimvar&i;
                 do j=1 to dim(avar); abeta(j)=avar(j); end;
                     %if &&cov&i.otype=3 %then %do;
                         se&&cov&i=_rmse_;
                         %end;
-                    keep _sample_ bvar&i._00-bvar&i._&&dimvar&i 
+                    keep %if &bootstrap_method = 0 %then _sample_ ;
+                         %else %if &bootstrap_method > 0 %then _sample_s _sample_r ;
+                         bvar&i._00-bvar&i._&&dimvar&i 
                         %if &&cov&i.otype=3 %then %do;
                         se&&cov&i
                             %end;
@@ -2471,7 +2799,9 @@ options mautosource minoperator ;
 
                data &&cov&i;
                merge &&cov&i.randomvisitp &&cov&i;
-               by _sample_;
+               by 	%if &bootstrap_method = 0 %then _sample_;
+                	%else %if &bootstrap_method > 0 %then _sample_s  _sample_r;
+			      ;
                run;
 
             %end; 
@@ -2484,21 +2814,37 @@ options mautosource minoperator ;
                 data c0_z&&cov&i;
                     set c0_z&&cov&i;
                     if _type_='PARMS';
-                    _sample_ = &bsample;
+                    %if &bootstrap_method = 0 %then %do;
+            			_sample_=&bsample;
+					%end;
+					%else %if &bootstrap_method > 0 %then %do;
+			 			_sample_s = &sample_s ;
+						_sample_r = &sample_r ;
+					%end;
                     array avar intercept &&cov&i.array;
                     array abeta bvar&i.z0_00-bvar&i.z0_&&dimvar&i;
                     do j=1 to dim(avar); abeta(j)=avar(j); end;
-                        keep _sample_ bvar&i.z0_00-bvar&i.z0_&&dimvar&i;
+                        keep %if &bootstrap_method = 0 %then _sample_ ;
+                            %else %if &bootstrap_method > 0 %then _sample_s _sample_r ;
+                           bvar&i.z0_00-bvar&i.z0_&&dimvar&i;
                 run;
 
                 data c1_z&&cov&i;
                     set c1_z&&cov&i;
                     if _type_='PARMS';
-                    _sample_ = &bsample;
+                    %if &bootstrap_method = 0 %then %do;
+            			_sample_=&bsample;
+					%end;
+					%else %if &bootstrap_method > 0 %then %do;
+			 			_sample_s = &sample_s ;
+						_sample_r = &sample_r ;
+					%end;
                     array avar intercept &&cov&i.array;
                     array abeta bvar&i.z1_00-bvar&i.z1_&&dimvar&i;
                     do j=1 to dim(avar); abeta(j)=avar(j); end;
-                        keep _sample_ bvar&i.z1_00-bvar&i.z1_&&dimvar&i;
+                        keep %if &bootstrap_method = 0 %then _sample_ ;
+                              %else %if &bootstrap_method >  %then _sample_s _sample_r ;
+                         bvar&i.z1_00-bvar&i.z1_&&dimvar&i;
                 run;
 
                 %end;
@@ -2506,22 +2852,38 @@ options mautosource minoperator ;
                 data z&&cov&i;
                     set z&&cov&i;
                     if _type_='PARMS';
-                    _sample_ = &bsample;
+                    %if &bootstrap_method = 0 %then %do;
+            	   		_sample_=&bsample;
+					%end;
+					%else %if &bootstrap_method > 0  %then %do;
+			 			_sample_s = &sample_s ;
+						_sample_r = &sample_r ;
+					%end;
                     array avar intercept &&cov&i.array;
                     array abeta bvar&i.z_00-bvar&i.z_&&dimvar&i;
                     do j=1 to dim(avar); abeta(j)=avar(j); end;
-                        keep _sample_ bvar&i.z_00-bvar&i.z_&&dimvar&i;
+                        keep %if &bootstrap_method = 0 %then _sample_ ;
+                              %else %if &bootstrap_method > 0  %then _sample_s _sample_r ;
+                        bvar&i.z_00-bvar&i.z_&&dimvar&i;
                 run;
                 %end;
             data &&cov&i;
                 set &&cov&i;
                 if _type_='PARMS';
-                _sample_ = &bsample;
+                %if &bootstrap_method = 0 %then %do;
+            		_sample_=&bsample;
+				%end;
+				%else %if &bootstrap_method > 0  %then %do;
+			 		_sample_s = &sample_s ;
+					_sample_r = &sample_r ;
+				%end;
                 array avar intercept &&cov&i.array;
                 array abeta bvar&i._00-bvar&i._&&dimvar&i;
                 do j=1 to dim(avar); abeta(j)=avar(j); end;
                     se&&cov&i=_rmse_;
-                    keep _sample_ bvar&i._00-bvar&i._&&dimvar&i se&&cov&i;
+                    keep %if &bootstrap_method = 0 %then _sample_ ;
+                         %else %if &bootstrap_method > 0  %then _sample_s _sample_r ;
+                      bvar&i._00-bvar&i._&&dimvar&i se&&cov&i;
             run;
             data &&cov&i;
                 %if %bquote(&&cov&i.class)^= %then %do;
@@ -2530,7 +2892,9 @@ options mautosource minoperator ;
                 %else %do;
                     merge &&cov&i z&&cov&i;
                     %end;
-                by _sample_;
+                by %if &bootstrap_method = 0 %then _sample_ ;
+				   %else %if &bootstrap_method > 0  %then _sample_s _sample_r ;
+				    ;
             run;
 
           
@@ -2538,7 +2902,9 @@ options mautosource minoperator ;
 
                data &&cov&i;
                merge &&cov&i.randomvisitp &&cov&i;
-               by _sample_;
+               by %if &bootstrap_method = 0 %then _sample_ ;
+                   %else %if &bootstrap_method > 0  %then _sample_s _sample_r ;
+                ;
                run;
 
             %end;      
@@ -2550,16 +2916,26 @@ options mautosource minoperator ;
                 data &&cov&i.._&l;
                     set &&cov&i.._&l;
                     if _type_='PARMS';
-                    _sample_ = &bsample;
+                    %if &bootstrap_method = 0 %then %do;
+            			_sample_=&bsample;
+					%end;
+					%else %if &bootstrap_method > 0  %then %do;
+			 			_sample_s = &sample_s ;
+						_sample_r = &sample_r ;
+					%end;
                     array avar_&l intercept &&cov&i.array;
                     array abeta_&l bvar&i._&l._00-bvar&i._&l._&&dimvar&i;
                     do j=1 to dim(avar_&l); abeta_&l.(j)=avar_&l.(j); end;
-                        keep _sample_  bvar&i._&l._00-bvar&i._&l._&&dimvar&i;
+                        keep %if &bootstrap_method = 0 %then _sample_ ;
+                            %else %if &bootstrap_method > 0  %then _sample_s _sample_r ;
+                           bvar&i._&l._00-bvar&i._&l._&&dimvar&i;
                 run;
                 %end;
             data &&cov&i;
                 merge %do l = 1 %to %eval(&&cov&i.lev - 1); &&cov&i.._&l %end; ;
-                by _sample_;
+                by %if &bootstrap_method = 0 %then _sample_ ;
+                    %else %if &bootstrap_method > 0  %then _sample_s _sample_r ;
+                        ;
             run;
 
 
@@ -2568,7 +2944,8 @@ options mautosource minoperator ;
 
                data &&cov&i;
                merge &&cov&i.randomvisitp &&cov&i;
-               by _sample_;
+               by %if &bootstrap_method = 0 %then _sample_ ;
+                    %else %if &bootstrap_method > 0  %then _sample_s _sample_r ;;
                run;
 
             %end; 
@@ -2578,14 +2955,22 @@ options mautosource minoperator ;
             data &&cov&i;
                 set &&cov&i;
                 if _type_='PARM';
-                _sample_ = &bsample;
+                %if &bootstrap_method = 0 %then %do;
+            		_sample_=&bsample;
+				%end;
+				%else %if &bootstrap_method > 0  %then %do;
+			 		_sample_s = &sample_s ;
+					_sample_r = &sample_r ;
+				%end;
                 array avar intercept &&cov&i.array;       
                 array abeta bvar&i._00-bvar&i._&&dimvar&i;
                 do j=1 to dim(avar); abeta(j)=avar(j); end;
                     
                         se&&cov&i=_Sigma;
                         
-                    keep _sample_ bvar&i._00-bvar&i._&&dimvar&i 
+                    keep %if &bootstrap_method = 0 %then _sample_ ;
+                    %else %if &bootstrap_method > 0  %then _sample_s _sample_r ; 
+                        bvar&i._00-bvar&i._&&dimvar&i 
                         
                         se&&cov&i
                            
@@ -2597,7 +2982,8 @@ options mautosource minoperator ;
 
                data &&cov&i;
                merge &&cov&i.randomvisitp &&cov&i;
-               by _sample_;
+               by %if &bootstrap_method = 0 %then _sample_ ;
+                    %else %if &bootstrap_method > 0  %then _sample_s _sample_r ;;
                run;
 
             %end; 
@@ -2634,18 +3020,20 @@ options mautosource minoperator ;
                         %end;
                     %end;
                     ;
-          by _sample_;
-                _sample_ = &bsample;
-    run;
+          by %if &bootstrap_method = 0 %then _sample_ ;
+                    %else %if &bootstrap_method > 0  %then _sample_s _sample_r ;;               
+    	 run;
 
     proc append base=_beta_ data=samplebetas;
     run;
        
-    proc sort data=_beta_; by _sample_;
+    proc sort data=_beta_; 
+    by %if &bootstrap_method = 0 %then _sample_ ;
+                    %else %if &bootstrap_method > 0  %then _sample_s _sample_r ;;
     run;
     
 
-    %if &bsample =   &sample_end   %then %do;            
+    %if  &bsample =   &sample_end   %then %do;            
          
         
         %if %bquote(&betadata)^= %then %do;
@@ -2665,12 +3053,19 @@ options mautosource minoperator ;
 
      %if &check_cov_models = 1 OR &rungraphs = 1   %then %do;
           %local dataholder ;
-		  %if &bsample = &sample_start %then %let dataholder = &covmeanname ;  
-          %else %let dataholder = _cov_mean_tmp ; 
+		  %if &bootstrap_method = 0 %then %do;
+		  		%if &bsample = &sample_start %then %let dataholder = &covmeanname ;  
+          		%else %let dataholder = _cov_mean_tmp ; 
+		  %end ;
+		  %else %if &bootstrap_method > 0  %then %do;
+		  		%if &sample_s = 0  and &sample_r = 0 %then %let dataholder = &covmeanname ;
+				%else %let dataholder = _cov_mean_tmp ;
+		  %end;
 
           proc sql ;
             create table &dataholder  as
-            select &bsample as _sample_ , 
+            select  %if &bootstrap_method = 0 %then &bsample as _sample_ , ;
+                    %else %if &bootstrap_method > 0  %then &sample_r as _sample_r , &sample_s as _sample_s, ; 
                 &time as _time_ , 
                 %if &outctype = binsurv %then %do;
                       max(sum(&outc),0) as e,
@@ -2691,7 +3086,7 @@ options mautosource minoperator ;
                 %if &&usevisitp&ncov = 1 %then mean(&&cov&ncov.randomvisitp * _weight_ ) as &&cov&ncov.randomvisitp  ,; 
                 mean(&&cov&ncov %if &&cov&i.otype > 0 %then * _weight_ ; ) as &&cov&ncov 
               
-           from param(keep = &time  _weight_  %do i = 0 %to &ncov;  &&cov&i &&cov&i.randomvisitp  %end; &outc &compevent   )
+           from param(keep = &time  _weight_ &bootstrap_counts  %do i = 0 %to &ncov;  &&cov&i &&cov&i.randomvisitp  %end; &outc &compevent   )
         
            group by &time 
            order by &time 
@@ -2703,9 +3098,7 @@ options mautosource minoperator ;
 	  %if %bquote(&censor) ^= %then %do;
 			data  &dataholder ;
 			%if &outctype = binsurv %then %do;
- 				merge  &dataholder 
-                       forwtY (keep = &time meanoutc %if %bquote(&compevent) ^= AND &compevent_cens = 0 %then meancompevent ; ) 
-                       forwtCov (keep = &time &covlisttmp ) ;
+ 				merge  &dataholder forwtY (keep = &time meanoutc %if %bquote(&compevent) ^= AND &compevent_cens = 0 %then meancompevent ; ) forwtCov (keep = &time &covlisttmp ) ;
 			%end;
 			%else %do;
 				merge  &dataholder 
@@ -2713,14 +3106,16 @@ options mautosource minoperator ;
                        forwtCov (keep = &time &covlisttmp )  ;
 			%end;
 			by &time ;
-            run;		
+            run;
+
 
 			proc datasets library = work nolist ;
 			delete _censor_ forwtY forwtCov;
 			quit;
 	  %end;
         
-        %if &bsample > &sample_start  %then %do;
+	    
+        %if (&bootstrap_method = 0 and &bsample > &sample_start ) OR (&bootstrap_method > 0  and &sample_s > 0 )   %then %do;
            proc append base = &covmeanname data = _cov_mean_tmp  ;
            run;
 
@@ -2789,7 +3184,6 @@ options mautosource minoperator ;
           intchg1 = ,          
           intusermacro1= , 
         
-
           intvar2 = , inttype2 = , inttimes2 = (-1), intpr2 = 1, intcov2 = ,
           intmean2 = , intsd2 = , intvalue2 = , intmin2 =. , intmax2 =. , intchg2 = ,
           intusermacro2=,
@@ -2824,7 +3218,6 @@ options mautosource minoperator ;
     );
 
     %************ SIMULATION TO GET CUMULATIVE INCIDENCE UNDER INTERVENTION;
-
     %local n j i ;
     %if &printlogstats = 1 %then %put  Computing intervention &intno;
 
@@ -2866,7 +3259,6 @@ options mautosource minoperator ;
                 U = rand('uniform');
                 distid=int(U*&dsize)+1;
             run;
-
             proc sort data=simul;
                 by distid;
             run;
@@ -2889,14 +3281,15 @@ options mautosource minoperator ;
    %end;            
     
     %*Sort data;
+	/***
     proc sort data = simul;
         by _sample_;
     run;
-
+    ***/
   
     %*Outputting the mean of covariates and probability of event;
      proc means data=simulated&intno  noprint /*simulated&intno is a function*/; 
-     
+      freq &bootstrap_counts ;
       output out=stats_holder
              mean (%if &outctype=binsurv %then %do;
                         cuminc 
@@ -3041,12 +3434,21 @@ options mautosource minoperator ;
 
             data interv&intno;
             set stats_holder;
-            _sample_ = &bsample;
+			%if &bootstrap_method = 0 %then %do;
+            	_sample_ = &bsample;
+			%end;
+			%else %if &bootstrap_method > 0  %then %do;
+			  	_sample_r = &sample_r;
+				_sample_s = &sample_s ;
+			%end;
             length int2 $70 ;
             int=&intno;
             int2=&intlabel;
             n=_FREQ_;
-            keep int int2 _sample_ n %if &outctype=binsurv %then %do;
+            keep int int2  %if &bootstrap_method = 0 %then  _sample_ ;
+                           %else %if &bootstrap_method > 0  %then _sample_r _sample_s ; 
+                            n 
+                           %if &outctype=binsurv %then %do;
                                         pd 
                                         %do j = 1 %to %eval(&timepoints);
                                             s&outc.&j 										
@@ -3079,12 +3481,20 @@ options mautosource minoperator ;
                 data surv_tmp&intno;
                 set surv_holder ;
                 length int2 $70 ;
-                _sample_ = &bsample ;
+                %if &bootstrap_method = 0 %then %do;
+            		_sample_ = &bsample;
+				%end;
+				%else %if &bootstrap_method > 0  %then %do;
+			  		_sample_r = &sample_r;
+					_sample_s = &sample_s ;
+				%end;
                 int = &intno ;
                 int2 = &intlabel ;
                 n = _freq_ ;
                 surv0 = 1 ;
-                keep  int int2 _sample_ n surv0
+                keep  int int2 %if &bootstrap_method = 0 %then  _sample_ ;
+                                %else %if &bootstrap_method > 0  %then _sample_r _sample_s ;
+                   n surv0
                    %do n = 1 %to %eval(&timepoints);
                        risk&n surv&n compevent&n   
                    %end;
@@ -3099,7 +3509,9 @@ options mautosource minoperator ;
               data surv_tmp&intno ;
               set interv&intno ;
               
-              keep _sample_ s&outc int int2  ;
+              keep  %if &bootstrap_method = 0 %then  _sample_ ;
+                    %else %if &bootstrap_method > 0  %then _sample_r _sample_s ; 
+                    s&outc int int2  ;
               run;
           %end; 
 
@@ -3243,7 +3655,9 @@ options mautosource minoperator ;
     %end;
   
     data simul ;
-    set simul (keep =  _sample_ &newsimulkeeplist);
+    set simul (keep =   %if &bootstrap_method = 0 %then  _sample_ ;
+                        %else %if &bootstrap_method > 0  %then _sample_r _sample_s ;
+                        &newsimulkeeplist &bootstrap_counts );
     run;
 
     proc datasets library = work nolist ;
@@ -3338,9 +3752,8 @@ intusermacro7=,
                                          %end;
                                     %end;   
                                     %else &outc ;
-                                    %if &hazardratio = 1 %then _censor _newtime  ;
-                                    
-                                    
+                                    %if &hazardratio = 1 %then _censor _newtime  mygood  ;
+                                    &bootstrap_counts 
                                      )   /view = simulated&intno  ;
  
 
@@ -3348,14 +3761,13 @@ intusermacro7=,
         merge simul _betar_  _seedr_ _covbounds_ 
                     %if &hazardratio = 1 %then   _calchazard_   ; 
                       end=_end_;
-        by _sample_;
-        
+        by %if &bootstrap_method = 0 %then _sample_ ;
+		   %else %if &bootstrap_method > 0  %then _sample_s _sample_r ; ;
         call streaminit(_seedr_);
         drop _seedr_ ; 
 
          
-        %if &hazardratio = 1 %then %do;
-            
+        %if &hazardratio = 1 %then %do;            
             _censor = . ;
             _newtime = .;
             
@@ -3620,7 +4032,6 @@ intusermacro7=,
                                         totinterv = totinterv + 1;
                                     end;      
                                 %end;
-
                                 %*Intervention Type 5: Randomly Assign for Observed Dist;
                                 %else %if &&inttype&i = 5 %then %do;
                                     if (rand('uniform')<=&&intpr&i) then do;
@@ -3704,8 +4115,7 @@ intusermacro7=,
                             s&outc[&time] = p&outc ;
                             %if &hazardratio = 1 %then %do;
                                 if calchazard = 1 then do ;  
-                                    if Uoutc[&time] <= p&outc then _censor = 1;
-                                    
+                                    if Uoutc[&time] <= p&outc then _censor = 1;                                    
                                     if  _censor = 1 then do ; 
                                         _newtime = &time ;                                         
                                         mygood = 0 ;  /* do not want to simulate any further covariate history    */
@@ -3784,9 +4194,7 @@ intusermacro7=,
                             %if &hazardratio = 1 %then %do;
 
                                 if calchazard = 1 then do;
-                                    if Ucompevent[&time] <= pcompevent then _censor = 2;
-                                    
-
+                                    if Ucompevent[&time] <= pcompevent then _censor = 2;                                    
                                     if _censor = 2 then do ;
                                         _newtime = &time ;                                        
                                         mygood = 0 ;  /* do not want to simulate any further covariate history   */
@@ -3802,7 +4210,6 @@ intusermacro7=,
                         p&outc = . ;
                     end;
                  
-
                     %if &hazardratio = 1   %then %do;
                         /*  made it to end-of-followup without event or censor. need to censor due to eof */
                         if calchazard = 1 and mygood = 1 and &time = ( &timepoints -1) then do ; 
@@ -3810,7 +4217,6 @@ intusermacro7=,
                             _newtime = &time ;
                         end;
                     %end;
-
                     /* increment lagged variables for the next time point */
                     %do icov = 1 %to &ncov ;
                         &&cov&icov.._l3 = &&cov&icov.._l2 ;
@@ -4238,7 +4644,6 @@ intusermacro7=,
              pctlpre = hr_   
              pctlname = llim95 ulim95  pctlpts = 2.5 97.5;
              run;
-
              proc sql ;
              select round(hr_llim95,0.01) into :hrlb from _inthrstat_ ;
              select round(hr_ulim95,0.01) into :hrub from _inthrstat_;
@@ -4271,7 +4676,6 @@ intusermacro7=,
      %if &printlogstats = 1 %then %put ;
 
      %*Printing results;
-
      %if &outctype=binsurv or &outctype=bineofu %then %do;    
           title4 'PREDICTED RISK UNDER SEVERAL INTERVENTIONS';
      %end;
@@ -4342,7 +4746,6 @@ intusermacro7=,
           set drmst ;
           array drmst{*} drmst&intstart - drmst&numint ;
           array rmst{*} rmst&intstart - rmst&numint ;
-
           do i = 1 to %eval(&numint + 1 - &intstart);
                drmst[i] = rmst[i] - rmst&refint ;
           end;
@@ -4471,7 +4874,8 @@ intusermacro7=,
        title2= ,
        title3= ,
        tsize = 1,
-       printlogstats = 1
+       printlogstats = 1,
+	   bootstrap_method = 0 
        );
 
     
@@ -4680,10 +5084,29 @@ intusermacro7=,
       %end;
  
 
-      %results ;
+      %if &bootstrap_method = 0 %then %do;
+      	%results ;
+	  %end ;
+	  %else %do;
+	     proc sql noprint ;
+		 select max(_sample_s) as blb_s into: BLB_s from &survdata (where = (int=&refint));
+		 %if &bootstrap_method = 1 %then %do;
+		 select max(_sample_r ) as blb_r into: BLB_r from &survdata (where = (int = &refint and _sample_s > 0)) ;
+		 %end ;
+		 %else %if &bootstrap_method = 2 %then %do;
+			select count(_sample_r ) as blb_r into: bsample_counter from &survdata (where = (int = &refint and _sample_s > 0)) ;
+		 %end;
+		 quit;
+		 %let BLB_s = %sysfunc(left(&BLB_s));
+		 %if &bootstrap_method = 1 %then %let BLB_r = %sysfunc(left(&BLB_r));
+		 %if &bootstrap_method = 2 %then %let bsample_counter = %sysfunc(left(&bsample_counter));
+	  	%results_blb ;
+	  %end;
 
 %mend ;
+
 /**********************/
+
 %macro listpred(main,switchind,start,stop,t0,t1,t2,t3,pre,prep=0);
 /* listpred is in general called two ways, with main and contemp. contemp is for how variables covX appear in the models 
    for covY with X < Y . for main this will be run for all variables and may change  based on switchind = &i when using main */
@@ -5274,7 +5697,7 @@ intusermacro7=,
    NEEDS TO BE ADJUSTED. */
 /* ALSO, THE PRODUCT OF A DICHOTOMOUS AND A CONTINUOUS VARIABLE SHOULD
    PROBABLY INHERIT THE PREDICTOR-TYPE OF THE CONTINUOUS VARIABLE. AT
-   PRESENT IT DOESN'T. */
+   PRESENT IT DOESNT. */
 
 /*FIRST A MINI-MACRO FUNCTION BY ROGER LOGAN 
 FOR COUNTING THE NUMBER OF SPACE-SEPARATED WORDS IN A STRING*/
@@ -5534,7 +5957,6 @@ not the time-varying covariates, which are handled below in %interactionsb*/
                %if &printlogstats = 1 %then %put  &vrbl._I&iota = &&&vrbl._I&iota;    
             %end;
         %end; /*iota*/
-
     %end; /*if there are interactions*/
     %else %do;
        %let &vrbl.ninterx = 0;
@@ -5585,7 +6007,6 @@ not the time-varying covariates, which are handled below in %interactionsb*/
    for type = 6 there is one spline for each term
        type = 8, 9 there are cov.lev - 2 spline variables for each variable */
 
-
 %let nlevels1 = 1 ; /* default value for bin type and baseline variables */
 
 %if &type1 = 1 or &type1 = 2 %then %let nlevels1 = %eval(&&cov&first.lev-1); 
@@ -5623,7 +6044,6 @@ not the time-varying covariates, which are handled below in %interactionsb*/
 %macro makecatint(vrbl,iota,first,second,type1,type2,vartype,baseline);
   /* when first and second are spline variables, the same number of factors is used, except the variable
      names need to be changed. */
-
   /* vartype will indicate an outcome-type variable or covariate-type variable */
 
    %local level1 level2 nlevels1 nlevels2 var1 var2 splinelevel1 splinelevel2 mylag1 mylag2 lag1 lag2 lag3 spl1 spl2 varlevel1 varlevel2 ;
@@ -6289,7 +6709,6 @@ not the time-varying covariates, which are handled below in %interactionsb*/
            %end;        
 
         %end;
-
        /* for user-defined functions of cov&i and any cov&j where j < i (or possibly lagged values of cov&h where h > i ) */
         %if &&cov&i.genmacro^=  %then %do;
             %&&cov&i.genmacro;
@@ -6356,8 +6775,8 @@ not the time-varying covariates, which are handled below in %interactionsb*/
     drop &x.gr;
     %MEND MAKECAT;
 
-/* TIME INTERACTION FOR WHEN THE DATA WASN'T COLLECTED IN THAT TIME PERIOD. */
-/* NOTE: ASSUMED THAT THERE'S A CONSTANT INTERVAL BETWEEN MEASUREMENTS/QUESTIONNAIRES. */
+/* TIME INTERACTION FOR WHEN THE DATA WASNT COLLECTED IN THAT TIME PERIOD. */
+/* NOTE: ASSUMED THAT THERES A CONSTANT INTERVAL BETWEEN MEASUREMENTS/QUESTIONNAIRES. */
 /* ANOTHER ASSUMPTION: NOTHING IS SKIPPED MORE THAN 2 PERIODS IN A ROW. */
 
 
@@ -7063,7 +7482,8 @@ not the time-varying covariates, which are handled below in %interactionsb*/
 %mend rescaleround;
 
 %macro labels;
-  
+   label pD_ulim95 = 'Upper limit 95% CI';
+   label pD_llim95 = 'Lower limit 95% CI';
    label RR_ulim95 = 'Upper limit 95% CI';
    label RR_llim95 = 'Lower limit 95% CI';
    label RD_ulim95 = 'Upper limit 95% CI';
@@ -7074,8 +7494,6 @@ not the time-varying covariates, which are handled below in %interactionsb*/
    label int2      = 'Description';
    
 %if &outctype=binsurv or &outctype=bineofu %then %do;
- 	label pD_ulim95 = 'Upper limit 95% CI';
-   label pD_llim95 = 'Lower limit 95% CI';
    label pD        = 'Risk (%)';
    label pD_std    = 'Bootstrap Risk SE';
    label pD_mean   = 'Bootstrap Risk Mean';
@@ -7087,11 +7505,9 @@ not the time-varying covariates, which are handled below in %interactionsb*/
    %end;
 
 %else %if &outctype=conteofu %then %do;
- label s&outc._ulim95 = 'Upper limit 95% CI';
-   label s&outc._llim95 = 'Lower limit 95% CI';
-   label s&outc        = 'Mean';
-   label s&outc._std    = 'Bootstrap Mean SE';
-   label s&outc._mean   = 'Bootstrap Mean Mean';
+   label pD        = 'Mean';
+   label pD_std    = 'Bootstrap Mean SE';
+   label pD_mean   = 'Bootstrap Mean Mean';
    label rr        = 'Ratio of means';
    label RD        = 'Difference of Means';
    %end;
@@ -7128,6 +7544,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
  quit;
 *****/
 
+
  %local nperiods mintime mydate mywork anydoubles  idouble word simlist i ivar vartmp ngraph mycount myextra mypair graphlist graph1
         graph2 graph3 graph4 graph5 graph6 ;
 
@@ -7137,7 +7554,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
        filename mygraphs "&mywork./graphs.pdf";
    
     proc sql noprint ;
-    select count(&time) as mtime into :nperiods from &covmean ;
+    select count(distinct &time) as mtime into :nperiods from &covmean ; * add in distinct time for testing when bootstrap_method > 0  ;
     select min(&time)   as mintime into :mintime from &covmean ;      
     quit;
 
@@ -7364,7 +7781,10 @@ set _cont  ( where = ( substr(name,1,1)='s'
 
         * natural course risk ;
         data _estncrsk ;
-        set _datass ( keep = risk1 - risk&nperiods _sample_ int where = (_sample_ = 0 and int = 0));
+        set _datass ( keep = risk1 - risk&nperiods int 
+			%if &bootstrap_method = 0 %then _sample_ where = (_sample_ = 0 and int = 0)) ;
+			%else %if &bootstrap_method > 0  %then _sample_s _sample_r where = (_sample_s = 0 and _sample_r = 0 and int = 0)) ;
+			;
         array risk{&nperiods} ;
         &time = 0 ;
         r = 0 ;
@@ -7383,19 +7803,29 @@ set _cont  ( where = ( substr(name,1,1)='s'
         run;
 
 
-        %if &frombootstrap = 1 %then %do;
+        %if &frombootstrap = 1  %then %do;
+		   /* simulated risk under natural course from bootstrap samples */
             data _bsss ;
-            set _datass ( keep = risk1 - risk&nperiods _sample_ int where = (_sample_ > 0 and int = 0) )  ;
+            set _datass ( keep = risk1 - risk&nperiods int 
+				%if &bootstrap_method = 0 %then _sample_  where = (_sample_ > 0 and int = 0) ;
+				%else %if &bootstrap_method > 0  %then _sample_s _sample_r where = (_sample_s > 0 and int = 0 ) ;
+				)  ;
             drop int ;
             run;
 
+			/* observed natural course risk from bootstrap samples*/
             data _ncss ;
-            set _dataos (keep = obrisk&mintime - obrisk%eval(&mintime + &nperiods - 1) _sample_ where = (_sample_ > 0));
+            set _dataos (keep = obrisk&mintime - obrisk%eval(&mintime + &nperiods - 1)
+				%if &bootstrap_method = 0 %then _sample_ where = (_sample_ > 0) ;
+				%else %if &bootstrap_method > 0  %then _sample_s _sample_r where = (_sample_s > 0 ) ;
+			);
             run;
 
             data _bsres ;
             merge _bsss _ncss ;
-            by _sample_ ;
+            %if &bootstrap_method = 0 %then by _sample_ ;
+			%else %if &bootstrap_method > 0  %then by _sample_s _sample_r ;
+			   ;
             array obrisk{&nperiods} obrisk&mintime - obrisk%eval(&mintime+&nperiods-1) ;
             array risk{&nperiods} risk1 - risk&nperiods ;
 
@@ -7407,31 +7837,71 @@ set _cont  ( where = ( substr(name,1,1)='s'
 
         
 
-        
-           proc univariate data = _bsres  noprint  ;
-           var  rdiff1 - rdiff&nperiods  ;
+           %if &bootstrap_method = 0 %then %do;
+           		proc univariate data = _bsres  noprint  ;
+           		var  rdiff1 - rdiff&nperiods  ;
 
 
-           output out = _bsstd2  pctlpre =  rdiff1 - rdiff&nperiods
-                pctlname = _pct025 _pct975 
-                pctlpts = 2.5 97.5 ;
-            run;
+           		output out = _bsstd2  pctlpre =  rdiff1 - rdiff&nperiods
+                	pctlname = _pct025 _pct975 
+                	pctlpts = 2.5 97.5 ;
+
+            	run;
          
-            data _bsstd2 ;
-            set _bsstd2 ;
-            %do i = 1 %to &nperiods ;
-                &time = &i ;
-                lb = rdiff&i._pct025 ;
-                ub = rdiff&i._pct975 ;
-                output ;
-            %end;
-            keep &time lb ub ;
-            run;
+	            data _bsstd2 ;
+	            set _bsstd2 ;
+	            %do i = 1 %to &nperiods ;
+	                &time = &i ;
+	                lb = rdiff&i._pct025 ;
+	                ub = rdiff&i._pct975 ;
+	                output ;
+	            %end;
+	            keep &time lb ub ;
+	            run;
+		   %end;
+		   %else %if &bootstrap_method > 0  %then %do;
 
-        %end;
+			*	data mybsres ;
+			*	set _bsres ;
+			*	run;
+		   	
+         
+			
+			    %let mylist = ;
+				%do i = 1 %to &nperiods ;
+					%let mylist = &mylist rdiff&i ;
+				%end;
+
+				
+
+				data _bsres_gt_0 ;
+				set _bsres (where = (_sample_s > 0  ));
+				run;
+			
+
+				%blb_pct_helper( datain = _bsres_gt_0 , varlistin = &mylist , dataout = _tmp3_) ;
+
+				data _bsstd2 ;
+	            set _tmp3_ ;
+	            %do i = 1 %to &nperiods ;
+	                &time = &i ;
+	                lb = rdiff&i._pct025 ;
+	                ub = rdiff&i._pct975 ;
+	                output ;
+	            %end;
+	            keep &time lb ub ;
+	            run;
+
+				proc datasets library = work nolist ;
+				delete _bsres_gt_0 _tmp3_ ;
+				quit;
+			%end;
+		%end;
 
         data _estobsrisk ;
-        set _dataos (keep = obrisk&mintime - obrisk%eval(&mintime+&nperiods-1) _sample_ where = (_sample_ = 0));
+        set _dataos (keep = obrisk&mintime - obrisk%eval(&mintime+&nperiods-1)
+            %if &bootstrap_method = 0 %then _sample_ where = (_sample_ = 0));
+			%else %if &bootstrap_method > 0  %then _sample_s _sample_r where = (_sample_s = 0 and _sample_r = 0)) ;;
         array obrisk{&nperiods} obrisk&mintime - obrisk%eval(&mintime+&nperiods-1) ;
          &time = 0 ;
         obs = 0 ;
@@ -7564,12 +8034,16 @@ set _cont  ( where = ( substr(name,1,1)='s'
         do i = 1 to &nperiods ;
            death[i] = 1 - obrisk[i] - osurv[i];
         end;
-        keep _sample_  estobsdeath1 - estobsdeath&nperiods  ;
+        keep  estobsdeath1 - estobsdeath&nperiods 
+			%if &bootstrap_method = 0 %then _sample_ ;
+			%else %if &bootstrap_method > 0  %then _sample_s _sample_r ;;
         run;
 
 
         data _estncdeath ;
-        set _datass (keep = _sample_ compevent1 - compevent&nperiods int where = (   int = 0 ));
+        set _datass (keep = %if &bootstrap_method = 0 %then _sample_ ;
+                          %else %if &bootstrap_method > 0  %then _sample_s _sample_r ;
+                         compevent1 - compevent&nperiods int where = (   int = 0 ));
         drop  int ;
         run;
 
@@ -7578,43 +8052,69 @@ set _cont  ( where = ( substr(name,1,1)='s'
         %if &frombootstrap = 1 %then %do;
             data _forgraph3  ;
             merge _estobssurv   _estncdeath  ;
-            by _sample_ ;
+            by  %if &bootstrap_method = 0 %then _sample_ ;
+			    %else %if &bootstrap_method > 0  %then _sample_s _sample_r ;
+				;
             array death{&nperiods} estobsdeath1 - estobsdeath&nperiods  ;
             array cdeath{&nperiods} compevent1 - compevent&nperiods ;
             array riskdiff{&nperiods} ;
 
-            if _sample_ > 0 ;
+            %if &bootstrap_method = 0 %then if _sample_ > 0 ;
+			%else %if &bootstrap_method > 0  %then if _sample_s > 0 and _sample_r > 0 ;
+			   ;
             do &time = 1 to &nperiods ;     
                riskdiff[&time] = death[&time] - cdeath[&time] ;      
             end;
-            keep _sample_ riskdiff1 - riskdiff&nperiods ;
+            keep %if &bootstrap_method = 0 %then _sample_  ;
+                 %else %if &bootstrap_method > 0  %then _sample_s _sample_r ;
+                riskdiff1 - riskdiff&nperiods ;
             run;
 
         
  
 
-       
-            proc univariate data = _forgraph3  noprint  ;
-            var  riskdiff1 - riskdiff&nperiods  ;
-            output out = _sdgraph4  pctlpre =  riskdiff1 - riskdiff&nperiods
-                 pctlname = _pct025 _pct975 
-                 pctlpts = 2.5 97.5 ;
-            run;
-     
+           %if &bootstrap_method = 0 %then %do;
 
-
-            data _sdgraph4 ;
-            set _sdgraph4 ;
-            %do i = 1 %to &nperiods ;
-               rename riskdiff&i._pct025 = pctlb&i riskdiff&i._pct975 = pctub&i ; 
+	            proc univariate data = _forgraph3  noprint  ;
+	            var  riskdiff1 - riskdiff&nperiods  ;
+	            output out = _sdgraph4  pctlpre =  riskdiff1 - riskdiff&nperiods
+	                 pctlname = _pct025 _pct975 
+	                 pctlpts = 2.5 97.5 ;
+	            run;
+	     
             %end;
-            run;
 
+			%else %if &bootstrap_method > 0  %then %do ;
+
+			    %let mylist = ;
+				%do i = 1 %to &nperiods ;
+					%let mylist = &mylist riskdiff&i ;
+				%end;
+
+				
+				
+				%blb_pct_helper( datain = _forgraph3 , varlistin = &mylist , dataout = _sdgraph4) ;
+
+
+		   %end;
+
+	            data _sdgraph4 ;
+	            set _sdgraph4 ;
+	            %do i = 1 %to &nperiods ;
+	               rename riskdiff&i._pct025 = pctlb&i riskdiff&i._pct975 = pctub&i ; 
+	            %end;
+	            run;
+		  
+		   
         %end ;
 
 
         data _graph3  ;
-        merge _estobssurv(where = (_sample_ = 0)) _estncdeath(where = (_sample_ = 0))  
+        merge _estobssurv(where = ( %if &bootstrap_method = 0 %then _sample_ = 0 ; 
+                                    %else %if &bootstrap_method > 0  %then _sample_s = 0 and _sample_r = 0 ;
+                                )) 
+             _estncdeath(where = (        %if &bootstrap_method = 0 %then _sample_ = 0 ; 
+                                    %else %if &bootstrap_method > 0  %then _sample_s = 0 and _sample_r = 0 ;))  
              %if &frombootstrap = 1 %then _sdgraph4 ; ;
         %if &frombootstrap = 1 %then %do ;
             array  pctlb{&nperiods} ;
@@ -7837,14 +8337,26 @@ set _cont  ( where = ( substr(name,1,1)='s'
 
 
 %macro createhazard ;
+
+data _null_ ;
+   put "inside create hazard macro sample = &bsample ";
+run;
+
      %local firstint secondint ;
       data _calchazard_ ;
       calchazard = 1 ;
+	  %if &bootstrap_method = 0 %then %do;
       _sample_ = &bsample ;
+	  %end;
+	  %else %if &bootstrap_method > 0  %then %do;
+	  	_sample_r = &sample_r ;
+		_sample_s = &sample_s ;
+	  %end;
       run;
 
       %let firstint = %sysfunc(compress(%scan(&intcomp,1)));
       %let secondint = %sysfunc(compress(%scan(&intcomp,2)));
+
 
       data hazard1 ;
       set simulated&firstint;
@@ -7864,20 +8376,26 @@ set _cont  ( where = ( substr(name,1,1)='s'
 
       data _calchazard_ ;
       calchazard = 0 ;
-      _sample_ = &bsample ;
+
+      %if &bootstrap_method = 0 %then %do;
+      	_sample_ = &bsample ;
+	  %end;
+	  %else %if &bootstrap_method > 0  %then %do;
+	  	_sample_r = &sample_r ;
+		_sample_s = &sample_s ;
+	  %end;
       run;
 
 
       
-data both ;
-set both ;
-rename  _censor = event _newtime = newtime ;
+	data both ;
+	set both ;
+	rename  _censor = event _newtime = newtime ;
 
-if int = &firstint then int = 0;
-else int = 1 ;
-run;
+	if int = &firstint then int = 0;
+	else int = 1 ;
+	run;
 
- 
  *ods select none ;
  proc phreg data = both   ;
  ods output ParameterEstimates=_inthr0_  ; 
@@ -7901,8 +8419,16 @@ run;
 
     data _inthr0_ ;
     set _inthr0_ (keep = HazardRatio) ;
-    _sample_ = &bsample ;
+     %if &bootstrap_method = 0 %then %do;
+      _sample_ = &bsample ;
+	  %end;
+	  %else %if &bootstrap_method > 0  %then %do;
+	  	_sample_r = &sample_r ;
+		_sample_s = &sample_s ;
+	  %end;
     run;
+
+%if &run_remote = 0 %then %do;
 
     %if &bsample = &sample_start %then %do;
          data &hazardname ;
@@ -7914,7 +8440,11 @@ run;
          set &hazardname  _inthr0_ ;
          run;
     %end;
-
+%end;
+%else %do;
+      proc append base = &hazardname data = _inthr0_ ; run;
+%end;
+  
     proc datasets library = work nolist ;
     delete both hazard1 hazard2 _inthr0_ ;
     quit;
@@ -7977,3 +8507,3731 @@ run;
         %if &vartype = 0 %then %let &&outvar.addvars = &tmplist ;
         %if &vartype = 1 %then  %let cov&i.addvars =  &tmplist ;
 %mend ;
+
+
+%macro samples_blb(sample_s = , sample_r = );
+
+/* want to create samples for innter loop of samples (blb_s, blb_r) */
+/* not sure where to do this. */
+    %local subseed i ;
+
+    %************ CREATING BOOTSTRAP SAMPLES;  
+    
+       /* %if &printlogstats = 1 %then */ %put  Creating bootstrap sample sample_s = &sample_s , sample_r = &sample_r , blb_b = &BLB_b ,  seed = &seed , ssize=&ssize , nsimul = &nsimul , nparam = &nparam  ;
+       /* %if &printlogstats = 1 %then %put    ; */
+
+        %*Generating random sample of ids to be used in bootstrap sample; 
+
+		data _idsamples ;
+		set step2(where = (sample_si = &sample_s and sample_rj = &sample_r )) ;
+		keep newid BLB_count0 ;
+		run;
+
+        %*Merging with parameter estimation data;
+   
+      * paramdata is original data for parameter models. paramsample is bootstrap sample with newid , numberhits, and the current bootstrap sample > 0
+      this overrites the value in paramdata where newid and time agree. ;
+   
+        data _paramsample_ ;
+        set _idsamples ;
+        _sample_r = &sample_r  ;
+        _sample_s = &sample_s ;
+        run; 
+
+  
+    * add in the variable numberhits for the number of times a subject is selected into the bootstrap sample ;
+
+		%let droplist = ;
+ 		%if &expand_param_counts = 1 %then %let droplist = BLB_count0 ;
+		%if %bquote(&censor) =  AND &expand_param_counts = 1 %then %let droplist = &droplist _copy_ ;
+    data param ;
+        merge _paramdata_ (in= p) _paramsample_;
+        by newid ;
+        if BLB_count0 > 0 ; *delete those not selected into sample ;
+		%if &expand_param_counts = 1 %then %do;
+	        do _copy_ = 1 to BLB_count0 ; * make numberhits copies of each remaining subject ;
+			    BLB_counts = 1 ;
+				%if &bootstrap_method = 0 %then bootstrap_counts = 1 ;;
+	            output ;
+	        end;
+		%end;
+		%if &expand_param_counts = 0 %then %do;
+			%if &bootstrap_method > 0 %then rename BLB_count0 = BLB_counts ;;
+			%if &bootstrap_method = 0 %then rename BLB_count0 = bootstrap_counts ;;
+		%end;
+
+        %if %bquote(&droplist )^= %then  drop &droplist ;;
+              ;
+        run;
+
+
+	%if %bquote(&censor) ^= AND &expand_param_counts = 1 %then %do;
+	    /* when using censoring weights we need to create a newid so that the expansion will work when merged */
+		proc sort data = param ;
+		by newid _copy_ &time ;
+		run;
+
+		data param ;
+		set param (drop = newid _copy_ );
+		retain newid ;
+		if _n_ = 1 then newid = 0 ;
+		if &time = 0 then newid = newid + 1 ;
+	    run;
+	%end;
+*proc means data = param(where = (&time = 0)) n sum ;
+*var BLB_counts ;
+*run;
+
+       * reset the outcome and covariate bounds to that models and simulated 
+        values depend on what would be the observed bounds ;
+
+        data _covbounds_ /*_null_ */ ;
+        set param end=_end_;
+        %do i=0 %to &ncov;
+            %if &&cov&i.otype=3 or &&cov&i.otype=4 or &&cov&i.otype=6 or &&cov&i.otype=7   or &&cov&i.otype = -1  %then %do;
+                
+                retain &&cov&i.._min &&cov&i.._max;
+
+                if _n_ = 1 then do;
+                    &&cov&i.._min =  1.0e100;
+                    &&cov&i.._max = -1.0e100;
+                    end; 
+
+                *if &&cov&i ne . and &&cov&i < &&cov&i.._min then &&cov&i.._min = &&cov&i;
+                /* 6-2015 rwl need to treat otype = 4 - 0-lin different. want min of non-zero values, otherwise min will be 0 */
+                %if &&cov&i.otype ^= 4 %then if &&cov&i ne . and &&cov&i < &&cov&i.._min then &&cov&i.._min = &&cov&i;;
+                %if &&cov&i.otype  = 4 %then if &&cov&i > 0  and &&cov&i < &&cov&i.._min then &&cov&i.._min = &&cov&i;;
+                if &&cov&i ne . and &&cov&i > &&cov&i.._max then &&cov&i.._max = &&cov&i;
+                
+                if _end_ then do; 
+
+                    * for truncated normal model we will extend the bounds based on the oringal sample (rwl 7/2013) ; 
+                  
+                      
+
+                    call symput("cov&i.min", trim(left(&&cov&i.._min))); 
+                    call symput("cov&i.max", trim(left(&&cov&i.._max)));
+                 end;
+                
+                %end;
+            %end;
+        %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3  %then %do;
+
+             retain &outc._min &outc._max;
+
+                if _n_ = 1 then do;
+                    &outc._min =  1.0e100;
+                    &outc._max = -1.0e100;
+                    end; 
+
+                if &outc ne . and &outc < &outc._min then &outc._min = &outc;
+                if &outc ne . and &outc > &outc._max then &outc._max = &outc;
+                
+                if _end_ then do;
+                    call symput("outcmin",trim(left(&outc._min)) );
+                    call symput("outcmax",trim(left(&outc._max)) );
+                    end;
+        %end;
+		%if &bootstrap_method = 0 %then %do ;
+			_sample_ = &bsample ;
+		%end;
+		%else %if &bootstrap_method > 0 %then %do;
+         	_sample_r = &sample_r ;
+		 	_sample_s = &sample_s ;
+		%end;
+        keep %if &bootstrap_method = 0 %then _sample_ ;
+             %else %if &bootstrap_method > 0 %then _sample_r _sample_s ;
+              %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3  %then  &outc._min &outc._max ;
+                %do i = 0 %to &ncov ; 
+                    %if &&cov&i.otype=3 or &&cov&i.otype=4 or &&cov&i.otype=6 or &&cov&i.otype=7   or &&cov&i.otype = -1  %then &&cov&i.._min &&cov&i.._max ;
+                %end ;
+                 ;
+        if _end_ then output ;
+    run;
+
+    %do i = 0 %to &ncov;
+        %if &&cov&i.otype=3 or &&cov&i.otype=4 or  &&cov&i.otype=6 or &&cov&i.otype=7  or &&cov&i.otype=-1 %then %do;
+            %if &printlogstats = 1 %then %put  bootstrap sample &sample_s &sample_r &&cov&i range is &&cov&i.min to &&cov&i.max;                    
+            %end;
+        %end;
+    %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu %then %do;
+      %if &printlogstats = 1 %then %put  bootstrap sample &sample_s &sample_r &outc range is &outcmin to &outcmax;
+      %end;
+   
+        
+
+        %*Merging with simulation data;
+
+        * default simul data set is to take all subjects in param data set, number of subjects in nparam ;
+  
+    * _simuldata_ has one observation per person for time = 0 ;
+        /* idsamples containes number of times newid selected into current param data set */
+        data simul ;
+        merge _simuldata_  _idsamples;
+        by newid; 
+		if BLB_count0 > 0 ;
+		%if &bootstrap_method = 0 %then %do;
+			_sample_ = &bsample ;
+		%end;
+		%else %if &bootstrap_method > 0 %then %do;
+        	_sample_r = &sample_r  ; 
+			_sample_s = &sample_s ;
+		%end;
+        run;
+
+
+        %if &expand_simul_counts = 1 %then %do;
+        	data simul ;
+        	set simul ;
+        	do _copy0_ = 1 to BLB_count0;
+			    
+			    %if &bootstrap_method = 0 %then bootstrap_counts = 1 ;;
+				%if &bootstrap_method > 0  %then BLB_counts = 1 ;;
+                output ;
+        	end;
+        	drop BLB_count0 _copy0_ ;
+        	run;
+		%end;
+		%else %do;
+			proc datasets library = work nolist;
+			modify simul ;
+			rename BLB_count0 = BLB_counts ;
+			quit;
+		%end;
+		
+
+        /* want to sample when nsimul is different from size of param data set */
+        %if &nsimul ne &ssize %then %do;
+            * now take a random sample of size nsimul  when nsimul ne nparam ;
+            %let subseed = %eval(2*&seed);
+
+			%if &use_bootstrap_counts = 1 %then %do;
+        		data simul_expanded ;
+        		set simul ;
+			 
+        		do _copy0_ = 1 to BLB_count0  ;
+				   	%if &bootstrap_method = 0 %then bootstrap_counts = 1 ;;
+				    %if &bootstrap_method > 0  %then BLB_counts = 1 ;;
+                	output ;
+        		end;
+        		drop BLB_count0 _copy0_ ;
+        		run;
+			%end;
+
+            proc surveyselect data = %if &use_bootstrap_counts = 0 %then simul ;
+			                         %else %if &use_bootstrap_counts = 1 %then simul_tmp ;
+                        out = simul_tmp noprint
+                        method=urs  
+                        sampsize=&nsimul seed=&subseed;			
+            run;
+
+			%if &use_bootstrap_counts = 0 %then %do;
+            	data simul ;
+            	set simul_tmp ;
+				%if &bootstrap_method > 0 %then %do;
+            		_sample_r = &sample_r ;
+					_sample_s = &sample_s ;
+				 %end;
+				 %else %if &bootstrap_method = 0 %then %do;
+					_sample_ = &bsample ;
+				 %end;
+             	do _copy_ = 1 to numberhits ;
+				    %if &bootstrap_method = 0 %then bootstrap_counts = 1 ;;
+				    %if &bootstrap_method > 0 %then BLB_counts = 1 ;;;
+                    output ;
+             	end;				
+             	drop _copy_ numberhits ;
+             	run;
+			%end;
+			%else %if &use_bootstrap_counts = 1 %then %do;
+
+				proc sql ;
+				create table mytest3 as select
+				 id, count(newid) as id_count ,
+				         sum(numberhits) as BLB_counts_new 
+				 from simul_tmp
+				 group by newid ;
+				 quit;
+
+ 				proc sort data = mytest3   ;
+ 				by newid;
+ 				run;
+
+				data simul ;
+ 				merge simul mytest3  ;
+ 				by newid ;
+				BLB_counts = BLB_counts_new ;
+				drop BLB_counts_new ;
+ 				run;				
+
+			%end;
+         %end;
+
+ 
+   
+     %if &hazardratio = 1  AND &bootstrap_hazard = 0  %then %do;     
+         data _calchazard_ ;
+         calchazard = 0 ;
+         _sample_r = &sample_r  ;
+		 _sample_s = &sample_s ;
+         run;
+    %end;
+
+    proc datasets library=work nolist ;
+        delete _idsamples ;
+    quit;
+   /**
+    proc contents data = simul ; run ;
+   **/  
+%mend samples_blb;
+
+%macro bootstrap_blb ;
+	/* variables for BLB method:
+         BLB_b = size of smaller sample of original data 
+		 BLB_s = number of samples of sze BLB_b to create  : used for outer loop 
+		 BLB_r = number of samples of size n to use for each sample of size b : used in inner loop
+
+      The outer loop will be for BLB_s for each sample of size b, then an inner loop over 
+      BLB_r for each sample of size n
+
+     In this case sample_start and sample_end are for BLB_s
+  ****/
+
+       /* as a first test we will generate ids for all samples used in BLB method */ 
+		
+
+		%local use_blb_sampling  ran_basemodel;
+		%let use_blb_sampling = 1 ;
+		%let ran_basemodel = 0;
+		%if ((&bootstrap_method = 2 and &BLB_s_start = 1 AND &BLB_s_max = 1) or (&bootstrap_method = 1 and &BLB_s = 1)) AND &test_blb_using_samples_orig = 1
+			%then %let use_blb_sampling = 0 ;
+		%if &sample_start = 0 %then %do ;
+			%let sample_start = 1 ;   
+			%let ran_basemodel = 1 ;
+		%end;
+
+        %if &BLB_s > 0  AND  &BLB_r > 0 %then %do; 
+			%if &use_blb_sampling = 1 %then %do;
+			    %if &use_disjoint_blb_samples = 0 %then %do;
+					proc surveyselect data = tmpids(keep =newid ) out = step1 (rename = (replicate = sample_si))
+		   			method = srs 
+		   			sampsize = &BLB_b 
+		   			reps = &BLB_s_max 
+					seed = &seed 
+		   			noprint 
+		   				;
+					run ;
+
+				%end;
+				%else %if &use_disjoint_blb_samples = 1 %then %do;
+					%local BLB_s_last ii ;
+					%let BLB_s_last = &BLB_s ;
+					%if &bootstrap_method = 2 %then %let BLB_s_last = &BLB_s_max ;
+					data _disjoint0_ ;
+					set tmpids (keep = newid );
+					call streaminit(&seed);
+					x = rand('uniform');
+					run;
+
+					proc sort data = _disjoint0_ ;
+					by x ;
+					run;
+					                
+					data _disjoint1_;
+					set _disjoint0_ ;
+					%do ii = 1 %to &BLB_s_last ;
+						if %eval((&ii - 1 ) * &BLB_b + 1) <= _N_ <= %eval(&ii * &BLB_b ) then sample_si = &ii ;;
+					%end;
+	                if sample_si ne . then output ;
+	                run;
+
+					data step1 ;
+					set _disjoint1_ (keep = newid sample_si );
+					run;
+
+					proc sort data = _disjoint1_ (keep = newid sample_si) out = step1 ;
+					by sample_si newid ;
+					run;
+
+            	%end;
+				proc surveyselect data = step1 
+		  		out=step2 (drop = ExpectedHits SamplingWeight rename = (replicate = sample_rj 
+		                                                                numberhits = BLB_count0))
+		  		method = urs 
+		  		sampsize = &nsimul  
+				%if &bootstrap_method = 1 %then reps = &BLB_r ;
+				%else %if &bootstrap_method = 2 %then reps = &BLB_r_max ; 
+				/* %if &BLB_keep_seeds = 1 %then outseed ;*/
+				outseed 
+				%if %bquote(&BLB_use_seeds)^= %then %do ;
+					seed = &BLB_use_seeds 
+				%end;
+				%else %do;
+					seed = %eval(&seed * &seed )
+				%end;
+		  		noprint 
+		 			;
+		  		strata sample_si ;
+				run;
+
+			
+				data _blb_seeds_;
+				set step2(keep = sample_si InitialSeed );
+				by sample_si ;
+				if first.sample_si ;
+				run;
+
+				data step2 ;
+				set step2 (drop = InitialSeed );
+				run;
+			
+
+			%end;
+
+    		%*Looping over bootstrap samples;
+
+    		%let bsample = 0 ;
+			%local rstart rend adaptive_iteration rconverged ;
+			%local sstart send sconverged ;
+
+			%if &bootstrap_method = 1 %then %do;
+					%let sstart = 1 ;
+					%let send = &BLB_s ;
+					%let adaptive_iteration = 1 ;
+					%let sconverged = 1 ;
+					%if &chunked = 1 %then %do;
+						%let sstart = &sample_start ;
+						%let send = &sample_end ;
+					%end;
+			%end ;
+        	%else %if &bootstrap_method = 2 %then %do;
+					%let sstart = 1 ;
+					%let send = &BLB_s_start ;
+					%let adaptive_iteration = 1 ;
+            		%let sconverged = 0 ;
+					%if &chunked = 1 %then %do;
+						%let sstart = &sample_start ;
+						%let send = &sample_end ;
+						%let sconverged = 1 ;
+						%put IN ADAPTIVE METHOD WHEN RUNNING PROGRAM IN CHUNKS, ADAPTIVE METHOD FOR S IS TURNED OFF;
+					%end ;
+			%end;
+				
+
+			%do %until(&sconverged = 1 );
+    			%do sample_s = &sstart %to &send ;
+	        		%if (&outputs ^= yes or %eval(&sample_s) ^= 0) %then %do;
+	               		%let ods_logit = ods select none ;
+	               		%let ods_reg = ods select none ;
+	               		%let ods_qlim = ods select none ;
+	        		%end;
+
+
+					%if &bootstrap_method = 1 %then %do;
+						%let rstart = 1 ;
+						%let rend = &BLB_r ;
+						%let adaptive_iteration = 1 ;
+						%let rconverged = 1 ;
+					%end ;
+	        		%else %if &bootstrap_method = 2 %then %do;
+						%let rstart = 1 ;
+						%let rend = &BLB_r_start ;
+						%let adaptive_iteration = 1 ;
+	            		%let rconverged = 0 ;
+					%end;
+
+					%if &use_blb_sampling = 1 %then %do;
+						data _null_ ;
+						set _blb_seeds_ (where = (sample_si = &sample_s )) ;
+						call symput('seed',left(InitialSeed));
+						put "starting r loop with " _all_ ;
+						run;
+					%end;
+					%else %put starting r loop with seed = &seed ;
+
+					%do %until ( &rconverged = 1 ); /* the do until always runs one iteration and checks condtion at end of loop */
+
+						%do sample_r = &rstart  %to &rend  ;
+							%let bsample = %eval(&bsample + 1 );
+							%let bsample_counter = %eval(&bsample_counter + 1 );
+	        				%*Generating samples;
+
+							%if &printlogstats = 1 %then %put  before sample =  ( &sample_s , &sample_r )   seed = &seed ;
+							%if &printlogstats = 1 %then %put  ;
+
+							%if &use_blb_sampling = 1 %then %do ;
+			        			%samples_blb(sample_s = &sample_s , sample_r = &sample_r ); 
+							%end;
+							%else %do;
+								%samples ;
+								data param ;
+								set param (rename = ( bootstrap_counts = BLB_counts)) ;
+								sample_s = &sample_s ;
+								sample_r = &sample_r ;
+								run ;
+
+							    data simul ;
+								*set simul (drop = bootstrap_counts );
+								set simul (drop = _sample_ rename = (bootstrap_counts = BLB_counts) );
+								_sample_s = &sample_s ;
+								_sample_r = &sample_r ;
+								run;
+
+								data _covbounds_ ;
+								set _covbounds_ (drop = _sample_) ;
+								_sample_s = &sample_s ;
+								_sample_r = &sample_r ;
+								run;
+
+	
+							%end;
+
+
+							 
+			        		%*Estimating parameters;
+			        		%if &usebetadata = 0 %then %do;            
+			                	%if &uselabelc = 0  and &uselabelo = 0 %then options nolabel ;;
+			                	%parameters;     
+			                	options &label_orig ;  
+							 
+			        		%end;
+
+			        		%else %do; /*feb2013*/
+			            		data _beta_;
+			            		set &betadata;
+			            		run;
+			        		%end;   
+
+	 
+		        			ods select all ; 
+
+		        			data _betar_ ;
+		        			set _beta_  (where = ( _sample_r = &sample_r and _sample_s = &sample_s )) ;
+		        			run;
+
+		        			data _seedr_ ;
+		        			_seedr_ = %eval(&seed);
+		        			_sample_r = &sample_r ;
+							_sample_s = &sample_s ;
+		        			run;
+
+	       					%if &created_dataviews = 0  %then %do;
+		             			/* initialize data views for interventions */
+
+		             			%if &runnc = 1 %then %do;
+		                 			%interv_init(intno=0, intlabel='Natural course' ); 
+		             			%end;   
+		        
+
+		             			%do intnum = 1 %to &numint;
+		                			%interv_init(&&interv&intnum);
+		             			%end;             
+	 
+					 			%let created_dataviews = 1 ;
+	        				%end;            
+	       
+		        			%if &hazardratio = 1 %then %do;
+		             			%if &sample_s = 0 %then  %createhazard ;
+		             			%else %if &bootstrap_hazard = 1 %then %createhazard ;
+		        			%end;
+
+	        				%if &runnc = 1 %then %do;  /*** for natural course results ***/
+	            				%*No intervention cumulative incidence;
+
+	            				%if &sample_s = 0 AND  %bquote(&simuldata)^=  %then %do;
+
+		                			%*Outputting/creating  simulated dataset;
+
+		                			data &simuldata ;
+		                			set simulated0 ;
+		                			run;
+	              
+		                			%if &testing = yes %then %do;
+		                     			%do intcount = 0 %to &numint ;
+		                        			data &savelib..simuldata&intcount  ;
+		                        			set simulated&intcount ;
+		                        			run;
+		                      			%end;
+		                			%end;
+
+		                			%*Outputting the mean of covariates and probability of event;
+		                			proc means data= &simuldata  mean min max ;                                                                      
+		                			var %if &outctype = binsurv %then cuminc ;
+		                    			intervened averinterv  
+		                    			%if &outctype = binsurv %then %do;
+		                        			%do j = 1 %to %eval(&timepoints);
+		                            			s&outc.&j
+		                        			%end;
+		                    			%end;
+		                    			%else &outc ;
+		                    			%if &minimalistic = no %then %do;
+		                        			%do i = 1 %to &ncov;
+		                            			%do j = 1 %to %eval(&timepoints);
+		                                			%if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ;
+		                                			s&&cov&i..&j
+													/**  %if &intno = 0  AND %bquote(&censor)^= %then %do ; ***/
+													ncs&&cov&i..&j %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j ;
+													/** %end;  ****/
+		                            			%end;
+		                        			%end; 
+		                    			%end;
+		                    			%if &outctype = binsurv %then %do;
+		                        			%do n = 1 %to %eval(&timepoints) ;
+		                            			cumincr&n cumsurvr&n cumcompeventr&n   
+		                        			%end;
+		                    			%end;
+		                				;
+	            
+	                    			output out=interv0 mean= %if &outctype = binsurv %then pd  ;
+	                        			intervened averinterv 
+	                        			%if &outctype = binsurv %then %do;
+	                            			%do j = 1 %to %eval(&timepoints);
+	                                			s&outc.&j
+	                            			%end;
+	                        			%end;
+	                        			%else s&outc ;
+	                        			%if &minimalistic = no %then %do;
+	                            			%do i = 1 %to &ncov;
+	                                			%do j = 1 %to %eval(&timepoints);
+	                                    			%if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ;
+	                                    			s&&cov&i..&j
+													/** %if &intno = 0  AND %bquote(&censor)^=   %then  %do;  ***/
+													ncs&&cov&i..&j %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j ;
+													/** %end ;  **/
+	                                			%end;
+	                            			%end;  
+	                        			%end;
+	                        			%if &outctype = binsurv %then %do;
+	                            			%do n = 1 %to %eval(&timepoints) ;
+	                                			cumincr&n cumsurvr&n cumcompeventr&n  
+	                            			%end;
+	                        			%end;
+	                        			;
+	                    
+	                    			title "mean, min, max under intervention 0";
+		                			run;
+
+
+		                			data interv0;
+		                			set interv0;
+		                			_sample_r = &sample_r;
+									_sample_s = &sample_s ;
+		                			length int2 $70 ;
+		                			int=0;
+		                			int2="Natural course";
+		                			n=_FREQ_;
+		                			keep int int2 _sample_ n   intervened averinterv 
+		                			%if &outctype=binsurv %then %do;
+		                    			pd
+		                    			%do j = 1 %to %eval(&timepoints);
+		                        			s&outc.&j
+		                    			%end;
+		                			%end;
+		                			%else s&outc ;
+		                 				%if &minimalistic = no %then %do;
+		                    				%do j = 1 %to %eval(&timepoints);
+		                        				%do i = 1 %to &ncov;
+		                            				%if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ;
+		                            				s&&cov&i..&j
+													/*** %if &intno = 0  AND %bquote(&censor)^=   %then  %do; ***/
+													ncs&&cov&i..&j %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j ;
+													/*** %end; ****/
+		                        				%end;
+		                    				%end;  
+		                				%end;
+		                			dataname ssize obsp 
+		                			;
+		                			dataname = "&data";
+		                    		ssize = &ssize ;
+		                    		obsp = &obsp ;
+		                			run;             
+
+	                				%if &outctype = binsurv %then %do;
+
+	                   					proc means data = &simuldata noprint ;
+	                   					var  %do n = 1 %to %eval(&timepoints);
+	                        					cumincr&n cumsurvr&n cumcompeventr&n 
+	                    					%end; ;
+	                   					output out = survprobs0 mean = %do n = 1 %to &timepoints; risk&n surv&n compevent&n  %end; ;
+	                   					run;
+
+	                    				/* initialize survdata */
+
+	                    				data surv_tmp0 ;
+	                        			set survprobs0 ;
+	                        			length int2 $70 ;
+	                        			int = 0 ;
+	                        			int2 = "Natural course";
+	                        			_sample_r = &sample_r;
+										_sample_s = &sample_s ;
+	                        			surv0 = 1;
+	                        			n = _freq_ ;
+	                        			keep  int int2 _sample_r _sample_s n  surv0
+	                        				%do n = 1 %to &timepoints;
+	                            				risk&n surv&n compevent&n  
+	                        				%end;
+	                    					;
+	                    				run;
+
+
+
+										data interv0 ;
+										merge interv0 surv_tmp0 (keep = surv1 - surv&timepoints );
+										array surv{&timepoints } ;
+										%do myi = 1 %to &ncov ;
+											array ncs&&cov&myi {&timepoints } ;
+											%if &&usevisitp&myi = 1 %then array ncs&&cov&myi.randomvisitp { &timepoints } ; ;
+										%end;
+
+					    				do j = 2 to &timepoints ; 
+						    				%do myi = 1 %to &ncov ;
+												ncs&&cov&myi [j ] = ncs&&cov&myi [ j ] / surv[j - 1 ] ; * should this be j or j-1;
+												%if &&usevisitp&myi = 1 %then ncs&&cov&myi.randomvisitp [ j ] = ncs&&cov&myi.randomvisitp [ j ] / surv[j - 1] ;;
+											%end;
+					     				end;
+						 				drop j ;
+					     				run;
+	                				%end;   
+	                				%else %do;
+
+	                        			/* initialize survdata */
+
+	                    				data surv_tmp0 ;
+				                        set interv0 ;
+				                        length int2 $70 ;
+				                        int = 0 ;
+				                        int2 = "Natural course";
+				                        _sample_r = &sample_r;
+										_sample_s = &sample_s ;                                        
+				                        keep  int int2 _sample_r _sample_s  s&outc  ;
+				                    	run;
+	                				%end; 
+	            				%end;  /* end of saving simuldata , needed outside of interv and interv_init macros */
+	            				%else %do;                   
+	                				%interv (intno=0 , intlabel='Natural course'); /* do not need to save simulated data set */                                 
+	            				%end;   
+
+	         
+				                %if &sample_s = &sample_start AND &sample_r = 1 AND &chunked = 1 AND &ran_basemodel = 0   %then %do;  
+				                    data &survdata ;
+				                    set  surv_tmp0 ;
+				                    run;
+				                %end;
+				                %else %do ;
+				                    proc append base = &survdata data = surv_tmp0;
+				                    run;
+				                %end;
+	           
+	        				%end ; /* run natural course = 1 **/
+	        				%*Looping over interventions;
+
+
+					        %do intnum = 1 %to &numint;
+					            %interv(&&interv&intnum);                    
+					                %if &intnum = 1 AND &runnc = 0 AND &sample_s = &sample_start AND &sample_r = 1 AND &chunked = 1 AND &ran_basemodel = 0 %then %do;
+					                      data &survdata ;
+					                      set surv_tmp&intnum ;
+					                      run;
+					                %end;
+					                %else %do;
+					                    proc append base = &survdata data = surv_tmp&intnum ;
+					                    run;
+					                %end;            
+					        %end;
+
+					        %*Outputing intervention results into temporary data sets ;
+
+					        %let intstart = 0 ;
+					        %if &runnc = 0 %then %let intstart = 1;
+
+					        %if %eval(&sample_s) = &sample_start and &sample_r = 1 and &chunked = 1 AND &ran_basemodel = 0   %then %do;  
+					           
+					            %do int = &intstart %to %eval(&numint);
+					                
+					                data interv&int._all;
+					                set interv&int;
+					                run;
+					            %end;
+					        %end;
+					        %else %do;
+					            %do int = &intstart %to %eval(&numint);
+					                proc append base = interv&int._all data = interv&int;
+					                run;
+					            %end;
+					        %end;
+
+					        %if &chunked = 1 %then %do;
+					             /* save all interventions into a permanent data set for each chunk */
+					             %if &sample_s = &sample_start and &sample_r = 1 AND &ran_basemodel = 0    %then %do; 
+
+					                  /* save interventions */
+					                  %if &runnc = 1 %then %do;
+					                     data &intervdata ; 
+					                     set interv0 ;
+					                     run;
+					                  %end;
+					                  %else %do;
+					                      data &intervdata ;
+					                      set interv1; 
+					                      run;
+					                  %end;
+					                   
+					                  %do int = %eval(&intstart +1) %to &numint ;
+					                      *proc append base = &intervdata    data = interv&int ;
+					                      *run;
+							      			data &intervdata ;
+							      			set &intervdata interv&int ;
+							      			run;
+	                  				 %end;  
+	             				%end;
+					            %else %do;
+					                  %do int = &intstart %to &numint ;
+					                      *proc append base = &intervdata    data = interv&int  ;
+					                      *run;
+							      		data &intervdata ;
+							      		set &intervdata interv&int ;
+							      		run;
+					                 %end; 
+					            %end;
+	        				%end;
+	 
+	        				%if &printlogstats = 1 %then %put  sample_s = &sample_s , sample_r = &sample_r  , seed = &seed  ;
+
+	        				%let seed = %eval(&seed+3);
+
+
+	       					proc datasets library = work nolist ;
+	        				delete _betar_ _seedr_   %if &sample_r > 0 and &sample_s > 0 %then _simulsample_ ; param simul  _covbounds_ 
+	               				%if &runnc = 1 %then surv_tmp0 ;
+	               				%do i = 1 %to &numint ; surv_tmp&i %end;
+	               				;
+	        				quit;
+	   
+	    				%end; /* end of r */
+
+
+						%if &bootstrap_method = 2 %then %do;
+							/* check convergence of method */
+							%put testing for r convergence for s sample &sample_s using &rend samples ;
+	    					%check_rconvergence (sample = &sample_s ); /* will use variables from current macro */
+	    					%if &rconverged = 0 %then %do;
+								%let adaptive_iteration = %eval(&adaptive_iteration + 1 );
+	        					%let rstart = %eval(&rend + 1) ;
+	        					%let rend = %eval(&rend + &BLB_r_delta );
+								%if &rend > &BLB_r_max %then %let rend = &BLB_r_max ;
+								%if &rstart > &BLB_r_max %then %do;
+									%let rconverged = 1 ;
+									%put STOPPING ADAPTIVE ITERATION  FOR R = &sample_r SINCE &rstart > &BLB_r_max ;
+								%end ;
+	    					%end;
+
+
+						%end ;
+	 				%end; /* end of do until rconverged  */
+
+				%end ; /* end of s loop */
+    
+				%if &bootstrap_method = 2    %then %do;
+							/* check convergence of method */
+							%put testing for s convergence using &send samples ;
+	    					%check_sconvergence  ; /* will use variables from current macro */
+	    					%if &sconverged = 0 %then %do;
+								%let adaptive_iteration = %eval(&adaptive_iteration + 1 );
+	        					%let sstart = %eval(&send + 1) ;
+	        					%let send = %eval(&send + &BLB_s_delta );
+								%if &send > &BLB_s_max %then %let send = &BLB_s_max ;
+								%if &sstart > &BLB_s_max %then %do;
+									%let sconverged = 1 ;
+									%put STOPPING ADAPTIVE METHOD FOR BLB_S DUE TO sample_s EXCEEDING &BLB_s_max ;
+								%end;
+	    					%end;
+
+
+				%end ;
+			%end ; /* end of do until socnverged */
+ 		%end; /* end of if blb_s > 0 and bls_r > 0  */
+
+
+	    %if &runnc = 1 OR (&runnc = 0 AND &numint > 0 AND &refint > 0 ) %then %do;
+	        %if &chunked = 0 %then %do;
+	           %*Summarizing final results;
+			   
+	           	%results_blb;
+			   
+	        %end;
+	        %else %if &chunked = 1 AND &ran_basemodel = 1  %then %do;
+	           %local visitlist ;
+	           %let visitlist = ;
+	           %do i = 1 %to &ncov;
+	              %if &&usevisitp&i = 1 %then %let visitlist = &visitlist &i ;
+	           %end;
+	           %bootstrap_results(
+	               bootlib = &savelib,
+	               bootname = &intervname ,
+	               outc = &outc ,
+	               outctype = &outctype,
+	               compevent = &compevent ,
+	               censor = &censor ,
+	               check_cov_models = &check_cov_models,
+	               covmeandata = &covmeanname0 ,
+	               ncov = &ncov,
+	               usevisitp = &visitlist ,
+	               survdata=&survdata,
+	               observed_surv = &observed_surv,
+	               print_cov_means = &print_cov_means,
+	               savecovmean = 0,
+	               bootstrap_hazard = 0,
+	               hazardratio=&hazardratio,
+	               hazardname = &hazardname0 ,
+	               intcomp = &intcomp ,
+	               time = &time ,
+	               timepoints = &timepoints,
+	               numparts = 1,
+	               samplestart = 0 ,
+	               sampleend = &sample_end,
+	               numboot = &sample_end,
+	               numint = &numint ,
+	               refint = &refint ,
+	               rungraphs = &rungraphs ,
+	               graphfile = &graphfile,
+	               resultsdata = &resultsdata,
+	               runnc = &runnc ,              
+	               titledata= &titledata,
+	               title1= &title1,
+	               title2= &title2,
+	               title3= &title3,
+	               tsize = &tsize,
+	               printlogstats = &printlogstats ,
+				   bootstrap_method = &bootstrap_method
+	               );
+	              
+	           
+	       %end;
+	  %end;
+%mend ;
+
+
+%macro base_sample ;
+/*******
+   want code for original data , no looping 
+   for bsample = 0 
+************/
+	%put RUNNING BASE MODEL CODE FROM BASE_SAMPLE ;
+
+    %if &sample_start = 0 %then %let bsample = 0 ;
+	%else %let bsample = 1 ; /* place holder ??? */
+    %if &bootstrap_method > 0 %then %do;
+		%let sample_r = 0 ;
+		%let sample_s = 0 ;
+	%end;
+
+
+    %*Looping over bootstrap samples;
+   
+        %if (&outputs ^= yes or %eval(&bsample) ^= 0) %then %do;
+               %let ods_logit = ods select none ;
+               %let ods_reg = ods select none ;
+               %let ods_qlim = ods select none ;
+        %end;
+        %*Generating samples;
+
+		%if &printlogstats = 1 AND &bootstrap_method = 0 %then %put  before sample =   &bsample   seed = &seed ;
+		%if &printlogstats = 1 AND &bootstrap_method > 0 %then %put  before sample =   (&sample_s , &sample_r ) ,  seed = &seed ;
+
+		%if &printlogstats = 1 %then %put  ;
+
+	 
+
+        %*Base data for estimation and simulation (sample 0);
+        
+        data param;
+        set _paramdata_;        
+		%if &bootstrap_method = 0 %then %do;
+		    _sample_ = 0 ;
+			bootstrap_counts = 1 ;
+		%end;
+		%else %if &bootstrap_method > 0 %then %do;
+		    _sample_r = 0 ;
+			_sample_s = 0 ;
+			BLB_counts = 1 ;
+		%end;
+        run;
+        
+       %let subseed = %eval(2*&seed);
+       * _simuldata_ contains baseline variables ;
+       %if &nsimul = &ssize %then %do;
+            data simul;
+            set _simuldata_;
+		
+            
+			%if &bootstrap_method = 0 %then %do;
+			    _sample_ = 0 ;
+				bootstrap_counts = 1 ;
+			%end;
+			%else %if &bootstrap_method > 0 %then %do;
+			   _sample_r = 0 ;
+			   _sample_s = 0 ;
+				BLB_counts = 1 ;
+			%end;
+            run;
+        %end;
+        %else %do;
+       
+         
+
+            proc surveyselect data=_simuldata_ out=simul noprint
+                method=urs  sampsize=&nsimul seed=&subseed;
+            run;
+
+            data simul ;
+            set simul ;
+             %if &bootstrap_method = 0 %then %do;
+			 	_sample_ = 0 ;
+			 %end;
+			 %else %if &bootstrap_method > 0 %then %do;
+			 	_sample_s = 0 ;
+				_sample_r = 0 ;
+             %end;
+			 %if &use_bootstrap_counts = 0 %then %do;
+            	do _copy_ = 1 to numberhits ;
+					%if &bootstrap_method = 0 %then %do;
+						bootstrap_counts = 1 ;
+					%end;
+					%else %if &bootstrap_method > 0 %then %do;
+						BLB_counts = 1 ;
+					%end;
+                	output ;
+            	end;
+           
+			
+				drop _copy_ numberhits ;
+		     %end;
+			 %else %do;
+				%if &bootstrap_method = 0 %then %do;
+					bootstrap_counts = numberhits ;
+				%end;
+				%else %if &bootstrap_method > 0 %then %do;
+					BLB_counts = numberhits ;
+				%end;
+				drop numberhits ;
+			 %end;            
+            run;
+        %end;             
+  
+          
+        %*Estimating parameters;
+        %if &usebetadata = 0 %then %do;            
+                %if &uselabelc = 0  and &uselabelo = 0 %then options nolabel ;;
+                %parameters;     
+                options &label_orig ;      
+        %end;
+
+        %else %do; /*feb2013*/
+
+            data _beta_;
+            set &betadata;
+            run;
+
+        %end;   
+
+ 
+        ods select all ; 
+
+        data _betar_ ;
+        set _beta_  (where = ( %if &bootstrap_method = 0 %then _sample_=&bsample ;
+                               %else %if &bootstrap_method > 0 %then _sample_r = &sample_r and _sample_s = &sample_s ;)) ;
+        run;
+
+        data _seedr_ ;
+        _seedr_ = %eval(&seed);
+		%if &bootstrap_method = 0 %then %do ;
+        	_sample_ = &bsample ;
+		%end;
+		%else %if &bootstrap_method > 0 %then %do;
+			_sample_s = &sample_s ;
+			_sample_r = &sample_r ;
+		%end;
+        run;
+
+	 
+       
+         /* initialize data views for interventions */
+
+         %if &runnc = 1 %then %do;
+             %interv_init(intno=0, intlabel='Natural course' ); 
+         %end;   
+    
+         %do intnum = 1 %to &numint;
+            %interv_init(&&interv&intnum);
+         %end;             
+
+         %let created_dataviews = 1 ;          
+       
+        %if &hazardratio = 1 %then %do;
+             %if &bsample = 0 %then  %createhazard ;
+             %else %if &bootstrap_hazard = 1 %then %createhazard ;
+        %end;
+
+        %if &runnc = 1 %then %do;  /*** for natural course results ***/
+            %*No intervention cumulative incidence;
+
+            %if   %bquote(&simuldata)^=  %then %do;
+
+                %*Outputting/creating  simulated dataset;
+
+                data &simuldata ;
+                set simulated0 ;
+                run;
+              
+                %if &testing = yes %then %do;
+                     %do intcount = 0 %to &numint ;
+                        data &savelib..simuldata&intcount  ;
+                        set simulated&intcount ;
+                        run;
+                      %end;
+                %end;
+
+                %*Outputting the mean of covariates and probability of event;
+                proc means data= &simuldata  mean min max ;                                                                      
+                var %if &outctype = binsurv %then cuminc ;
+                    intervened averinterv  
+                    %if &outctype = binsurv %then %do;
+                        %do j = 1 %to %eval(&timepoints);
+                            s&outc.&j
+                        %end;
+                    %end;
+                    %else &outc ;
+                    %if &minimalistic = no %then %do;
+                        %do i = 1 %to &ncov;
+                            %do j = 1 %to %eval(&timepoints);
+                                %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ;
+                                s&&cov&i..&j
+								/**  %if &intno = 0  AND %bquote(&censor)^= %then %do ; ***/
+									ncs&&cov&i..&j %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j ;
+								/** %end;  ****/
+                            %end;
+                        %end; 
+                    %end;
+                    %if &outctype = binsurv %then %do;
+                        %do n = 1 %to %eval(&timepoints) ;
+                            cumincr&n cumsurvr&n cumcompeventr&n   
+                        %end;
+                    %end;
+                ;
+            
+                    output out=interv0 mean= %if &outctype = binsurv %then pd  ;
+                        intervened averinterv 
+                        %if &outctype = binsurv %then %do;
+                            %do j = 1 %to %eval(&timepoints);
+                                s&outc.&j
+                            %end;
+                        %end;
+                        %else s&outc ;
+                        %if &minimalistic = no %then %do;
+                            %do i = 1 %to &ncov;
+                                %do j = 1 %to %eval(&timepoints);
+                                    %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ;
+                                    s&&cov&i..&j
+									/** %if &intno = 0  AND %bquote(&censor)^=   %then  %do;  ***/
+										ncs&&cov&i..&j %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j ;
+									/** %end ;  **/
+                                %end;
+                            %end;  
+                        %end;
+                        %if &outctype = binsurv %then %do;
+                            %do n = 1 %to %eval(&timepoints) ;
+                                cumincr&n cumsurvr&n cumcompeventr&n  
+                            %end;
+                        %end;
+                        ;
+                    freq &bootstrap_counts ;
+                    title "mean, min, max under intervention 0";
+                run;
+
+
+                data interv0;
+                set interv0;
+                %if &bootstrap_method = 0 %then %do;
+				     _sample_ = 0 ;
+				%end;
+				%else %if &bootstrap_method > 0 %then %do;
+					_sample_r = 0 ;
+					_sample_s = 0 ;
+				%end;
+                length int2 $70 ;
+                int=0;
+                int2="Natural course";
+                n=_FREQ_;
+                keep int int2 %if &bootstrap_method = 0 %then _sample_ ;
+                              %else %if &bootstrap_method > 0 %then _sample_s _sample_r ;
+                       n   intervened averinterv 
+                %if &outctype=binsurv %then %do;
+                    pd
+                    %do j = 1 %to %eval(&timepoints);
+                        s&outc.&j
+                    %end;
+                %end;
+                %else s&outc ;
+                 %if &minimalistic = no %then %do;
+                    %do j = 1 %to %eval(&timepoints);
+                        %do i = 1 %to &ncov;
+                            %if &&usevisitp&i = 1 %then s&&cov&i.randomvisitp.&j ;
+                            s&&cov&i..&j
+							/*** %if &intno = 0  AND %bquote(&censor)^=   %then  %do; ***/
+								ncs&&cov&i..&j %if &&usevisitp&i = 1 %then ncs&&cov&i.randomvisitp.&j ;
+							/*** %end; ****/
+                        %end;
+                    %end;  
+                %end;
+                dataname ssize obsp 
+                ;
+                dataname = "&data";
+                    ssize = &ssize ;
+                    obsp = &obsp ;
+                run;             
+
+                %if &outctype = binsurv %then %do;
+
+                   proc means data = &simuldata noprint ;
+                   var  %do n = 1 %to %eval(&timepoints);
+                        cumincr&n cumsurvr&n cumcompeventr&n 
+                    %end; ;
+				   freq &bootstrap_counts ;
+                   output out = survprobs0 mean = %do n = 1 %to &timepoints; risk&n surv&n compevent&n  %end; ;
+                   run;
+
+                    /* initialize survdata */
+
+                    data surv_tmp0 ;
+                        set survprobs0 ;
+                        length int2 $70 ;
+                        int = 0 ;
+                        int2 = "Natural course";
+                        %if &bootstrap_method = 0 %then %do;
+				     		_sample_ = 0 ;
+						%end;
+						%else %if &bootstrap_method > 0 %then %do;
+							_sample_r = 0 ;
+							_sample_s = 0 ;
+						%end;
+                        surv0 = 1;
+                        n = _freq_ ;
+                        keep  int int2 %if &bootstrap_method = 0 %then _sample_ ;
+                              %else %if &bootstrap_method > 0 %then _sample_s _sample_r ;
+                            n  surv0
+                        %do n = 1 %to &timepoints;
+                            risk&n surv&n compevent&n  
+                        %end;
+                    ;
+                    run;
+
+
+
+					data interv0 ;
+					merge interv0 surv_tmp0 (keep = surv1 - surv&timepoints );
+					array surv{&timepoints } ;
+					%do myi = 1 %to &ncov ;
+						array ncs&&cov&myi {&timepoints } ;
+						%if &&usevisitp&myi = 1 %then array ncs&&cov&myi.randomvisitp { &timepoints } ; ;
+					%end;
+
+    				do j = 2 to &timepoints ; 
+	    				%do myi = 1 %to &ncov ;
+							ncs&&cov&myi [j ] = ncs&&cov&myi [ j ] / surv[j - 1 ] ; * should this be j or j-1;
+							%if &&usevisitp&myi = 1 %then ncs&&cov&myi.randomvisitp [ j ] = ncs&&cov&myi.randomvisitp [ j ] / surv[j - 1] ;;
+						%end;
+     				end;
+	 				drop j ;
+     				run;
+                %end;   
+                %else %do;
+
+                        /* initialize survdata */
+
+                    data surv_tmp0 ;
+                        set interv0 ;
+                        length int2 $70 ;
+                        int = 0 ;
+                        int2 = "Natural course";
+                        %if &bootstrap_method = 0 %then %do;
+				     		_sample_ = 0 ;
+						%end;
+						%else %if &bootstrap_method > 0 %then %do;
+							_sample_r = 0 ;
+							_sample_s = 0 ;
+						%end;                                        
+                        keep  int int2 %if &bootstrap_method = 0 %then _sample_ ;
+                                       %else %if &bootstrap_method > 0 %then _sample_s _sample_r ;
+                                s&outc  ;
+                    run;
+                %end; 
+            %end;  /* end of saving simuldata , needed outside of interv and interv_init macros */
+            %else %do;                   
+                %interv (intno=0 , intlabel='Natural course'); /* do not need to save simulated data set */                                 
+            %end;   
+
+         
+                %if &bsample = &sample_start %then %do;  
+                    data &survdata ;
+                    set  surv_tmp0 ;
+                    run;
+                %end;
+                %else %do ;
+                    proc append base = &survdata data = surv_tmp0;
+                    run;
+                %end;
+           
+        %end ; /* run natural course = 1 **/
+        %*Looping over interventions;
+
+        %do intnum = 1 %to &numint;
+            %interv(&&interv&intnum);                    
+                %if &intnum = 1 AND &runnc = 0 AND &bsample = &sample_start %then %do;
+                      data &survdata ;
+                      set surv_tmp&intnum ;
+                      run;
+                %end;
+                %else %do;
+                    proc append base = &survdata data = surv_tmp&intnum ;
+                    run;
+                %end;            
+        %end;
+
+        %*Outputing intervention results into temporary data sets ;
+
+        %let intstart = 0 ;
+        %if &runnc = 0 %then %let intstart = 1;
+
+        %if  &bsample = &sample_start %then %do;  
+           
+            %do int = &intstart %to %eval(&numint);
+                
+                data interv&int._all;
+                    set interv&int;
+                run;
+            %end;
+        %end;
+        %else %do;
+            %do int = &intstart %to %eval(&numint);
+                proc append base = interv&int._all data = interv&int;
+                run;
+            %end;
+        %end;
+
+        %if &chunked = 1 %then %do;
+             /* save all interventions into a permanent data set for each chunk */
+             %if &bsample = &sample_start %then %do; 
+
+                  /* save interventions */
+                  %if &runnc = 1 %then %do;
+                     data &intervdata ; 
+                     set interv0 ;
+                     run;
+                  %end;
+                  %else %do;
+                      data &intervdata ;
+                      set interv1; 
+                      run;
+                  %end;
+                   
+                  %do int = %eval(&intstart +1) %to &numint ;
+                      *proc append base = &intervdata    data = interv&int ;
+                      *run;
+		      data &intervdata ;
+		      set &intervdata interv&int ;
+		      run;
+                  %end;  
+             %end;
+             %else %do;
+                  %do int = &intstart %to &numint ;
+                      *proc append base = &intervdata    data = interv&int  ;
+                      *run;
+		      data &intervdata ;
+		      set &intervdata interv&int ;
+		      run;
+                  %end; 
+             %end;
+        %end;
+ 
+        %if &printlogstats = 1 %then %put  sample = &bsample , seed = &seed  ;
+
+        %let seed = %eval(&seed+3);
+
+
+       proc datasets library = work nolist ;
+        delete _betar_ _seedr_   %if &bsample > 0 %then _simulsample_ ; param simul  _covbounds_ 
+               %if &runnc = 1 %then surv_tmp0 ;
+               %do i = 1 %to &numint ; surv_tmp&i %end;
+               ;
+        quit;
+   
+   
+
+%mend base_sample  ;
+%macro blb_graphs_part1(blb_samples = 1 );
+  /*   %if (&check_cov_models = 1 OR &rungraphs  ) AND &runnc = 1 %then %do; */
+
+
+          %if &save_raw_covmean = 1  %then %do;
+
+               data &covmeanname._raw ;
+               set &covmeanname ;
+               run;
+
+          %end;
+
+
+		  data res_s ;
+		  run;
+
+		 
+
+           /* include base sample for _sample_s = 0 */
+		  %do sample = 0 %to &blb_samples ;
+
+
+	          %if &outctype = binsurv %then %do;
+					/* results from observed data, used for observed_risk data : cuminc and sumsurv  */
+			        /* for use in natural course, int = 0 */
+ 
+	               data rr ;              
+	               set &covmeanname (keep = _sample_r _sample_s  _time_   meanoutc   meancompevent where = (_sample_s = &sample) ) ;
+	               by _sample_r _time_ ;
+	               retain cumsurv  cuminc newn ;
+	               if first._sample_r then do ;
+	                    cumsurv = 1;
+	                    cuminc = 0 ;
+	                    newn = 0 ;
+	               end;
+	               newn = newn + 1 ;                            
+	               inc = cumsurv * meanoutc * (1 - meancompevent) ;
+	               cuminc = cuminc + inc;                
+	               surv = (1 - meanoutc) * ( 1 - meancompevent ) ;
+	               cumsurv = cumsurv * surv;
+	               if newn <= &timepoints then output;
+	               keep _sample_r  _time_  cuminc cumsurv ;
+	               run;
+		 
+
+	               proc transpose data = rr  out=_stmp_ prefix= obsurv ;
+	               var cumsurv ;
+	               id _time_ ;
+	               by _sample_r; 
+	               run;
+
+	               proc transpose data = rr out = _itmp_ prefix= obrisk ;
+	               var cuminc ;
+	               id _time_ ;
+	               by _sample_r ;
+	               run;
+
+	               data _observed_surv_s  ;
+	               merge _stmp_ _itmp_ ;
+	               by _sample_r ;
+	               _int_ = 0 ;
+				   _sample_s = &sample ;
+	               drop _NAME_ ;
+	               run;
+
+				   %if &sample = 0 %then %do;
+				   		data &observed_surv ;
+						set _observed_surv_s ;
+						run;
+					%end;
+					%else %do;
+						data &observed_surv ;
+						set &observed_surv _observed_surv_s ;
+						run;
+				   %end;
+	               proc datasets library = work nolist ;
+	               delete rr _stmp_ _itmp_ ;
+	               quit;
+
+	          %end; /* binsurv */
+	          %else %do; /* for all other outcome types  */
+	               data _obsoutcmean_ &observed_surv ;
+	               set &covmeanname (keep = _sample_r _sample_s &time &outc where = (_sample_s = &sample ) );
+	               if &time = &timepoints -1  ;  
+	               run;
+	 
+	          %end;
+
+	          %do i = 1 %to &ncov ;
+
+	               proc transpose data = &covmeanname  (where = (_sample_s = &sample))  out = _mean_&i(drop = _NAME_ ) prefix = &&cov&i ;
+	               var &&cov&i ;
+	               by _sample_r ;
+	               run;
+
+	               %if &&usevisitp&i = 1 %then %do;
+	                    proc transpose data = &covmeanname (where = (_sample_s = &sample )) out = _mean_vp&i (drop = _NAME_) prefix=&&cov&i.randomvisitp ;
+	                    var &&cov&i.randomvisitp;
+	                    by _sample_r;
+	                    run;
+
+	               %end;
+	          %end ;
+
+	          data &covmeanname._s ;
+	          merge %do i = 1 %to &ncov ;
+	                    _mean_&i 
+	                    %if &&usevisitp&i = 1 %then _mean_vp&i ;
+	               %end;
+	               ;
+	          by _sample_r ;
+	          run;
+
+	          data _diff_mean ;
+	          merge &covmeanname._s  (keep = _sample_r 
+	               %do i = 1 %to &ncov ;
+	                    %do k = 1 %to &timepoints ;
+	                         &&cov&i..&k
+	                         %if &&usevisitp&i = 1 %then &&cov&i.randomvisitp.&k ;
+	                    %end;
+	               %end;)                
+	               interv0_all(keep = _sample_r _sample_s 
+	               %do i = 1 %to &ncov ;
+	                    %do k = 1 %to %eval(&timepoints);
+	                       /***  s&&cov&i..&k ***/
+						      ncs&&cov&i..&k 
+	                         %if &&usevisitp&i = 1 %then %do ;
+							    /***	s&&cov&i.randomvisitp.&k  ***/
+							     ncs&&cov&i.randomvisitp.&k
+	                         %end;     
+	                    %end;
+	               %end; 
+				
+					  rename = (
+						%do i = 1 %to &ncov ;
+		                    %do k = 1 %to %eval(&timepoints);	                          
+							   ncs&&cov&i..&k = s&&cov&i..&k 
+							   %if &&usevisitp&i = 1 %then  ncs&&cov&i.randomvisitp.&k = s&&cov&i.randomvisitp.&k ;  
+		                    %end;               				  
+				   		%end; 
+						 )
+						 where = (_sample_s = &sample )
+				);
+
+	           %do i = 1 %to &ncov ;
+	                    %do k = 1 %to &timepoints ;
+	                         d&&cov&i..&k  = &&cov&i..&k  - s&&cov&i..&k ;
+	                         %if &&usevisitp&i = 1 %then d&&cov&i.randomvisitp.&k = &&cov&i.randomvisitp.&k - s&&cov&i.randomvisitp.&k;;
+	                    %end;
+	           %end;
+			   by _sample_r ;
+			   
+	           run;
+
+			  %if &sample = 0 %then %do;
+			  		data _diff_mean_0 ;
+					set _diff_mean ;				
+					run;
+			  %end;
+			  %else %do;
+
+		          proc univariate data = _diff_mean(where = (_sample_r > 0))  noprint  ;
+		          var %do i = 1 %to &ncov ;
+		                    %do k = 1 %to &timepoints  ;
+		                         d&&cov&i..&k 
+		                         %if &&usevisitp&i = 1 %then d&&cov&i.randomvisitp.&k ;
+		                    %end;
+		               %end;
+		               ;
+
+		          output out = _cov_std2 
+		               std = %do i = 1 %to &ncov ;
+		                         %do k = 1 %to &timepoints  ;
+		                              d&&cov&i..&k._stddev 
+		                              %if &&usevisitp&i = 1 %then d&&cov&i.randomvisitp.&k._stddev ;
+		                         %end;
+		                    %end;
+		               pctlpre = %do i = 1 %to &ncov ;
+		                              %do k = 1 %to &timepoints  ;
+		                                   d&&cov&i..&k 
+		                                   %if &&usevisitp&i = 1 %then d&&cov&i.randomvisitp.&k ;
+		                              %end;
+		                         %end;
+		               pctlname = _pct025 _pct975 
+		               pctlpts = 2.5 97.5 ;
+		          run;
+
+
+			  data _cov_std2 ;
+			  set _cov_std2 ;
+			  _sample_s = &sample ;
+			  run;
+
+
+			data res_s ;
+			set res_s  _cov_std2 ;
+			if _sample_s > . ;
+			run;
+
+			proc datasets library = work nolist ;
+			delete _cov_std2 ;
+			quit;
+	        %end;
+
+ 		%end; /* sample loop */
+
+
+
+
+		%let myvarlist = ;
+		%do i = 1 %to &ncov ;
+			%do j = 1 %to &timepoints ;
+				%let myvarlist = &myvarlist d&&cov&i..&j._pct025 d&&cov&i..&j._pct975 d&&cov&i..&j._stddev ;
+				%if &&usevisitp&i = 1 %then %do;
+					%let myvarlist = &myvarlist d&&cov&i.randomvisitp.&j._pct025 d&&cov&i.randomvisitp.&j._pct975 d&&cov&i.randomvisitp.&j._stddev ; 
+				%end;
+			 %end;
+		%end;
+
+
+		
+	proc means data = res_s noprint ;
+	var &myvarlist ;
+	output out=cov_results mean(&myvarlist ) = ;
+	run;
+
+
+		  /*****************/
+
+          data &covmeanname._test ;
+          merge _diff_mean_0  cov_results  ; 
+          drop  _sample_r ;
+          label %do i = 1 %to &ncov ;
+                    &&cov&i = "mean of observed &&cov&i" 
+                    s&&cov&i = "mean of simulated &&cov&i"
+                    &&cov&i.._diff = "difference of mean observed and simulated"
+                    &&cov&i.._stddev = "Standard deviation of difference"
+                    &&cov&i.._lb = "95% lower bound for difference"
+                    &&cov&i.._ub = "95% upper bound for difference"
+                    &&cov&i.._lbp="2.5 percentile for difference"
+                    &&cov&i.._ubp="97.5 percentile for difference"
+                    %if &&usevisitp&i = 1 %then %do;
+                         &&cov&i.randomvisitp = "mean of observed &&cov&i.randomvisitp" 
+                         s&&cov&i.randomvisitp = "mean of simulated &&cov&i"
+                         &&cov&i.randomvisitp._diff = "difference of mean observed and simulated"
+                         &&cov&i.randomvisitp._stddev = "Standard deviation of difference"
+                         &&cov&i.randomvisitp._lb = "95% lower bound for difference"
+                         &&cov&i.randomvisitp._ub = "95% upper bound for difference"
+                         &&cov&i.randomvisitp._lbp="2.5 percentile for difference"
+                         &&cov&i.randomvisitp._ubp="97.5 percentile for difference"
+                    %end;
+               %end ;
+               &time = "n-th time point" ;
+          %do k = 1 %to &timepoints  ;
+                %let j = &k ;
+                &time = %eval( &k - 1) ;
+                %do i = 1 %to &ncov ;
+                         &&cov&i = &&cov&i..&k ;
+                         s&&cov&i = s&&cov&i..&j;
+                         &&cov&i.._diff = d&&cov&i..&k ;
+                         &&cov&i.._stddev = d&&cov&i..&k._stddev ;
+                         &&cov&i.._lb = &&cov&i.._diff - 1.96 * &&cov&i.._stddev ;
+                         &&cov&i.._ub = &&cov&i.._diff + 1.96 * &&cov&i.._stddev ;
+                         &&cov&i.._lbp = d&&cov&i..&k._pct025 ;
+                         &&cov&i.._ubp = d&&cov&i..&k._pct975 ;
+                         %if &&usevisitp&i = 1 %then %do;
+                              &&cov&i.randomvisitp = &&cov&i.randomvisitp.&k ;
+                              s&&cov&i.randomvisitp = s&&cov&i.randomvisitp.&j;
+                              &&cov&i.randomvisitp._diff = d&&cov&i.randomvisitp.&k ;
+                              &&cov&i.randomvisitp._stddev = d&&cov&i.randomvisitp.&k._stddev ;
+                              &&cov&i.randomvisitp._lb = &&cov&i.randomvisitp._diff - 1.96 * &&cov&i.randomvisitp._stddev ;
+                              &&cov&i.randomvisitp._ub = &&cov&i.randomvisitp._diff + 1.96 * &&cov&i.randomvisitp._stddev ;
+                              &&cov&i.randomvisitp._lbp = d&&cov&i.randomvisitp.&k._pct025 ;
+                              &&cov&i.randomvisitp._ubp = d&&cov&i.randomvisitp.&k._pct975 ;
+                         %end;
+                         drop &&cov&i..&k s&&cov&i..&j d&&cov&i..&k d&&cov&i..&k._stddev  d&&cov&i..&k._pct025  d&&cov&i..&k._pct975
+                              %if &&usevisitp&i = 1 %then &&cov&i.randomvisitp.&k s&&cov&i.randomvisitp.&j d&&cov&i.randomvisitp.&k
+                              d&&cov&i.randomvisitp.&k._stddev  d&&cov&i..&k._pct025  d&&cov&i..&k._pct975 ;
+                         ;
+                 %end;
+                    output ;
+            %end;
+            run;
+            /********************/
+
+
+            %if &print_cov_means = 1 %then %do ;
+                    %do i = 1 %to &ncov ;
+                         proc print data = &covmeanname._test noobs label;
+                         title "Comparison of means of observed &&cov&i and simulated &&cov&i over &time ";
+                         var &time   &&cov&i   s&&cov&i  &&cov&i.._diff   &&cov&i.._stddev  &&cov&i.._lb    &&cov&i.._ub  &&cov&i.._lbp &&cov&i.._ubp           ;               
+                         run;    
+                         title ;
+
+                         %if &&usevisitp&i = 1 %then %do;
+                              proc print data = &covmeanname._test noobs label;
+                              title "Comparison of means of observed &&cov&i.randomvisitp and simulated &&cov&i.randomvisitp over &time ";
+                              var &time   &&cov&i.randomvisitp   s&&cov&i.randomvisitp  &&cov&i.randomvisitp._diff   &&cov&i.randomvisitp._stddev 
+                                   &&cov&i.randomvisitp._lb    &&cov&i.randomvisitp._ub  &&cov&i.randomvisitp._lbp &&cov&i.randomvisitp._ubp           ;               
+                              run;    
+                              title ;
+
+                         %end;
+                    %end;
+           %end;
+
+
+           %if &rungraphs = 1 %then %do;
+		            %let useboot = 0 ;
+					%if &bootstrap_method = 0 and &nsamples > 0 %then %let useboot = 1 ;
+					%if &bootstrap_method = 1 and &BLB_s > 0 and &BLB_r > 0 %then %let useboot = 1 ;
+					%if &bootstrap_method = 2 and &BLB_s_start > 0 and &BLB_r_start > 0 %then %let useboot = 1 ;
+ 
+                    
+                    %construct_graphs(
+                         time=&time ,
+                         outcome=&outc ,
+                         compevent = &compevent ,
+                         outctype = &outctype,
+                         covmean=&covmeandata._test ,
+                         obssurv = &observed_surv ,
+                         simsurv = &survdata ,
+                         sixgraphs = 0 ,
+                         gfilename= &graphfile ,
+                         title1= &title1 ,
+                         title2= &title2,
+                         title3= &title3, 
+                         titledata=  &titledata , 
+                         tsize=&tsize ,
+                         frombootstrap = &useboot ) ;
+          %end;
+
+		 
+		  proc datasets library = work nolist ;
+		  delete &covmeandata._test &covmeanname._s _diff_mean_0 cov_results res_s 
+			%if &outctype = binsurv %then _observed_surv_s  cuminc ;
+            ;
+		  quit;
+   /*  %end; */
+
+%mend ;
+
+
+%macro results_blb ;
+/* blb_samples is BLB_s, the number of outer samples of size BLB_b used in
+   bootstrap samples */
+/*****/
+
+
+%local blb_samples ;
+proc sql noprint ;
+select max(_sample_s) as blb_samples into: blb_samples from interv&refint._all ;
+quit;
+
+%if (&check_cov_models = 1 OR &rungraphs = 1  ) AND &runnc = 1 %then %do;
+    /* following macro includes the first parts of the results macro */
+    
+	%blb_graphs_part1(blb_samples = &blb_samples  ) ;
+%end;
+
+/******/
+     data fin_s;
+	 run;
+
+	 data _inthrstat_s ;
+	 run;
+
+/* for each sample of size BLB_b of BLB_s samples (outer limit ) use one 
+	 loop of the results macro and then average over the BLB_s subsets */
+
+
+  
+
+
+	 %do sample = 1 %to &blb_samples ;
+
+	     %*Generating reference cumulative incidence;        
+	     data _ref_s ;
+	     set interv&refint._all (where = (_sample_s = &sample   )); /*change jgy*/
+	     %if &outctype=binsurv %then   pDref=pD;
+	     %else pDref=s&outc ;;
+	     keep _sample_r pDref;
+	     run;
+
+
+
+	     %do i=&intstart %to &numint;
+
+	          %*Outputting summary of intervention;
+	          %*proc means data = interv&i._all;
+	          %*run;
+
+	          %*Comparing intervention to reference;
+	                 
+	          %let pd = pd ;
+	          %if &outctype ^= binsurv %then %let pd = s&outc ;
+
+	          data interv&i; 
+	          merge interv&i._all (where = (_sample_s = &sample )) _ref_s ;
+	          by _sample_r; 
+	          if pDref^=0 then rr=&pd /pDref;
+	          if pDref^=0 then rd=&pd - pDref;
+	          if rd^=. and rd>0 then nnt = 1/rd;
+	          *logrr=log(rr); /* commented out since this was the only occurrance of this variable */
+	          run;
+
+			  /***************
+
+	          %*Appending intervention datasets;
+			  * this data set will be used for printing the output. has rows for each intervention ;
+
+	          data fin; 
+	          set fin interv&i; 
+	          if _sample =0  ;
+	          if int=. then int=&i;
+	          run;
+	            
+			  *********/
+
+
+	          %*Calculating bootstrap mean, variance and confidence intervals;
+	          proc univariate data=interv&i noprint;
+	          where _sample_r ne 0;
+	          var &pd rr rd nnt;
+	          output out = temp&i
+	          mean = &pd._mean RR_mean RD_mean NNT_mean
+	          std =  &pd._std  RR_std  RD_std  NNT_std
+	          pctlpre = &pd._  RR_     RD_     NNT_
+	          pctlname = llim95 ulim95  pctlpts = 2.5 97.5;
+	          run;
+
+	          data temp&i;
+	          set temp&i;
+	          int = &i;
+			  _sample_s = &sample ;
+	          run;
+
+
+			  /*** used for printing output 
+	          data fin;
+	          merge fin temp&i;
+	          by int;
+	          run;
+	          *************/
+	 
+			  data fin_s ;
+			  set fin_s temp&i ;
+			  if _sample_s ne . ;
+			  run;
+
+
+	        
+     	%end;
+
+
+	     %if &hazardratio = 1 AND &bootstrap_hazard = 1 %then %do;
+	             proc univariate data = &hazardname (where = (_sample_s = &sample   ))  ;
+	             var hazardratio ;
+	             output out = temp_inthrstat_ 
+	             mean = hr_mean  
+	             std =  hr_std   
+	             pctlpre = hr_   
+	             pctlname = llim95 ulim95  pctlpts = 2.5 97.5;
+	             run;
+
+				data temp_inthrstat_ ;
+				set temp_inthrstat_ ;
+				_sample_s = &sample ;
+				run;
+
+				data _inthrstat_s ;
+				set _inthrstat_s temp_inthrstat_ ;
+				if _sample_s ne . ;
+				run;
+         
+			  proc datasets library = work nolist ;
+			  delete temp_inthrstat_ ;
+			  quit;
+
+
+	     %end;
+%end;
+
+
+proc sort data = fin_s ; 
+by int _sample_s ;
+run;
+
+
+
+%let mylist = &pd._mean rr_mean rd_mean nnt_mean 
+              &pd._std  rr_std  rd_std  nnt_std 
+              &pd._llim95 rr_llim95 rd_llim95 nnt_llim95
+			  &pd._ulim95 rr_ulim95 rd_ulim95 nnt_ulim95 ;
+
+proc means data = fin_s noprint ;
+var &mylist ;
+by int ;
+output out=fin_results mean(&mylist ) = ;
+run;
+
+data fin ;
+run;
+
+data _ref_ ;
+set interv&refint._all (where = (_sample_r = 0 and _sample_s = 0));
+%if &outctype=binsurv %then   pDref=pD;
+%else pDref=s&outc ;;
+keep _sample_s _sample_r pDref;
+run ;
+
+
+  %do i=&intstart %to &numint;
+
+          %*Outputting summary of intervention;
+          %*proc means data = interv&i._all;
+          %*run;
+
+          %*Comparing intervention to reference;
+                 
+          %let pd = pd ;
+          %if &outctype ^= binsurv %then %let pd = s&outc ;
+
+          data interv_base&i; 
+          merge interv&i._all (where = (_sample_s = 0 and _sample_r = 0)) _ref_;
+          by _sample_s _sample_r; 
+          if pDref^=0 then rr=&pd /pDref;
+          if pDref^=0 then rd=&pd - pDref;
+          if rd^=. and rd>0 then nnt = 1/rd;
+          *logrr=log(rr); /* commented out since this was the only occurrance of this variable */
+          run;
+
+
+          %*Appending intervention datasets;
+          data fin; 
+          set fin interv_base&i; 
+          if _sample_r=0 and _sample_s = 0;
+          if int=. then int=&i;
+          run;
+
+		    %*Deleting no longer needed datasets;
+	          proc datasets library=work nolist; 
+	          delete  interv&i interv&i._all temp&i interv_base&i ;
+	          quit;
+
+         
+     %end;
+
+
+
+	   %if &hazardratio = 1 AND &bootstrap_hazard = 1 %then %do;
+
+	            %let mylist2 = hr_mean hr_std hr_llim95 hr_ulim95 ;
+	   
+				proc means data = _inthrstat_s noprint ;
+				var &mylist2 ;
+			*	by int ;
+				output out=_inthrstat_ mean(&mylist2 ) = ;
+				run;
+
+	             proc sql ;
+	             select round(hr_llim95,0.01) into :hrlb from _inthrstat_ ;
+	             select round(hr_ulim95,0.01) into :hrub from _inthrstat_ ;
+	             quit;
+
+	             %let hrub = %sysfunc(compress(&hrub));
+	             %let hrlb = %sysfunc(compress(&hrlb));
+
+				 proc datasets library = work nolist ;
+				 delete _inthrstat_s ;
+				 quit;
+	 %end;
+
+
+
+ 	data fin;
+    merge fin fin_results;
+    by int;
+    run;
+
+     %*Cleaning up results to print nicely; 
+
+     data finfin;
+     set fin;      
+     %rescaleround; /* RESCALE AND ROUND OFF THE OUTPUT */
+     %labels;       /* LABEL THE OUTPUT */
+     run;
+
+
+	 
+     %*Outputting results dataset;
+     %if %bquote(&resultsdata)^= %then %do;
+          %if &printlogstats = 1 %then %put ;
+          %if &printlogstats = 1 %then %put  Outputting results to &resultsdata;
+          data &resultsdata;
+          set finfin;
+          run;
+     %end;
+     %if &printlogstats = 1 %then %put ;
+
+     %*Printing results;
+
+     %if &outctype=binsurv or &outctype=bineofu %then %do;    
+          title4 'PREDICTED RISK UNDER SEVERAL INTERVENTIONS';
+     %end;
+     %else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 %then %do;
+          title4 "PREDICTED MEAN &outc UNDER SEVERAL INTERVENTIONS";
+     %end;
+     proc print data=finfin noobs label double;
+     var int int2;
+     run;
+
+
+     %let additional_text = ;
+     %if &hazardratio = 1 %then %do;
+         %let additional_text =, Hazard Ratio between interventions %scan(&intcomp,1) and %scan(&intcomp,2) is &sample_hazard ;
+         %if &bootstrap_hazard = 1 %then %let additional_text = &additional_text (&hrlb , &hrub) ;
+     %end;
+
+     %if &outctype=binsurv or &outctype=bineofu %then %do;
+	     %if %bquote(&censor) ^= %then %do ;
+		     title6 "IP-weighted natural course risk= %sysevalf(&obspm) % &additional_text "; 	
+		 %end;
+		 %else %do;
+             title6 "Observed risk= %sysevalf(&obspm) % &additional_text ";
+		 %end;
+     %end;      
+     %else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 %then %do;
+          title6 "Observed mean= %sysevalf(&obspm) ";
+     %end;
+     title7 "Data= &data, Sample size= &ssize, Monte Carlo sample size= &nsimul ";
+	 %if &use_disjoint_blb_samples = 0 %then %do;
+     	title8 "Number of bootstrap samples using Bag of Little Bootstraps method with &BLB_s samples of size &BLB_b, each with &BLB_r samples of size &nsimul";
+	 %end;
+	 %else %if &use_disjoint_blb_samples = 1 %then %do;
+     	title8 "Number of bootstrap samples using Bag of Little Bootstraps method with &BLB_s disjoint samples of size &BLB_b, each with &BLB_r samples of size &nsimul";
+	 %end;
+	 %if &bootstrap_method = 2 %then %do;
+			title8 "Number of bootstrap samples using Bag of Little Bootstraps method using &BLB_s samples of size &BLB_b with adaptive selection of r using &bsample_counter bootstrap samples"; 
+	 %end;
+     title9 "Reference intervention is &refint";
+
+     proc print data=finfin noobs label double; 
+     var int &pd &pd._llim95 &pd._ulim95 rr rr_llim95 rr_ulim95 &pd._mean &pd._std intervened averinterv; 
+     run;
+
+     proc print data=finfin noobs label double; 
+     %if &outctype=binsurv or &outctype=bineofu %then %do;
+          var int &pd &pd._llim95 &pd._ulim95 rd rd_llim95 rd_ulim95 nnt nnt_llim95 nnt_ulim95;
+     %end;
+     %else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 %then %do;
+          var int s&outc s&outc._llim95 s&outc._ulim95 rd rd_llim95 rd_ulim95 ;    
+     %end;
+     run;
+
+	 %if &outctype = binsurv %then %do;
+       data ausc (keep = _sample_r _sample_s int ausc&timepoints ) ;
+          set &survdata (keep = int _sample_r _sample_s surv0 - surv&timepoints ) ;
+          array surv{*} surv1 - surv&timepoints ;
+          array ausc{*} ausc1 -  ausc&timepoints ;
+          ausc1 = surv0 ;  /* = 1 */
+          do i = 2 to  &timepoints ;
+               ausc[i]=ausc[i-1]+surv[i];   /* integral of survival curve */
+          end;
+          run;
+          proc transpose data=ausc out=drmst (drop= _NAME_) prefix=rmst;
+          var ausc&timepoints;
+          id int ;
+          by _sample_s _sample_r;
+          run;
+
+          data ausc ;
+          set ausc (where = (_sample_s = 0));
+          run;
+
+          data drmst ;
+          set drmst ;
+          array drmst{*} drmst&intstart - drmst&numint ;
+          array rmst{*} rmst&intstart - rmst&numint ;
+          do i = 1 to %eval(&numint + 1 - &intstart);
+               drmst[i] = rmst[i] - rmst&refint ;
+          end;
+          drop i ;
+          run;
+ 
+          proc univariate data=drmst (where = (_sample_s ne 0)) noprint;
+          
+          var drmst&intstart - drmst&numint ;
+          output out = drmst_stat
+          mean = %do myint=&intstart %to &numint ; drmst&myint._mean %end;
+          std =   %do myint=&intstart %to &numint ; drmst&myint._std %end;
+          pctlpre =  %do myint=&intstart %to &numint ; drmst&myint._ %end;
+          pctlname = llim95 ulim95  pctlpts = 2.5 97.5;
+		  by _sample_s ;
+          run;
+
+          proc univariate data=drmst (where = (_sample_s ne 0 )) noprint;          
+          var rmst&intstart - rmst&numint ;
+          output out = rmst_stat
+          mean = %do myint=&intstart %to &numint ;rmst&myint._mean %end;
+          std =   %do myint=&intstart %to &numint ; rmst&myint._std %end;
+          pctlpre =  %do myint=&intstart %to &numint ; rmst&myint._ %end;
+          pctlname = llim95 ulim95  pctlpts = 2.5 97.5;
+		  by _sample_s ;
+          run;
+
+
+		proc means data = drmst_stat noprint  ;
+		var %do myint=&intstart %to &numint ;
+                  drmst&myint._mean drmst&myint._std drmst&myint._llim95 drmst&myint._ulim95
+             %end;
+			 ;
+		output out = drmst_stat2 mean (%do myint=&intstart %to &numint ;
+                  drmst&myint._mean drmst&myint._std drmst&myint._llim95 drmst&myint._ulim95
+             %end; ) = ;
+		run;
+
+		
+		proc means data = rmst_stat noprint  ;
+		var %do myint=&intstart %to &numint ;
+                  rmst&myint._mean rmst&myint._std rmst&myint._llim95 rmst&myint._ulim95
+             %end;
+			 ;
+		output out = rmst_stat2 mean (%do myint=&intstart %to &numint ;
+                  rmst&myint._mean rmst&myint._std rmst&myint._llim95 rmst&myint._ulim95
+             %end; ) = ;
+		run;
+
+          %let prec = 0.001 ;
+/***/
+          data drmst_out ;
+          merge drmst (where = (_sample_s = 0))  drmst_stat2 rmst_stat2 ;
+          label rmst ='Restricted mean survival time';
+          label rmst_ub = 'Upper limit 95% CI';
+          label rmst_lb = 'Lower limit 95% CI';
+
+          label drmst ='Restricted mean survival time difference';
+          label drmst_ub = 'Upper limit 95% CI';
+          label drmst_lb = 'Lower limit 95% CI';
+
+
+          %do myint=&intstart %to &numint ;
+               int = &myint ;
+               rmst = round(rmst&myint,&prec) ;
+               rmst_mean = round(rmst&myint._mean, &prec ) ;
+               rmst_std = round(rmst&myint._std,&prec) ;
+               rmst_lb = round(rmst&myint._llim95,&prec) ;
+               rmst_ub = round(rmst&myint._ulim95,&prec) ;
+
+               drmst = round(drmst&myint,&prec) ;
+               drmst_mean = round(drmst&myint._mean,&prec) ;
+               drmst_std = round(drmst&myint._std,&prec) ;
+               drmst_lb = round(drmst&myint._llim95,&prec) ;
+               drmst_ub = round(drmst&myint._ulim95,&prec) ;
+
+               output ;
+          %end;
+
+          keep int rmst rmst_mean rmst_std rmst_lb rmst_ub  drmst drmst_mean drmst_std drmst_lb drmst_ub ;
+          run;
+
+
+          title4 "RESTRICTED MEAN SURVIVAL TIME AFTER &timepoints TIME POINTS";
+          title7 "Data= &data, Sample size= &ssize, Monte Carlo sample size= &nsimul";
+          %if &use_disjoint_blb_samples = 0 %then %do;
+     		title8 "Number of bootstrap samples using Bag of Little Bootstraps method with &BLB_s samples of size &BLB_b, each with &BLB_r samples of size &nsimul";
+	 	  %end;
+	      %else %if &use_disjoint_blb_samples = 1 %then %do;
+     	    title8 "Number of bootstrap samples using Bag of Little Bootstraps method with &BLB_s disjoint samples of size &BLB_b, each with &BLB_r samples of size &nsimul";
+	      %end;
+	      %if &bootstrap_method = 2 %then %do;
+			 title8 "Number of bootstrap samples using Bag of Little Bootstraps method using &BLB_s samples of size &BLB_b with adaptive selection of r using &bsample_counter bootstrap samples"; 
+	      %end;
+          title9 "Reference intervention is &refint";
+          proc print data = drmst_out noobs label double ;
+          var int rmst rmst_lb rmst_ub  drmst drmst_lb drmst_ub ;
+          run;
+ 
+
+	 %end;
+
+	 proc datasets library=work nolist; 
+     delete    _paramdata_  _simuldata_ _inputd_ _beta_  _ref_ _ref_s fin_s fin finfin fin_results 
+     %if &outctype = binsurv %then ausc drmst drmst_stat rmst_stat drmst_stat2 rmst_stat2 drmst_out  ;
+     %if &check_cov_models %then _diff_mean  _cov_std2 
+     %do ii = 0 %to &ncov ; _mean_&ii %if &&usevisitp&ii = 1 %then _mean_vp&ii ; %end ;
+      step1 step2  ;        
+     quit; 
+%mend ;
+
+
+/******/
+
+
+%macro blb_pct_helper(datain = , varlistin =  , dataout= );
+
+proc sort data = &datain out = _tmp_ ;
+by _sample_s _sample_r ;
+run ;
+
+
+
+proc univariate data = _tmp_ noprint ;
+var &varlistin ;
+output out = _tmp2_ pctlpre = &varlistin 
+          pctlname = _pct025 _pct975 
+          pctlpts = 2.5 97.5 ;
+by _sample_s ;
+run;
+
+
+%let varlisttmp = ;
+
+%let ntmp = %numargs(&varlistin ) ;
+
+
+%do itmp = 1 %to &ntmp ;
+	%let word = %scan(&varlistin , &itmp ) ;
+	%let varlisttmp = &varlisttmp &word._pct025 &word._pct975 ;
+%end;
+
+proc means data = _tmp2_ noprint ;
+var &varlisttmp ;
+output out = &dataout ( keep = &varlisttmp  ) mean( &varlisttmp  ) = ;
+run;
+
+proc datasets library = work nolist ;
+delete _tmp_ _tmp2_ ;
+quit ;
+
+%mend ;
+
+%macro check_rconvergence (sample = 1) ;
+/*
+sample = the sth collection of bootstrap samples being tested for convergence. Data holds all previously run samples 
+
+*/
+
+data test_s ; run ;
+
+     %*Generating reference cumulative incidence;        
+	     data _ref_s ;
+	     set interv&refint._all (where = (_sample_s = &sample   )); /*change jgy*/
+	     %if &outctype=binsurv %then   pDref=pD;
+	     %else pDref=s&outc ;;
+	     keep _sample_r pDref;
+	     run;
+
+		%local i rindex ;
+
+		
+	                 
+	    %let pd = pd ;
+	    %if &outctype ^= binsurv %then %let pd = s&outc ;
+
+
+	     %do i = 1 %to &BLB_r_trend ;
+
+	       
+	          data rsubset&i; 
+	          set interv&refint._all (where = (_sample_s = &sample and _sample_r <= %eval(&rend - (&i - 1) )) ) ;
+			  keep &pd  _sample_r _sample_s ;
+	          run;
+
+	          %*Calculating bootstrap mean, variance and confidence intervals;
+	          proc univariate data=rsubset&i noprint;
+	          where _sample_r ne 0;
+	          var &pd ;
+	          output out = temp&i	 
+			  mean = &pd._mean 
+	          std =  &pd._std   
+	          pctlpre = &pd._ 
+	          pctlname = llim95 ulim95  pctlpts = 2.5 97.5;
+	          run;
+				
+			  data temp&i;
+			  set temp&i ;
+			  test_sample = %eval(&rend - (&i - 1)) ;
+			  run;
+
+			  %if &i = 1 %then %do;
+			  	data test_r ;
+				set temp&i;
+				run;
+			  %end;
+			  %else %do;
+			  	data test_r ;
+			  	set test_r temp&i ;			  
+			  	run;
+			  %end;
+			  proc datasets library = work nolist ;
+			  delete temp&i rsubset&i ;
+			  quit;
+     	%end;
+
+  
+
+
+	proc sort data = test_r ;
+	by descending test_sample ;
+	run;
+
+	data test_r ;
+	set test_r ;
+	retain ref_llimit ref_ulimit ref_mean ref_std ;
+	if test_sample = &rend then do ;
+		ref_llimit = &pd._llim95 ;
+		ref_ulimit = &pd._ulim95 ;
+		ref_mean   = &pd._mean;
+		ref_std    = &pd._std ;
+	end;
+	test_llimit = abs((&pd._llim95 - ref_llimit)/ref_llimit) ;
+	test_ulimit = abs((&pd._ulim95 - ref_ulimit)/ref_ulimit) ;
+	test_mean = abs((&pd._mean - ref_mean)/ref_mean );
+	test_std = abs((&pd._std - ref_std )/ref_std );
+	%if &bootstrap_method = 2 AND &BLB_s_max = 1 %then %do;
+		if _n_ = 1 then put "percentile estimates using &rend samples " ref_llimit= ref_ulimit= ;
+	%end;
+	run;
+
+	%if &BLB_r_test_method = 1 %then %do;
+		proc means data = test_r noprint;
+		var test_llimit test_ulimit ;
+		output out = test_r2 sum(test_llimit test_ulimit)= ;
+		run;
+
+		data test_r2 ;
+		set test_r2 ;
+		conv_check = test_llimit + test_ulimit ;
+		if conv_check > &BLB_r_epsilon then converged  = 0 ;
+		else converged = 1 ;
+		call symput('rconverged',compress(converged));
+		rename _freq_ = trend ;	
+		put _all_ ;
+		run;
+	%end;
+	%else %if &BLB_r_test_method = 2 %then %do;
+		data test_r ;
+		set test_r end = _end_ ;
+		retain maxcheck  ;
+        if _n_ = 1 then do;
+            
+			 maxcheck = -1 ;
+		end;
+		check = 0.5 * (test_llimit + test_ulimit ) ;
+		maxcheck = max(maxcheck,check);
+        
+		if _end_ then do ;
+		    if maxcheck > &BLB_r_epsilon then converged = 0 ;
+			else converged = 1 ;
+		    put maxcheck= converged= ;
+			call symput('rconverged',compress(converged));
+		end;
+		run;
+	%end;
+	%else %if &BLB_r_test_method = 3 %then %do;
+		data test_r ;
+		set test_r end = _end_ ;
+		retain maxcheck  ;
+        if _n_ = 1 then do;
+            
+			 maxcheck = -1 ;
+		end;
+		check = 0.5 * (test_mean + test_std ) ;
+		maxcheck = max(maxcheck,check);
+        
+		if _end_ then do ;
+		    if maxcheck > &BLB_r_epsilon then converged = 0 ;
+			else converged = 1 ;
+		    put maxcheck= converged= ;
+			call symput('rconverged',compress(converged));
+		end;
+		run;
+	%end;
+	%else %if &BLB_r_test_method = 4 %then %do;
+		data test_r ;
+		set test_r end = _end_ ;
+		retain maxcheck  ;
+        if _n_ = 1 then do;
+            
+			 maxcheck = -1 ;
+		end;
+		check = test_std  ;
+		maxcheck = max(maxcheck,check);
+        
+		if _end_ then do ;
+		    if maxcheck > &BLB_r_epsilon then converged = 0 ;
+			else converged = 1 ;
+		    put maxcheck= converged= ;
+			call symput('rconverged',compress(converged));
+		end;
+		run;
+	%end;
+
+%if &rconverged = 1  or &rend = &BLB_r_max %then %do;
+	data _null_ ;
+	set test_r ; 
+	if _n_ = 1 then put "percentile estimates for sample &sample_s using &rend r-samples " ref_llimit= ref_ulimit= ;
+	run;
+
+%end ;
+
+/*	%let rconverged = 1 ; */
+
+proc datasets library = work nolist ;
+delete test_r %if &BLB_r_test_method = 1 %then test_r2 ;;
+quit;
+
+%mend ;
+%macro check_sconvergence (sample = 1) ;
+/*
+sample = the sth collection of bootstrap samples being tested for convergence. Data holds all previously run samples 
+
+*/
+
+ %local i rindex pd ;
+ %let pd = pd ;
+ %if &outctype ^= binsurv %then %let pd = s&outc ;
+
+ 
+
+     %*Generating reference cumulative incidence;    
+
+
+
+
+
+ 
+	     data _ref_s ;
+	     set interv&refint._all (where = (_sample_s > 0   )); /*change jgy*/	    
+	     keep _sample_r _sample_s &pd ;
+	     run;
+
+	
+
+		proc sort data = _ref_s out = _tmp_ ;
+		by _sample_s _sample_r ;
+		run ;
+
+
+
+		proc univariate data = _tmp_ noprint ;
+		var &pd ;
+		output out = _tmp2_
+            mean = &pd._mean 
+	        std =  &pd._std  
+            pctlpre = &pd
+     	    pctlname = _pct025 _pct975 
+      	    pctlpts = 2.5 97.5 ;
+		by _sample_s ;
+		run;
+
+
+		
+	       
+	     %do i = 1 %to &BLB_s_trend ;
+
+	       
+	          data ssubset&i; 
+	          set _tmp2_ (where = ( _sample_s <= %eval(&send - (&i - 1) )) ) ;
+			  keep &pd._mean &pd._std &pd._pct025 &pd._pct975 _sample_s ;
+	          run;
+
+	          %*Calculating bootstrap mean, variance and confidence intervals;
+	          proc means data=ssubset&i noprint;
+	          var &pd._mean &pd._std &pd._pct025 &pd._pct975 ;
+	          output out = temps&i (keep = &pd._mean &pd._std &pd._pct025 &pd._pct975 )
+					mean( &pd._mean &pd._std &pd._pct025 &pd._pct975 ) = ;
+	          run;
+				
+			  data temps&i;
+			  set temps&i ;
+			  test_sample = %eval(&send - (&i - 1)) ;
+			  run;
+
+			  %if &i = 1 %then %do;
+			  	data test_s ;
+				set temps&i;
+				run;
+			  %end;
+			  %else %do;
+			  	data test_s ;
+			  	set test_s temps&i ;			  
+			  	run;
+			  %end;
+
+			  proc datasets library = work nolist ;
+			  delete ssubset&i temps&i ;
+			  quit;
+     	%end;
+
+  
+
+
+	proc sort data = test_s ;
+	by descending test_sample ;
+	run;
+
+	data test_s ;
+	set test_s (rename = (&pd._pct025=&pd._llim95 &pd._pct975 = &pd._ulim95 )) ;
+	retain ref_llimit ref_ulimit ref_mean ref_std ;
+	if test_sample = &send then do ;
+		ref_llimit = &pd._llim95 ;
+		ref_ulimit = &pd._ulim95 ;
+		ref_mean   = &pd._mean;
+		ref_std    = &pd._std ;
+	end;
+	test_llimit = abs((&pd._llim95 - ref_llimit)/ref_llimit) ;
+	test_ulimit = abs((&pd._ulim95 - ref_ulimit)/ref_ulimit) ;
+	test_mean = abs((&pd._mean - ref_mean)/ref_mean );
+	test_std = abs((&pd._std - ref_std )/ref_std );
+	if _n_ = 1 then put "using &send s-samples " ref_llimit= ref_ulimit= ref_mean= ref_std= ;
+	run;
+
+	%if &BLB_s_test_method = 1 %then %do;
+		proc means data = test_s noprint;
+		var test_llimit test_ulimit ;
+		output out = test_s2 sum(test_llimit test_ulimit)= ;
+		run;
+
+		data test_s2 ;
+		set test_s2 ;
+		conv_check = test_llimit + test_ulimit ;
+		if conv_check > &BLB_s_epsilon then converged  = 0 ;
+		else converged = 1 ;
+		call symput('sconverged',compress(converged));
+		rename _freq_ = trend ;	
+		put   _all_ ;
+		run;
+	%end;
+	%else %if &BLB_s_test_method = 2 %then %do;
+		data test_s ;
+		set test_s end = _end_ ;
+		retain maxcheck  ;
+        if _n_ = 1 then do;
+            
+			 maxcheck = -1 ;
+		end;
+		check = 0.5 * (test_llimit + test_ulimit ) ;
+		maxcheck = max(maxcheck,check);
+        
+		if _end_ then do ;
+		    if maxcheck > &BLB_s_epsilon then converged = 0 ;
+			else converged = 1 ;
+		    put   maxcheck= converged= ;
+			call symput('sconverged',compress(converged));
+		end;
+		run;
+	%end;
+	%else %if &BLB_s_test_method = 3 %then %do;
+		data test_s ;
+		set test_s end = _end_ ;
+		retain maxcheck  ;
+        if _n_ = 1 then do;
+            
+			 maxcheck = -1 ;
+		end;
+		check = 0.5 * (test_mean + test_std ) ;
+		maxcheck = max(maxcheck,check);
+        
+		if _end_ then do ;
+		    if maxcheck > &BLB_s_epsilon then converged = 0 ;
+			else converged = 1 ;
+		    put   maxcheck= converged= ;
+			call symput('sconverged',compress(converged));
+		end;
+		run;
+	%end;
+	%else %if &BLB_s_test_method = 4 %then %do;
+		data test_s ;
+		set test_s end = _end_ ;
+		retain maxcheck  ;
+        if _n_ = 1 then do;
+            
+			 maxcheck = -1 ;
+		end;
+		check =   test_std    ;
+		maxcheck = max(maxcheck,check);
+        
+		if _end_ then do ;
+		    if maxcheck > &BLB_s_epsilon then converged = 0 ;
+			else converged = 1 ;
+		    put   maxcheck= converged= ;
+			call symput('sconverged',compress(converged));
+		end;
+		run;
+	%end;
+	%else %if &BLB_s_test_method = 5 %then %do;
+		data test_s ;
+		set test_s end = _end_ ;
+		retain maxcheck  ;
+        if _n_ = 1 then do;
+            
+			 maxcheck = -1 ;
+		end;
+		check =   test_mean    ;
+		maxcheck = max(maxcheck,check);
+        
+		if _end_ then do ;
+		    if maxcheck > &BLB_s_epsilon then converged = 0 ;
+			else converged = 1 ;
+		    put   maxcheck= converged= ;
+			call symput('sconverged',compress(converged));
+		end;
+		run;
+	%end;
+
+	proc datasets library = work nolist ;
+	delete test_s %if &BLB_s_test_method = 1 %then test_s2 ;;
+	quit;
+%mend ;
+
+/*** macros for parallelization (run_remote = 1)  ******/
+
+%macro remote_loop ;
+
+             /* will run the base sample outside of this loop. */           
+
+             %local bsample ;
+             %let NiterAll = &nsamples  ;
+             %let Niter = 1 ;
+             %if &check_remote = 0 %then %do;
+               /*   %let NiterAll = %eval(&sample_end - &sample_start + 1) ;*/
+                  %let NiterAll = &nsamples ;
+                  %let seed = %eval(&seed - 3); 
+                  %let bsample = %eval(&sample_start ) ; * this was sample_start - 1 ;
+             %end;
+             %else %if &check_remote = 1 %then %do;
+                    %let NiterAll = 1 ;
+                    %let bsample = &sample_start ;
+             %end;
+ 
+              %if &localhost = 1 %then %do;
+                           %let use_sascmd = 1 ;
+	                   data _hosts ;
+             		   length host $6 script $3 ;
+			   
+		          %do _ihost = 1 %to &nlocalhosts ;
+                                host = "host&_ihost" ;
+                                script = "sas" ;
+                                output ;
+                          %end;
+                          run;
+
+             %end;
+
+             %signon ;
+
+             %distribute ;                           
+
+
+             data &survdata._base ; 
+             set &survdata ; 
+             run ;
+
+             %RCollect(&survdata,&survdata) ;
+
+	     data &survdata ;
+             set &survdata &survdata._base ;
+             run;
+         
+           
+ 
+             proc sort data = &survdata ;
+             by _sample_;
+             run;
+
+
+             %if %bquote(&betadata)^= %then %do;
+	     	 data &betadata._base ;
+                 set _beta_ ;
+                 run;
+
+                  %RCollect(_beta_,&betadata );
+
+		  data &betadata ;
+                  set &betadata &betadata._base ;
+                  run;
+
+                  proc sort data = &betadata ;
+                  by _sample_ ;
+                  run;
+             %end;
+ 
+             %if &runnc = 0 %then %let intestart = 1 ;
+             %else %let intstart = 0 ;
+
+
+
+             %do int = &intstart   %to &numint;
+                
+                data interv&int._base ;
+                 set interv&int._all ; 
+                 run ;
+                
+                %RCollect(interv&int._all,interv&int._all);
+
+                data interv&int._all ;
+                set interv&int._all interv&int._base ; 
+                run;
+
+                proc sort data = interv&int._all ;
+                by _sample_ ;
+                run;
+               
+             %end;
+
+            %if  &hazardratio = 1 and &bootstrap_hazard = 1 %then %do;
+                     data _inthr_base ;
+                     set _inthr_ ;
+                     run;
+
+                     %RCollect(_inthr_ , _inthr_ );
+ 
+                      data _inthr_ ;
+                      set _inthr_ _inthr_base ;
+                      run;
+
+                      proc sort data = _inthr_ ; 
+                      by _sample_ ;
+                      run ;
+             %end;
+            
+
+             %if %bquote(&covmeandata)^= & &check_cov_models = 1 %then %do;
+                  
+                   data &covmeanname._base ;
+                   set &covmeanname ;
+                   run;
+                   
+                  %RCollect(&covmeanname,&covmeanname);
+
+                  data &covmeanname ;
+                  set &covmeanname &covmeanname._base ;
+                  run;
+
+                  proc sort data = &covmeanname ;
+                  by _sample_ ;
+                  run;
+
+             %end;
+
+             %signoff ;
+            
+             %results ;
+%mend; 
+  
+%macro init_rint ;
+
+     /* initial data views for interventions */
+
+         %if &runnc = 1 %then %do;
+             %interv_init(intno=0, intlabel='Natural course');
+          %end;
+
+           %do intnum = 1 %to &numint;
+                %interv_init(&&interv&intnum);
+           %end;
+ %mend ;
+
+
+   %macro rint;
+
+       %if &runnc = 1 %then %do;
+              %interv(intno=0 , intlabel="Natural course");
+
+       	       /* save survdata */
+
+               %if &outctype = binsurv %then %do;       
+
+               	   proc append base = &survdata data = surv_tmp0;
+              	   run;
+          
+          %end;
+        %end;
+    
+        %do intnum = 1 %to &numint ;           
+             %interv(&&interv&intnum)  ;  
+                %if &outctype = binsurv %then %do;
+                    proc append base = &survdata data = surv_tmp&intnum ;
+                   run;
+                %end; 
+         %end  ;
+            %put done with rint ; 
+   %mend ;
+
+
+   
+  %macro rres ;
+ 
+            %if %eval(&bsample) = 0 %then %do;
+            
+                %do int = 0 %to %eval(&numint);
+                    data interv&int._all;
+                       set interv&int;
+                    run;
+                %end;
+             
+            %end;
+            %else %do;
+                %if &runnc = 1 %then %do;
+                             proc append base = interv0_all data = interv0 ;
+                             run;
+                %end;
+
+
+                %do int = 1 %to %eval(&numint);
+                   proc append base = interv&int._all data = interv&int;
+                   run;
+                %end;
+            %end;
+        %mend;
+
+%macro mysyslput(remote=) ;
+
+   %local mvarlist nmvar  i name;
+   PROC SQL  noprint ; 
+        select  name  into :mvarlist separated by " "
+        from   Dictionary.Macros
+        where  scope = "GFORMULA"
+        ;quit;
+
+
+
+    %let nmvar = %numargs(&mvarlist);
+   
+     %do i = 1 %to &nmvar ;
+         %let word = %qscan(&mvarlist,%eval(&i),%str( ));
+          
+         %syslput &word = %unquote(&&&word) /remote=&remote ; 
+     %end;
+     /* copy over the intervention definitions */
+     %do intnum = 1 %to &numint  ;
+         %syslput interv&intnum = &&interv&intnum / remote=&remote;
+     %end;
+ %mend ;
+
+
+ %macro simuldata ;
+     
+
+      %*Outputting/creating  simulated dataset;
+
+       data &simuldata ;
+       set simulated0 ;
+       run;
+
+       %*Outputting the mean of covariates and probability of event;
+       proc means data= &simuldata  mean min max ;                                                                      
+       var cuminc intervened averinterv  
+              %do j = 3 %to %eval(2+&timepoints);
+                     pchd&j
+              %end;
+              %do i = 1 %to &ncov;
+                    %do j = 3 %to %eval(2+&timepoints);
+                         s&&cov&i..&j
+                    %end;
+              %end; 
+                ;
+
+         %if &outctype = binsurv %then %do;
+              output out=interv0 mean=pd intervened averinterv 
+                              %do j = 3 %to %eval(2+&timepoints);
+                                 pchd&j
+                              %end;
+                              %do i = 1 %to &ncov;
+                                 %do j = 3 %to %eval(2+&timepoints);
+                                    s&&cov&i..&j
+                                 %end;
+                            %end;  
+                               ;
+          %end;
+          title "mean, min, max under intervention 0";
+          run;proc means data= &simuldata  mean min max ;                                                                      
+       var cuminc intervened averinterv  
+              %do j = 3 %to %eval(2+&timepoints);
+                     pchd&j
+              %end;
+              %do i = 1 %to &ncov;
+                    %do j = 3 %to %eval(2+&timepoints);
+                         s&&cov&i..&j
+                    %end;
+              %end; 
+                ;
+
+         %if &outctype = binsurv %then %do;
+              output out=interv0 mean=pd intervened averinterv 
+                              %do j = 3 %to %eval(2+&timepoints);
+                                 pchd&j
+                              %end;
+                              %do i = 1 %to &ncov;
+                                 %do j = 3 %to %eval(2+&timepoints);
+                                    s&&cov&i..&j
+                                 %end;
+                            %end;  
+                               ;
+          %end;
+          title "mean, min, max under intervention 0";
+          run;
+
+            
+
+         data interv0;
+         set interv0;
+         _sample_ = 0;
+         length int2 $70 ;
+         int=0;
+         int2="Natural course";
+         n=_FREQ_;
+         keep int int2 _sample_ n pd intervened averinterv 
+         %do j = 3 %to %eval(2+&timepoints);
+                pchd&j
+                %end;
+            %do j = 3 %to %eval(2+&timepoints);
+                %do i = 1 %to &ncov;
+                    s&&cov&i..&j
+                    %end;
+                %end;  
+                dataname ssize obsp 
+            ;
+           dataname = "&data";
+           ssize = &ssize ;
+           obsp = &obsp ;
+           
+           run;
+
+
+            proc means data = &simuldata noprint ;
+            var  %do n = 3 %to %eval(2+&timepoints);
+                 cuminc&n surv&n cumcensd&n sum&n
+              %end; ;
+            output out = survprobs0 mean = %do n = 1 %to &timepoints; risk&n surv&n censd&n sum&n %end; ;
+            run;
+     
+
+
+            %if &outctype = binsurv %then %do;
+
+            /* initialize survdata */
+
+                data surv_tmp0 ;
+                set survprobs0 ;
+                length int2 $70 ;
+                int = 0 ;
+                int2 = "Natrual course";
+                _sample_ = 0 ;
+                surv0 = 1;
+                n = _freq_ ;
+                keep  int int2 _sample_ n  surv0
+                    %do n = 1 %to &timepoints;
+                       risk&n surv&n censd&n sum&n
+                    %end;
+                  ;
+               run;
+
+           %end; 
+         
+
+        
+
+
+ %mend ; 
+
+
+/***** macros from distribute package ****/
+
+ /****************************************************************/
+ /*                                                              */
+ /*    NAME: DISTRIBUTE                                          */
+ /*   TITLE: Distributed parallel processing in SAS using MP     */
+ /*          CONNECT                                             */
+ /*  SYSTEM: ALL                                                 */
+ /*   PROCS: TEMPLATE                                            */
+ /* PRODUCT: SAS/CONNECT                                         */ 
+ /*    DATA:                                                     */
+ /*                                                              */
+ /* SUPPORT: sasrdt                      UPDATE:  26FEB01        */
+ /*     REF: See "Large-Scale Parallel Numerical Computation in  */
+ /*          the SAS System", Cheryl Doninger & Randy Tobias.    */
+ /****************************************************************/
+
+ 
+
+%*********************************************************************;
+%*  MACRO: SignOn                                                    *;
+%*  USAGE: %SignOn;                                                  *;
+%*  DESCRIPTION:                                                     *;
+%*    This macro signs on to the hosts, using the information in the *;
+%*    _Hosts data set.  See comments above for a description.        *;
+%*  NOTES:                                                           *;
+%*    Assumes _Hosts data set has been created correctly.            *;
+%*                                                                   *;
+%*********************************************************************;
+%macro SignOn;
+   
+
+   %local notesopt; 
+   %let notesopt = %sysfunc(getoption(notes));
+
+   %if (^&DIST_DEBUG) %then %do;
+      options nonotes;
+   %end;
+   %else %do;
+      options mprint;
+   %end;
+
+
+
+  /*
+  /  Retrieve global host information from the _Hosts data set and set
+  /  up Seed and Status variables for each host.
+  /---------------------------------------------------------------------*/
+  %global NumHosts;
+
+   data _Hosts; 
+   set _Hosts;
+   Status = '!';
+   iHost = _N_;
+   call symput('NumHosts',trim(left(_N_)));
+   run;
+
+   %do iHost=1 %to &NumHosts;
+      %global Host&iHost Status&iHost;
+   %end;
+
+   data _null_; set _Hosts;
+   call symput('Host'||trim(left(iHost)),trim(left(Host))       );
+   call symput('Seed'||trim(left(iHost)),round(100000*ranuni(1)));
+   run;
+
+   data _null_; 
+   set _Hosts;
+   select (Status);
+      when ('!') call symput('Status'||trim(left(iHost)),0);
+      when ('X') call symput('Status'||trim(left(iHost)),1);
+      when ('.') call symput('Status'||trim(left(iHost)),2); 
+      end;
+  run;
+
+/*
+/  For each host, retrieve script, sign on, and set up a RLS libref
+/  to the host's work library.
+/---------------------------------------------------------------------*/
+   %do iHost = 1 %to &NumHosts;
+      %put Starting up Host&iHost = &&host&iHost;
+
+      data _null_; 
+      set _Hosts(where=(iHost=&iHost));
+      call symput('Script' ,trim(left(Script )));
+      run;
+
+      %if (^&DIST_DEBUG) %then %do;
+         options notes;
+         proc printto log="&DistLog" print="&DistLst" %if &ihost = 1 %then new ;; 
+        run;
+     %end;
+
+  
+  /* use autosignon */
+    %if &use_sascmd = 1 %then %do;
+         options sascmd="&Script";
+         signon remote=Host&iHost ;
+    %end;
+    %else %do;
+         filename Script "&Script";
+         signon remote=Host&iHost script=Script;
+         filename Script;
+     %end;
+
+     libname RWork&iHost slibref=WORK server=Host&iHost;
+
+     %let Status&iHost = -1;
+     %RInit;  /* define the macros that will be called on each host */
+
+     %if (^&DIST_DEBUG) %then %do;
+       %let stimeropt = %sysfunc(getoption(stimer));
+       options nostimer;
+       proc printto; 
+       run;
+       options &stimeropt;
+       options nonotes;
+    %end;
+  %end;
+
+/*
+/  Print the initial status of each host.
+/---------------------------------------------------------------------*/
+   %let StatLine =;
+   data _null_; 
+   set _Hosts;
+   call symput('StatLine',symget('StatLine')||trim(left(Status)));
+   run;
+   %put Stat: &StatLine;
+
+options &notesopt;
+
+%mend;
+
+
+
+
+
+
+
+
+
+%*********************************************************************;
+%*  MACRO: SignOff                                                   *;
+%*  USAGE: %SignOff;                                                 *;
+%*  DESCRIPTION:                                                     *;
+%*    This macro signs off the hosts.                                *;
+%*********************************************************************;
+%macro SignOff;
+
+   %local notesopt; 
+   %let notesopt = %sysfunc(getoption(notes));
+   options nonotes;
+
+   data _null_; set _Hosts;
+   call symput('Host'  ||trim(left(iHost)),trim(left(Host))       );
+   call symput('NumHosts'                 ,trim(left(_n_))        );
+   select (Status);
+      when ('!')     call symput('Status'||trim(left(iHost)),0);
+      when ('X')     call symput('Status'||trim(left(iHost)),1);
+      when ('.','?') call symput('Status'||trim(left(iHost)),2); 
+      end;
+   run;
+
+
+  %do iHost = 1 %to &NumHosts;
+     %put Stopping Host&iHost = &&host&iHost;
+
+      options notes;
+
+      proc printto log="&DistLog" print="&DistLst"; 
+      run;
+
+      %let Status&iHost = -1;
+      signoff remote=Host&iHost macvar=Status&iHost;
+
+/*
+   rsubmit remote=Host&iHost wait=yes macvar=Status&iHost;
+   ;
+   endrsubmit;
+*/
+
+      %let stimeropt = %sysfunc(getoption(stimer));
+      options nostimer;
+      proc printto; run;
+      options &stimeropt;
+   
+      options nonotes;
+
+   %end;
+
+   %PrintStatus;
+
+   options &notesopt;
+
+%mend;
+
+
+
+
+
+
+%*********************************************************************;
+%*  MACRO: _TaskRSub                                                 *;
+%*  USAGE: Internal macro only                                       *;
+%*  DESCRIPTION:                                                     *;
+%*    This macro submits a chunk of the fundamental task to the host *;
+%*    with index nHost.                                              *;
+%*  NOTES:                                                           *;
+%*    Assumes the macro %TaskRSub has been previously defined on the *;
+%*    host.  Do this in the RInit macro defined on the client.       *;
+%*********************************************************************;
+%macro _TaskRSub;
+%global  DIST_ClientRSub;
+
+   %if (^&DIST_DEBUG) %then %do;
+      proc printto log="&DistLog" print="&DistLst"; 
+      run;
+   %end;
+
+   %let Status&nHost = -1;
+
+   /*
+   /  Keep track of what's been submitted to each host *on* the
+   /  hosts themselves, to ensure wires don't get crossed.
+   /------------------------------------------------------------------*/
+   rsubmit remote=Host&nHost wait=yes;
+      %nrstr(%%)let TaskNSubm = %eval(&TaskNSubm + &rem_niter);
+      %nrstr(%%)sysrput NSubm&rem_iHost = &TaskNSubm;
+   endrsubmit;
+   %syslput GlobalNSubm = &NSubm;
+
+   %if (&DIST_ClientRSub) %then %ClientRSub;
+
+   /*
+   /  Submit not only the task to this host, but also the random
+   /  seed and time management code.
+   /------------------------------------------------------------------*/
+   rsubmit remote=Host&nHost wait=no macvar=Status&nHost 
+           SYSRPUTSYNC=yes;
+      
+
+      data _TimeBetween;
+         Host = "&rem_Host";
+         now = datetime();
+         call symput('_TimeStart_',now);
+         TimeBetween = now - symget('_TimeEnd_');
+      run;
+
+      data _null_; call symput('_TimeStart_',datetime()); run;
+
+      %TaskRSub;
+
+      data _TimeEnd;
+         Host = "&rem_Host";
+         now = datetime();
+         call symput('_TimeEnd_',now);
+         Time = now - symget('_TimeStart_');
+      run;
+
+      data _Time; merge _TimeBetween _TimeEnd;
+      data _TimeAll; set _TimeAll _Time;
+      run;
+
+      %nrstr(%%)let TaskNDone = %eval(&TaskNDone + &rem_niter);
+      %nrstr(%%)sysrput NDone&rem_iHost = &TaskNDone;
+   endrsubmit;
+   %let NSubm = %eval(&NSubm + &NIter);
+
+   %if (^&DIST_DEBUG) %then %do;
+      options nostimer; proc printto; run; options stimer;
+      %end;
+%mend;
+
+
+
+
+
+
+%*********************************************************************;
+%*  MACRO: PrintStatus                                               *;
+%*  USAGE: Internal macro only                                       *;
+%*  DESCRIPTION:                                                     *;
+%*    This macro prints a line summarizing the current status of     *;
+%*    each server:                                                   *;
+%*       '.' for hosts that are currently working,                   *;
+%*       '!' for hosts that are currently waiting to be assigned     *;
+%*           work, and                                               *;
+%*       'X' for hosts that are unable to do work for some reason.   *;
+%*    Additional status information includes the number of           *;
+%*    fundamental tasks submitted and completed so far.              *;
+%*********************************************************************;
+%macro PrintStatus;
+
+%local notesopt; %let notesopt = %sysfunc(getoption(notes));
+options nonotes;
+
+   data _Hosts; set _Hosts;
+      xStatus = 1*symget('Status'||trim(left(iHost)));
+      select (xStatus);
+         when (0)  Status = '!';
+         when (1)  Status = 'X';
+         when (2)  Status = '.';
+         otherwise do; Status = '?'; put iHost= xStatus=; end;
+         end;
+      NSubm = 1*symget('NSubm'||trim(left(iHost)));
+      NDone = 1*symget('NDone'||trim(left(iHost)));
+   run;
+   %let StatLine =;
+   data _null_; set _Hosts;
+      call symput('StatLine',symget('StatLine')||trim(left(Status)));
+   run;
+   proc summary data=_Hosts;
+      var NSubm NDone;
+      output out=_SHosts sum=NSubm NDone;
+   data _null_; set _SHosts;
+      call symput('StatLine',symget('StatLine')
+                  ||': ('||trim(left(put(NSubm    ,best20.)))
+                  ||','  ||trim(left(put(NDone    ,best20.)))
+                  ||')/' ||trim(left(put(&NIterAll,best20.))));
+   run;
+   %put Stat: &StatLine;
+
+options &notesopt;
+
+%mend;
+
+
+
+
+
+
+%*********************************************************************;
+%*  MACRO: Distribute                                                *;
+%*  USAGE: %Distribute                                               *;
+%*  DESCRIPTION:                                                     *;
+%*    This macro performs the actual distribution, assuming that you *;
+%*    have first created the _Hosts data set and the %RInit macro,   *;
+%*    as described in the header comments above.                     *;
+%*********************************************************************;
+%macro Distribute;
+  
+ 
+
+   %global DIST_ClientRSub;
+
+   %do iHost=1 %to &NumHosts;
+       %global Host&iHost Seed&iHost Status&iHost NSubm&iHost NDone&iHost
+           TimeWork&iHost TimeWait&iHost TimeFreq&iHost _ElapsedTime;
+   %end;
+
+   %if (^&DIST_DEBUG) %then %do;
+       %local notesopt;    
+       %let notesopt = %sysfunc(getoption(notes));
+       options nonotes;
+   %end;
+   %else %do;
+      options notes /*  mtrace */ ;
+   %end;
+
+/*
+/  Start the timer.
+/---------------------------------------------------------------------*/
+   data _null_; 
+   call symput('TimeStart',trim(left(datetime()))); 
+   run;
+
+
+
+/*
+/  Check to see whether ClientRSub and Macros are defined.
+/---------------------------------------------------------------------*/
+   proc catalog cat=work.sasmacr;
+   contents out=_Macros;
+   run;
+
+   %let DIST_ClientRSub = 0;
+   data _null_; 
+   set _Macros(where=(upcase(Name) = upcase("ClientRSub")));
+   call symput('DIST_ClientRSub','1');
+   run;
+
+   %let DIST_Macros = 0;
+   data _null_; 
+   set _Macros(where=(upcase(Name) = upcase("Macros")));
+   call symput('DIST_Macros','1');
+   run;
+
+
+/*
+/  Set up macro variables with the names and random number seeds for
+/  all the hosts, and initialize monitoring information.
+/---------------------------------------------------------------------*/
+   data _null_; 
+   set _Hosts;
+   call symput('Host'  ||trim(left(iHost)),
+               trim(left(Host))       );
+   call symput('Seed'  ||trim(left(iHost)),
+               trim(left(round(100000*ranuni(1)))));
+   call symput('NumHosts'                 ,
+               trim(left(_N_))        );
+   select (Status);
+      when ('!') call symput('Status'||trim(left(iHost)),0);
+      when ('X') call symput('Status'||trim(left(iHost)),1);
+      when ('.') call symput('Status'||trim(left(iHost)),2); 
+      end;
+   call symput('NSubm' ||trim(left(iHost)),'0');
+   call symput('NDone' ||trim(left(iHost)),'0');
+   run;
+
+   %let NSubm = 0;
+
+/*
+/  Start-up phase: submit the initialization task to each host, and
+/  also the first fundamental task.
+/---------------------------------------------------------------------*/
+   %do iHost = 1 %to &NumHosts;
+        %if (^&DIST_DEBUG) %then %do;
+            proc printto log="&DistLog" print="&DistLst"  ; 
+            run;
+        %end;
+
+       options remote=Host&iHost;
+
+       %syslput rem_Host  =&&host&iHost;
+       %syslput rem_Seed  =&&seed&iHost;
+       %syslput rem_niter =&niter;
+       %syslput rem_iHost =&iHost;
+
+       /* Macros sets up local file in work space for storing central version of gformula being used 
+          also sets initial values of bsample = sample_start 
+        */
+       %if (&DIST_Macros) %then %Macros;
+
+      
+       rsubmit remote=Host&iHost wait=yes;
+
+          /* reads in version of gformula macros for remote session and uploads _paramdata_ and 
+           _simuldata_. Can these be read in from driver session?  */
+          %FirstRSub;
+
+          data _null_;
+          now = datetime();
+          call symput('_TimeEnd_',now);
+          run;
+
+          data _TimeAll; 
+          if (0); 
+          run;
+
+          %nrstr(%%)let TaskNSubm = 0;
+          %nrstr(%%)sysrput NSubm&rem_iHost = &TaskNSubm;
+          %nrstr(%%)let TaskNDone = 0;
+          %nrstr(%%)sysrput NDone&rem_iHost = &TaskNDone;
+       endrsubmit;
+       %let nHost = &iHost; 
+
+        /* _taskrSub sets up  call of TaskRSub. TaskRSub contains calls for a single iteration of the gformula 
+            macros : samples, parameters and interv as needed 
+       */
+       %_TaskRSub;
+
+       %if (^&DIST_DEBUG) %then %do;
+          options nostimer; 
+          proc printto; 
+          run; 
+          options stimer;
+      %end;
+
+      %if (&DIST_STATUS) %then %PrintStatus;
+      %let NSubm = 0;
+      %let NDone = 0;
+      %do jHost = 1 %to %eval(&iHost);
+        %let NSubm = %eval(&NSubm + &&NSubm&jHost);
+        %let NDone = %eval(&NDone + &&NDone&jHost);
+      %end;
+
+      %do jHost = 1 %to %eval(&iHost);
+         %let LastStat&jHost = &&Status&jHost;
+      %end;
+
+
+   /*
+   /  We also recycle through previous hosts here, resubmitting tasks
+   /  to them if they're ready for more: this saves a little time
+   /  when some hosts finish their first task before the start-up
+   /  phase is complete.
+   /------------------------------------------------------------------*/
+     %do jHost = 1 %to %eval(&iHost);
+      
+/* niterall is set in main remote_loop macro. In general this is nsamples */
+
+        %if ((&&LastStat&jHost = 0) & (&NDone < &niterall)) %then %do;            
+             %let nHost = &jHost; 
+             %_TaskRSub; /* includes call to TaskRSub for evaluating one loop of gformula */
+        %end;
+     %end;
+
+  %end;
+
+  %if (&DIST_STATUS) %then %PrintStatus;
+  %let NSubm = 0;
+  %let NDone = 0;
+  %do jHost = 1 %to %eval(&NumHosts);
+      %let NSubm = %eval(&NSubm + &&NSubm&jHost);
+      %let NDone = %eval(&NDone + &&NDone&jHost);
+  %end;
+
+
+/*
+/  Monitor the MACVARs Status1, Status2, etc. to watch the jobs
+/  finish.  As they do, resubmit new tasks for free hosts to work on.
+/---------------------------------------------------------------------*/
+  %let Running = 1;
+  %do %while(%length(&Running));
+     waitfor _any_
+         %do iHost = 1 %to &NumHosts; 
+            %if (&&LastStat&iHost = 2) %then %do;
+               Host&iHost 
+             %end;
+         %end;
+      ;
+
+      %if (&DIST_STATUS) %then %PrintStatus;
+      %let NSubm = 0;
+      %let NDone = 0;
+      %do jHost = 1 %to %eval(&NumHosts);
+         %let NSubm = %eval(&NSubm + &&NSubm&jHost);
+         %let NDone = %eval(&NDone + &&NDone&jHost);
+      %end;
+
+   %let Running   =;
+   %do iHost = 1 %to &NumHosts;
+      %let LastStat&iHost = &&Status&iHost;
+      %if (&&LastStat&iHost = 2) %then %let Running  =&Running &iHost;
+      %end;
+
+   %do iHost = 1 %to &NumHosts;
+    
+      %if ((&&LastStat&iHost = 0) & (&NSubm < &niterall)) %then %do;
+         %let nHost = &iHost; %_TaskRSub;
+         
+         %let LastStat&iHost = &&Status&iHost;
+         %if (&&LastStat&iHost = 2) %then %let Running  =&Running &iHost;
+
+         %let NSubm = 0;
+         %let NDone = 0;
+         %do jHost = 1 %to %eval(&NumHosts);
+            %let NSubm = %eval(&NSubm + &&NSubm&jHost);
+            %let NDone = %eval(&NDone + &&NDone&jHost);
+            %end;
+         %end;
+      %end;
+   %end;
+
+
+/*
+/  All tasks are finished: retrieve the timing information from each
+/  of the hosts, ...
+/---------------------------------------------------------------------*/
+%do iHost = 1 %to &NumHosts;
+   %let LastStat&iHost = &&Status&iHost;
+   %if (&&LastStat&iHost = 0) %then %do;
+
+      %if (^&DIST_DEBUG) %then %do;
+         proc printto log="&DistLog" print="&DistLst"; run;
+         %end;
+
+      rsubmit remote=Host&iHost wait=yes;
+         proc summary data=_TimeAll;
+            var Time TimeBetween;
+            output out=_TimeSumm mean=Work Wait;
+         run;
+
+         data _null_; set _TimeSumm;
+            call symput('_TimeWork',trim(left(Work)));
+            call symput('_TimeWait',trim(left(Wait)));
+            call symput('_TimeFreq',trim(left(_FREQ_ )));
+         run;
+         %nrstr(%%)sysrput TimeWork&rem_iHost = &_TimeWork;
+         %nrstr(%%)sysrput TimeWait&rem_iHost = &_TimeWait;
+         %nrstr(%%)sysrput TimeFreq&rem_iHost = &_TimeFreq;
+      endrsubmit;
+
+      %if (^&DIST_DEBUG) %then %do;
+         options nostimer; proc printto; run; options stimer;
+         %end;
+
+      %end;
+   %end;
+
+
+/*
+/  ... add it to the _Hosts data set, ...
+/---------------------------------------------------------------------*/
+   data _null_;
+      Elapse = datetime() - &TimeStart;
+      call symput('_ElapsedTime',trim(left(put(Elapse,best.))));
+   run;
+
+   data TimeSumm; set _Hosts(keep=Host iHost);
+      keep iHost Host NIter TimeWork EstElapsed Eff TimeWait TotalWork TotalWait;
+
+      NIter    = &NIter*symget('TimeFreq'||trim(left(iHost)));
+      TimeWork =      1*symget('TimeWork'||trim(left(iHost)));
+      TimeWait =      1*symget('TimeWait'||trim(left(iHost)));
+
+      EstElapsed = (&NIterAll/&NIter)*TimeWork;
+      Eff        = (EstElapsed/&_ElapsedTime)/&NumHosts;
+      TotalWork  = (NIter/&NIter)*TimeWork;
+      TotalWait  = (NIter/&NIter)*TimeWait;
+   run;
+
+
+/*
+/  ... and report it.
+/---------------------------------------------------------------------*/
+   %if (&DIST_DETAIL) %then %do;
+   proc sort data=TimeSumm out=TimeSumm; by descending TimeWork;
+   proc print data=TimeSumm label noobs;
+      format TimeWork  time.;
+      format TimeWait  time.;
+      format EstElapsed time.;
+      format Eff       percent.;
+      label  NIter      = "No. Iter";
+      label  TimeWork   = "Work Time/&Niter Iter";
+      label  TimeWait   = "Wait Time/&Niter Iter";
+      label  EstElapsed = "Estimated Time for Entire Problem";
+      label  Eff        = "Distribution Efficiency";
+      var iHost Host NIter TimeWork EstElapsed Eff TimeWait;
+   run;
+   %end;
+
+   proc summary data=TimeSumm;
+      var TotalWork TotalWait;
+      output out=TotalTime Sum=TotalWork TotalWait;
+   data _null_; set TotalTime;
+      Elapsed = &_ElapsedTime;
+      Eff     = (TotalWork/Elapsed)/&NumHosts;
+      put " ";
+      put "                      Total elapsed time:      " Elapsed   time.;
+      put "                      Cumulative working time: " TotalWork time.;
+      put "                      Cumulative waiting time: " TotalWait time.;
+      put "                      Scaling efficiency:      " Eff percent8.2;
+      put " ";
+      put " ";
+   run;
+
+%if (^&DIST_DEBUG) %then %do;
+   options &notesopt;
+   %end;
+
+%mend;
+
+
+
+
+
+
+%*********************************************************************;
+%*  MACRO: RCollect                                                  *;
+%*  USAGE: %RCollect(<<Remote DS prefix>>,<<Client DS>>);            *;
+%*  DESCRIPTION:                                                     *;
+%*    This macro collects similarly named data sets from &n          *;
+%*    libraries named RWork1, ..., RWork&n, into a single data set.  *;
+%*  NOTES:                                                           *;
+%*    In order to use a view to virtually collect the data sets, use *;
+%*    'dsname / view=dsname' as the client data set name.            *;
+%*********************************************************************;
+%macro RCollect(from,to,n=,by=);
+%global NumHosts;
+
+%if (^%length(%left(%trim(&n)))) %then %let n=&NumHosts;
+%do iHost=1 %to &NumHosts;
+   %global Host&iHost Status&iHost;
+   %end;
+
+data &to;
+   %if (^%length(%left(%trim(&by)))) %then %do;
+      set 
+      %end;
+   %else %do;
+      merge
+      %end;
+   %do i=1 %to &N; 
+      %if (&&Status&i = 0) %then %do;
+         RWork&i..&from 
+         %end;
+      %end;
+      ;
+   %if (%length(%left(%trim(&by)))) %then %do;
+      by &by;
+      %end;
+run;
+%mend;
+
+/*** files for gformula macro *****/
+
+
+%macro Macros ;
+
+   filename _rincin1 "gformula4.1p.sas" lrecl=256;
+   filename _rincot1 catalog "work._rinc._rinc1.source" lrecl=256;
+ 
+
+
+    data _null_;
+    infile _rincin1  ;
+    file _rincot1;
+    input;
+    put _infile_ ;
+    run;
+ 
+    %if &check_remote = 1 %then %do;
+        %unquote(%nrstr(%%)syslput bsample = &sample_start / remote = host&ihost );
+    %end;
+     %mysyslput(remote=host&ihost) ;
+%mend;
+
+%macro RInit;
+      rsubmit remote=Host&iHost wait=yes macvar=Status&iHost;
+         %nrstr(%%)let initialized = 0 ;
+
+         %macro FirstRSub;
+             options nonotes nosource;
+             proc upload incat=work._rinc outcat=work._rinc status=no;
+             select _rinc1.source ;
+             quit;
+             filename _rinc1 catalog "work._rinc._rinc1.source";
+             %include _rinc1;
+      
+             proc upload  inlib=work outlib=work status=no ;
+             select  /* _inputd_ */  _paramdata_  _simuldata_ tmpids  ;
+             run;
+
+            
+         
+         %mend;
+   
+         %macro TaskRSub;
+            
+                 
+                 %nrstr(%%)put  running task sample = &bsample , seed = &seed on host = &rem_host init=&initialized;
+     
+                 %samples ;
+                 %parameters ;  
+
+                 data _betar_ ;
+                 set _beta_  (where = ( _sample_=&bsample)) ;
+                 run;
+
+                 data _seedr_ ;
+                 _seedr_ = %eval(&seed);
+                 _sample_ = &bsample ;
+                 run;
+
+               %if &hazardratio = 1 AND &bootstrap_hazard = 1  %then %do;                   
+                         data _calchazard_ ;
+                         calchazard = 0 ;
+                         _sample_ = &bsample ;
+                         run;
+                %end;
+                 
+                 %nrstr(%%)if &initialized=0 %then %init_rint ;  
+                
+                 %rint ;
+
+               %if &hazardratio = 1 %then %do;
+                    %if &bsample = 0 %then  %createhazard ;
+                    %else %if &bootstrap_hazard = 1 %then %createhazard ;
+                %end;
+
+
+                 %rres ;
+                 %nrstr(%%)let initialized = 1 ;
+
+            %put DONE WITH SAMPLE = &bsample on host =&rem_host ;
+         %mend;
+
+   endrsubmit;
+%mend;
+
+%macro ClientRSub ;
+%put INSIDE CLIENTRSUB bsample = &bsample nhost = &nhost seed = &seed  check_remote = &check_remote ;
+    %if &check_remote = 0 %then %do;
+        %let seed = %eval(&seed + 3 );
+        %let bsample = %eval(&bsample + 1) ;
+    %end;
+   %put INSIDE CLIENTRSUB bsample = &bsample nhost = &nhost seed = &seed ;
+    %syslput bsample = &bsample / remote=host&nhost ;
+    %syslput seed = &seed / remote=host&nhost ;
+    %if (&outputs ^= yes or %eval(&bsample) ^= 0) %then %do;
+         %syslput ods_logit = ods select none / remote = host&nhost ;
+         %syslput ods_reg = ods select none / remote=host&nhost  ;
+    %end;
+   
+   * rsubmit host&nhost ;
+   *  options notes mprint ;
+   *    %nrstr(%%)put setting bsample and seeds in clientrsub bsample=&bsample seed=&seed  host = &rem_host;      
+   * endrsubmit ;
+%put FINISHED CLIENTRSUB bsample = &bsample nhost = &nhost seed = &seed  check_remote = &check_remote ;
+%mend ;
+ 

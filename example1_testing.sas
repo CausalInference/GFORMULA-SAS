@@ -110,25 +110,30 @@ conteof = . ;
 call streaminit(1234321);
 if time = 5 then do ;
    conteof = -1+2*rand('uniform');
+   bineof = rand('bernoulli',0.4) ;
+
 end;
 censor = (dead = 1 or censlost = 1) ;
 run;
+
 
 **GFORMULA Call;
 title 'GFORMULA SAMPLE';
 options mprint notes ;
 *options nomprint nonotes ;
+ 
+
 %gformula(
 data= sample,
 id=id,
 time=time,
 timepoints = 6,
+
 outc=conteof ,
 outctype=conteofu,
 compevent=,
 compevent_cens  = 0   ,
 censor = censor ,
-
 fixedcov = baseage,
 timeptype= concat, 
 timeknots = 1 2 3 4 5,
@@ -141,6 +146,7 @@ hazardratio = 0 ,
 intcomp = 0 1 ,
 seed= 9458, nsamples = 5, numint=1 ,
 rungraphs = 1 
+
 );
 
 
