@@ -111,31 +111,29 @@ call streaminit(1234321);
 if time = 5 then do ;
    conteof = -1+2*rand('uniform');
    bineof = rand('bernoulli',0.4) ;
+
 end;
 censor = (dead = 1 or censlost = 1) ;
 run;
 
- 
- proc greplay igout = GSEG nofs ;
- delete _all_ ;
- run;
- quit;
 
 **GFORMULA Call;
 title 'GFORMULA SAMPLE';
 options mprint notes ;
-options nomprint nonotes ;
+*options nomprint nonotes ;
+ 
+
 %gformula(
 data= sample,
 id=id,
 time=time,
 timepoints = 6,
-outc=dia ,
-outctype=binsurv,
-compevent= dead,
-compevent_cens  = 0   ,
-censor = censlost ,
 
+outc=conteof ,
+outctype=conteofu,
+compevent=,
+compevent_cens  = 0   ,
+censor = censor ,
 fixedcov = baseage,
 timeptype= concat, 
 timeknots = 1 2 3 4 5,
@@ -143,14 +141,12 @@ timeknots = 1 2 3 4 5,
 ncov=2,
 cov1  = hbp,    cov1otype  = 2, cov1ptype = tsswitch1,
 cov2  = act,    cov2otype  = 4, cov2ptype = lag2cub,
- save_raw_covmean = 1,
-hazardratio = 1 ,
-bootstrap_hazard = 1 ,
-intcomp = 0 1 ,
-seed= 9458, nsamples = 10, numint=1 ,
-rungraphs = 1 ,
 
-resultsdata = myresults 
+hazardratio = 0 ,
+intcomp = 0 1 ,
+seed= 9458, nsamples = 5, numint=1 ,
+rungraphs = 1 
+
 );
 
 
