@@ -2111,7 +2111,6 @@ options mautosource minoperator ;
             model &censor = &censorpred %if &uselabelo = 1 %then / parmlabel ;;
 			output out=_censor_ (keep = newid &time &censor &compevent  &outc pC_d  &covlisttmp ) pred = pC_d ;
             run;
-
 			%if &compevent_cens = 1  %then %do;
 
 			 	proc logistic descending data=param  ;
@@ -3810,7 +3809,6 @@ intusermacro7=,
                             _newtime = &time ;
                         end;
                     %end;
-
                     /* increment lagged variables for the next time point */
                     %do icov = 1 %to &ncov ;
                         &&cov&icov.._l3 = &&cov&icov.._l2 ;
