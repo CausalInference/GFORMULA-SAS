@@ -605,7 +605,7 @@ options mautosource minoperator ;
     %*Preparing data;    
     %dataprep;
      
-     
+   
 
     %if %bquote(&nparam)= %then %let nparam=&ssize;
     %if %bquote(&nsimul)= %then %let nsimul=&ssize;
@@ -1144,7 +1144,12 @@ options mautosource minoperator ;
     %*Arraying regression predictors;
      
     %if &checkaddvars = 1 %then %addvarcheck(vartype = 0, outvar = event );
-    %let outcpred = &fixedcov %listpred(main,,0,&ncov,_l2,_l1) &eventaddvars %qcmpres(%interxarrays(main,outc))   ;
+	%if &usehistory_eof = 0 %then %do;
+    	%let outcpred = &fixedcov %listpred(main,,0,&ncov,_l2,_l1) &eventaddvars %qcmpres(%interxarrays(main,outc))   ;
+	%end ;
+	%else %if &usehistory_eof = 1 %then %do; 
+		%let outcpred = &fixedcov %listpred(eof,,0,&ncov,_l2,_l1) &eventaddvars %qcmpres(%interxarrays(main,outc))   ;
+	%end ;
     %if &printlogstats = 1 %then %put  Outcome predictors are: &outcpred;
 
     %if %bquote(&compevent)^=  %then %do;
@@ -1382,6 +1387,18 @@ options mautosource minoperator ;
       _weight_ = 1.0 ;
    %end;
 
+   %if &usehistory_eof = 1 %then %do ;
+		%do i = 1 %to &ncov ;
+		    retain &&cov&i.._0 - &&cov&i.._%eval(&timepoints - 1) ; 
+            array a&&cov&i{0:%eval(&timepoints - 1) } &&cov&i.._0 - &&cov&i.._%eval(&timepoints - 1) ;
+            a&&cov&i [&time ] = &&cov&i ;
+
+			%genpred(main,useeof = 1 ) ;
+			     
+        %end;
+          
+
+   %end;
 
     run;
 
@@ -2252,7 +2269,6 @@ options mautosource minoperator ;
             %let outcond=%nrstr((&outc ne .));
         %end;
        
-
        %if &&usevisitp&i = 1 %then %do;
 
 
@@ -3473,9 +3489,16 @@ intusermacro7=,
 
 
  /*arraying time i outcome predictors */
+		     %if &usehistory_eof = 0 %then %do;
               array as&outc uno &fixedcov %listpred(main,,0,&ncov,&g,&h,&i,&i)   
                      &eventaddvars 
                     %qcmpres(%interxarrays(main,outc))   ;
+			  %end;
+			  %else %if &usehistory_eof = 1 %then %do;
+				array as&outc uno &fixedcov %listpred(eof ,,0,&ncov,&g,&h,&i,&i)   
+                     &eventaddvars 
+                    %qcmpres(%interxarrays(main,outc))   ;
+			  %end;
                          
      
  /*same for censoring, if simulated*/
@@ -3680,9 +3703,12 @@ intusermacro7=,
                         /* 10-24-2016 due to ptype can now involve more than one modeled variable, we need to call genpred for all variables, not
                             only those we have intervened on, example x has ptype = lag1cumavg and a cumint treatment variable. If we intervened on 
                             the treatment variable, then the predictors involving x will need to be re-calculated */
+						
                         %do i = 1 %to &ncov ;
                               %genpred(sim,lagtype=1);
                         %end;
+                        
+
                         /* outcome interactions,  for outcome we use factors at current time. */
                         %interactions(outc,,1,createvar);
                         %if %bquote(&compevent)^= AND &compevent_cens = 0  %then %do;
@@ -3690,12 +3716,30 @@ intusermacro7=,
                         %end;
                          
                       
-                        m&outc = 0 ;
-                        do i=1 to dim(aboutc);
-                            m&outc =sum(m&outc,aboutc(i)*as&outc(i));
-                        end;
+						%if &usehistory_eof = 1 %then %do ;
+							if &time = %eval(&timepoints - 1) then do ;
+                                %do i = 1 %to &ncov;
+ 									array a&&cov&i{0:%eval(&timepoints - 1) } &&cov&i.._0 - &&cov&i.._%eval(&timepoints - 1) ;
+									do _time_ = 0 to %eval(&timepoints - 1) ;
+         	   							a&&cov&i [_time_ ] = s&&cov&i[ _time_ ]  ;
+									end;
+									%genpred(main,useeof = 1 ) ;
+
+                                %end; 
+
+							end;
+					
+
+						%end ;
+                       
 
                         %if &outctype=binsurv  %then %do;
+
+						 	m&outc = 0 ;
+                        	do i=1 to dim(aboutc);
+                            	m&outc =sum(m&outc,aboutc(i)*as&outc(i));
+                        	end;
+
                             if &outcwherenosim then do; * at no sim time ; 
                                 /* evaluate user defined macro  because of some condition other than its too early to start simulating*/
                                 %if %bquote(&outcnosimelsemacro)^= %then  %&outcnosimelsemacro ;                                                        
@@ -3719,7 +3763,12 @@ intusermacro7=,
                         %if &outctype = bineofu %then %do;
 
 
-                            if &time = &timepoints -1 then do;
+ 							m&outc = 0 ;
+                        	do i=1 to dim(aboutc);
+                            	m&outc =sum(m&outc,aboutc(i)*as&outc(i));
+                        	end;
+
+                            if &time = %eval(&timepoints -1) then do;
                                 if &outcwherenosim then do; * at no sim time ; 
                                     /* evaluate user defined macro  because of some condition other than its too early to start simulating*/
                                     %if %bquote(&outcnosimelsemacro)^= %then %&outcnosimelsemacro ;                                        
@@ -3735,7 +3784,12 @@ intusermacro7=,
                         %end;                      
                         /* FOR A CONTINUOUS OUTCOME MEASURED AT EOF  */ 
                         %if &outctype=conteofu or &outctype = conteofu2 or &outctype=conteofu3 %then %do;                                              
-                            if &time = (&timepoints - 1) then do ;
+                            if &time = %eval(&timepoints - 1) then do ;
+
+ 								m&outc = 0 ;
+                        		do _i=1 to dim(aboutc);
+                            		m&outc =sum(m&outc,aboutc(_i)*as&outc(_i));
+                        		end;
 
                                 if &outcwherenosim then do; * at no sim time ; 
                                     /* evaluate user defined macro  because of some condition other than its too early to start simulating*/
@@ -5260,19 +5314,19 @@ intusermacro7=,
 	%local timeindex  ;
 	%if &main=eof %then %do;
         %do index = 1 %to &ncov;
-		    %do timeindex = 1 %to &timepoints - 1 ;
+		    %do timeindex = 0 %to &timepoints - 1 ;
 				%if %upcase(&&cov&index.mtype) = ALL %then %do;
 					%if &&cov&index.etype = bin %then %do;  
                         &&cov&index.._&timeindex  
 					%end;
 					%if &&cov&index.etype = qdc  %then %do;  
-                       &&cov&index.._&timeindex &&cov&index..s_&timeindex  
+                       &&cov&index.._&timeindex &&cov&index.._&timeindex.s  
 					%end;
 					%if &&cov&index.etype = zqdc %then %do; 
-                       z&&cov&index.._&timeindex &&cov&index.._&timeindex &&cov&index..s_&timeindex 
+                       z&&cov&index.._&timeindex &&cov&index.._&timeindex &&cov&index.._&timeindex.s 
 					%end;
 					%if &&cov&index.etype = cub %then %do;  
-                        &&cov&index.._&timeindex &&cov&index..s_&timeindex &&cov&index..c_&timeindex  
+                        &&cov&index.._&timeindex &&cov&index.._&timeindex.s &&cov&index.._&timeindex.c  
 					%end;
 					%if &&cov&index.etype = spl  %then %do; 
 						&&cov&index.._&timeindex
@@ -5314,7 +5368,7 @@ intusermacro7=,
 					%if &&cov&index.etype = tsswitch1 %then %do;
 
 						%if &switchind = %then %do; 
-                          &&cov&index.._&timeindex ts&&cov&index.._&timeindex._inter  %if &usespline = 1 %then ts&&cov&index.._&timeindex._inter_spl1   ts&&cov&index.._&timeindex._inter_spl2  ;
+                          &&cov&index.._&timeindex /* ts&&cov&index.._&timeindex._inter  %if &usespline = 1 %then ts&&cov&index.._&timeindex._inter_spl1   ts&&cov&index.._&timeindex._inter_spl2  ; */
 						%end;
 						%else %do;
                           %if %eval(&index)>%eval(&switchind) %then %do;
@@ -5640,7 +5694,7 @@ intusermacro7=,
 			%end; /* end timeindex */
 		%end /* end of ncov */	
 	%end ; /* main = eof */	
-
+%end;
  
  
  
@@ -6277,7 +6331,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
 /**************************************************************/
 /**************************************************************/
 
-%macro genpred(type,lagtype=0);
+%macro genpred(type,lagtype=0,useeof = 0);
 
         /* IMPORTATNT : THE VARIABLE I IS NOT A LOCAL VARIABLE, BUT IS USED IN THE CALLING PROGRAM FOR SETTING THE INDEX OF THE VARIABLE. COULD 
            CHANGE THIS SO IT IS AN ARGUMENT OF THE MACRO */
@@ -6291,7 +6345,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
 
 /* ALGEBRAIC MANIPULATIONS, ISH */
       
-
+%if &useeof = 0 %then %do; 
 
 
         %if &&cov&i.ptype = conqdc or &&cov&i.ptype = conzqdc    %then %do;
@@ -6724,19 +6778,19 @@ not the time-varying covariates, which are handled below in %interactionsb*/
 
      
   %end;     
-
+%end;
 /* code for complete hitory variables used ineof models */
 
 %local timeindex ;
-%if main = eof %then %do ;
-	%do timeindex = 0 to &timepoints - 1 ;
+%if &useeof = 1 %then %do ;
+	%do timeindex = 0 %to &timepoints - 1 ;
 
         %if &&cov&i.etype = qdc or &&cov&i.etype = zqdc    %then %do;
             &&cov&i.._&timeindex.s = &&cov&i.._&timeindex.*&&cov&i.._&timeindex.;             /* SQUARE */
         %end;
 
         %if &&cov&i.etype = cub  %then %do;
-            &&cov&i.._&timeindex.s = &&cov&i,,_&timeindex.*&&cov&i.._&timeindex;             /* SQUARE */
+            &&cov&i.._&timeindex.s = &&cov&i.._&timeindex.*&&cov&i.._&timeindex;             /* SQUARE */
             &&cov&i.._&timeindex.c = &&cov&i.._&timeindex * &&cov&i.._&timeindex * &&cov&i.._&timeindex;     /* CUBE */
         %end;
             
@@ -6805,24 +6859,19 @@ not the time-varying covariates, which are handled below in %interactionsb*/
             %end;
         %end; /* SKPCAT */
 
-
        
+		/* when using */
+        
          %if &&cov&i.etype = tsswitch1  %then %do; /*change JGY*/  
-            %if &type = main %then %do;
-               
-               /*ts&&cov&i.._l1_inter = lag(ts&&cov&i.._inter) ; */
-               retain  ts&&cov&i.._inter ;;
-               if &time = 0 then do;                             
-                   ts&&cov&i.._inter = 0 ;
-                   ts&&cov&i.._l1_inter = 0 ;
-               end;
-               ts&&cov&i.._l1_inter = ts&&cov&i.._inter ;
-               ts&&cov&i.._inter = ts&&cov&i.._l1_inter + &&cov&i ;
-
-               *sumtemp&i = sumtemp&i + &&cov&i; 
-               *sumtemp_l1&i = sumtemp_l1&i + &&cov&i.._l1;
-               *ts&&cov&i.._inter = &&cov&i*sumtemp&i;
-               *ts&&cov&i.._l1_inter = &&cov&i.._l1*sumtemp_l1&i;                   
+		    %let timeindex_l1 = %eval(&timeindex - 1) ;
+            %if &type = main %then %do;                              
+               %if &timeindex = 0 %then %do;                             
+                   ts&&cov&i.._&timeindex._inter = &&cov&i.._0 ;                    
+               %end;
+               %else %do; 
+               		ts&&cov&i.._&timeindex._inter = ts&&cov&i.._&timeindex_l1._inter + &&cov&i.._&timeindex  ;
+			   %end;
+                              
             %end;
             %else %if &type = sim %then %do;                            
                %if &lagged = 1 %then %do;
