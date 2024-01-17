@@ -114,6 +114,10 @@ end;
 censor = (dead = 1 or censlost = 1) ;
 run;
 
+proc datasets library = work nolist ;
+save sample ;
+quit;
+
 **GFORMULA Call;
 title 'GFORMULA SAMPLE';
 options mprint notes ;
@@ -129,18 +133,22 @@ compevent=,
 compevent_cens  = 0   ,
 censor = censor ,
 
+usehistory_eof = 1 ,
+
+
 fixedcov = baseage,
 timeptype= concat, 
 timeknots = 1 2 3 4 5,
 
 ncov=2,
-cov1  = hbp,    cov1otype  = 2, cov1ptype = tsswitch1,
-cov2  = act,    cov2otype  = 4, cov2ptype = lag2cub,
+cov1  = hbp,    cov1otype  = 2, cov1ptype = tsswitch1, cov1etype = tsswitch1 ,
+cov2  = act,    cov2otype  = 4, cov2ptype = lag2cub, cov2etype = cub ,
 
 hazardratio = 0 ,
 intcomp = 0 1 ,
 seed= 9458, nsamples = 5, numint=1 ,
-rungraphs = 1 
+rungraphs = 0 ,
+usespline = 0 
 );
 
 
