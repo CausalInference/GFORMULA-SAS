@@ -6725,6 +6725,345 @@ not the time-varying covariates, which are handled below in %interactionsb*/
      
   %end;     
 
+/* code for complete hitory variables used ineof models */
+
+%local timeindex ;
+%if main = eof %then %do ;
+	%do timeindex = 0 to &timepoints - 1 ;
+
+        %if &&cov&i.etype = qdc or &&cov&i.etype = zqdc    %then %do;
+            &&cov&i.._&timeindex.s = &&cov&i.._&timeindex.*&&cov&i.._&timeindex.;             /* SQUARE */
+        %end;
+
+        %if &&cov&i.etype = cub  %then %do;
+            &&cov&i.._&timeindex.s = &&cov&i,,_&timeindex.*&&cov&i.._&timeindex;             /* SQUARE */
+            &&cov&i.._&timeindex.c = &&cov&i.._&timeindex * &&cov&i.._&timeindex * &&cov&i.._&timeindex;     /* CUBE */
+        %end;
+            
+        %if &&cov&i.etype = spl   %then %do;
+            %rcspline(&&cov&i.._&timeindex ,&&cov&i.knots);        /* SPLINE, SEE BELOW! */
+        %end;
+            
+        %if &&cov&i.etype = cat   %then %do;    
+            %if &&cov&i.otype ne 5 %then %do;             /* MAKE CATEGORIES, SEE BELOW! */
+                %makecat(&&cov&i.._&timeindex., &&cov&i.knots, &&cov&i.lev);
+            %end;
+            %if &&cov&i.otype = 5 %then %do;
+                %do lev = 1 %to %eval(&&cov&i.lev - 1);
+                     &&cov&i.._&timeindex._&lev = (&&cov&i.._&timeindex = &lev);
+                %end;
+           %end;  
+        %end;
+
+/* IF TIMES WERE SKIPPED FOR THIS VARIABLE, WE NEED THE INTERACTION WITH TIME. */
+ 
+  
+      %if &&cov&i.etype = skpbin    %then %do;
+           %if &current = 1 %then  %maketi(&&cov&i.._&timeindex., &timeindex, &timeindex-1, &&cov&i.skip, &interval);
+                  
+      %end;
+
+        %if &&cov&i.etype = skpqdc or &&cov&i.etype = skpzqdc   
+               %then %do;
+            %if &current = 1 %then %maketi(&&cov&i.._&timeindex., &timeindex, &timeindex-1, &&cov&i.skip, &interval);
+            %if &current = 1 %then &&cov&i.._&timeindex.s = &&cov&i._&timeindex *&&cov&i.._&timeindex ;;
+            %if &current = 1 %then %maketi(&&cov&i.._&timeindex.s, &timeindex, &timeindex-1, &&cov&i.skip, &interval);
+                     
+       %end;
+
+
+        %if &&cov&i.etype = skpcub   %then %do;
+            %if &current = 1 %then %maketi(&&cov&i.._&timeindex., &timeindex, &timeindex-1, &&cov&i.skip, &interval);
+         
+            
+            %if &current = 1 %then  &&cov&i.._&timeindex.s = &&cov&i_&timeindex * &&cov&i_&timeindex ;;
+            %if &current = 1 %then  &&cov&i..c = &&cov&i*&&cov&i*&&cov&i;;
+            
+            %if &current = 1 %then %maketi(&&cov&i.._&timeindex.s, &timeindex, &timeindex-1, &&cov&i.skip, &interval);
+            %if &current = 1 %then  %maketi(&&cov&i.._&timeindex.c, &timeindex, &timeindex-1, &&cov&i.skip, &interval);
+           
+       %end;
+
+                        
+        %if &&cov&i.etype = skpspl   %then %do;
+            %if &current = 1 %then %maketi(&&cov&i.._&timeindex,&timeindex,&timeindex-1,&&cov&i.skip, &interval);
+            %if &current = 1 %then  %rcspline(&&cov&i.._&timeindex ,&&cov&i.knots);
+             
+            
+            %do knot = 1 %to %eval(&&cov&i.lev - 2);
+               %if &current = 1 %then  %maketi(&&cov&i.._&timeindex._spl&knot,&timeindex,&timeindex-1,&&cov&i.skip, &interval);
+            %end;
+        %end;
+            
+        %if &&cov&i.etype = skpcat   %then %do;
+
+            %if &current = 1 %then  %makecat(&&cov&i.._&timeindex , &&cov&i.knots, &&cov&i.lev);
+            
+            %do lev = 1 %to %eval(&&cov&i.lev - 1);
+               %if &current = 1 %then  %maketi(&&cov&i.._&timeindex._&lev,&timeindex,&timeindex-1,&&cov&i.skip, &interval);
+              
+            %end;
+        %end; /* SKPCAT */
+
+
+       
+         %if &&cov&i.etype = tsswitch1  %then %do; /*change JGY*/  
+            %if &type = main %then %do;
+               
+               /*ts&&cov&i.._l1_inter = lag(ts&&cov&i.._inter) ; */
+               retain  ts&&cov&i.._inter ;;
+               if &time = 0 then do;                             
+                   ts&&cov&i.._inter = 0 ;
+                   ts&&cov&i.._l1_inter = 0 ;
+               end;
+               ts&&cov&i.._l1_inter = ts&&cov&i.._inter ;
+               ts&&cov&i.._inter = ts&&cov&i.._l1_inter + &&cov&i ;
+
+               *sumtemp&i = sumtemp&i + &&cov&i; 
+               *sumtemp_l1&i = sumtemp_l1&i + &&cov&i.._l1;
+               *ts&&cov&i.._inter = &&cov&i*sumtemp&i;
+               *ts&&cov&i.._l1_inter = &&cov&i.._l1*sumtemp_l1&i;                   
+            %end;
+            %else %if &type = sim %then %do;                            
+               %if &lagged = 1 %then %do;
+                   if &time = 0 then do ;
+                       ts&&cov&i.._l1_inter = 0 ;
+                   end;
+               %end;
+               %if &current = 1 %then  ts&&cov&i.._inter = ts&&cov&i.._l1_inter + &&cov&i ;;                                        
+               %if &usespline = 1 %then %do;
+                     %if &current = 1 %then  %rcspline(ts&&cov&i.._inter ,&&cov&i.knots);
+                     %if &lagged  = 1 %then  %rcspline(ts&&cov&i.._l1_inter ,&&cov&i.knots);
+               %end;         
+            %end;
+        %end;
+
+        %if ( &&cov&i.etype=cumavg |  &&cov&i.etype=lag1cumavg | &&cov&i.etype=lag2cumavg | &&cov&i.etype = cumavgcat |
+               &&cov&i.etype=lag1cumavgcat | &&cov&i.etype = lag2cumavgcat ) 
+           %then %do;
+            %if &type = main %then %do;
+                retain sum_&&cov&i  %if %bquote(&&cov&i.cumint) ^= %then &&cov&i.._timestart_ &&cov&i..sumtimestart ;;
+
+                if first.newid then do ;               
+                    sum_&&cov&i = 0 ;  
+                    %if %bquote(&&cov&i.cumint) ^= %then &&cov&i.._timestart_ = -1 ; ;
+                end;
+
+                %if %bquote(&&cov&i.cumint) ^= %then %do;
+                    if &&cov&i.._timestart_ = -1 and &&cov&i.cumint = 1 then &&cov&i.._timestart_ = &time ;
+                %end;
+
+
+                _counter = &time + 1 ;
+                %if %bquote(&&cov&i.cumint) = %then %do;
+                    sum_&&cov&i = sum_&&cov&i + &&cov&i ;           
+                    &&cov&i.._cumavg = sum_&&cov&i / _counter ; 
+                    &&cov&i.._cumavg_l1 =  lag(&&cov&i.._cumavg) ; 
+                    &&cov&i.._cumavg_l2 =  lag2(&&cov&i.._cumavg) ; 
+                    &&cov&i.._cumavg_l3 =  lag3(&&cov&i.._cumavg)  ; 
+
+                    if &time < 1 then do ;
+                        &&cov&i.._cumavg_l1 =  0 ; 
+                        &&cov&i.._cumavg_l2 =  0 ; 
+                        &&cov&i.._cumavg_l3 =  0  ; 
+                    end ;
+                    else if &time < 2 then do ;
+
+                        &&cov&i.._cumavg_l2 =  0 ; 
+                        &&cov&i.._cumavg_l3 =  0  ; 
+                    end ;
+                    else if &time < 3 then do ;
+                        &&cov&i.._cumavg_l3 =  0  ;
+                    end;
+                    /**
+                    %if &&cov&i.etype = cumavgcat %then %do ;
+                        %if &current = 1 %then  %makecat(&&cov&i.._cumavg, &&cov&i.knots, &&cov&i.lev);
+                        %if &lagged = 1  %then  %makecat(&&cov&i.._cumavg_l1, &&cov&i.knots, &&cov&i.lev);
+                        
+                    %end;
+                    ***/
+                %end;
+
+                %if %bquote(&&cov&i.cumint) ^= %then %do;
+                    &&cov&i.._newcum = 0 ;
+                    if &&cov&i.._timestart_ ge 0 then do ;
+                        if &&cov&i.._timestart_ = &time then do ;
+                            &&cov&i..sumtimestart = sum_&&cov&i - &&cov&i ;   /* sum (m = 0 to m=timestart - 1 L(m) */             
+                        end;   
+                        &&cov&i.._newcum = (sum_&&cov&i - &&cov&i..sumtimestart) / (_counter - &&cov&i.._timestart_ ) ; 
+                    end;
+                    &&cov&i.._cumavg_l3 = lag3(&&cov&i.._newcum);
+                    &&cov&i.._cumavg_l2 = lag2(&&cov&i.._newcum);
+                    &&cov&i.._cumavg_l1 = lag1(&&cov&i.._newcum);
+                    if &time < 1 then do ;
+                        &&cov&i.._cumavg_l3 = 0;
+                        &&cov&i.._cumavg_l2 =0;
+                        &&cov&i.._cumavg_l1 = 0;
+                    end;
+                    if &time < 2 then do ;
+                        &&cov&i.._cumavg_l3 = 0 ;
+                        &&cov&i.._cumavg_l2 =  0;
+                    end;
+                    else if &time < 3 then do ;                
+                        &&cov&i.._cumavg_l3 = 0;
+                    end;                      
+                    drop &&cov&i.._newcum ;
+                %end;
+
+                drop  _counter sum_&&cov&i %if %bquote(&&cov&i.cumint) ^= %then &&cov&i..sumtimestart &&cov&i.._timestart_ ; ;   
+            %end;
+            %else %if &type = sim %then %do ;
+                %if %bquote(&&cov&i.cumint)= %then %do;
+                    %if &lagged = 1 %then %do;
+                        if &time = 0  then do;
+                            /* set all negative-time averages to be 0, k = 3 is baseline  */
+                            &&cov&i.._cumavg_l3 = 0 ;
+                            &&cov&i.._cumavg_l2 = 0 ;
+                            &&cov&i.._cumavg_l1 = 0 ;                                          
+                        end;
+                    %end;
+                     /*due to a possible change of the current value of variable due to intervention, we need to 
+                       recalculate the average. will use the mean function with the assumption that future times are missing */
+                       %if &current = 1 %then &&cov&i.._cumavg = (&time * &&cov&i.._cumavg_l1 + &&cov&i )/(&time + 1)  ;;              
+                   
+                %end;
+                %else %do ;
+                    * unless the variable tained in covX.cumint is created before covX then current value of the cumavg term ;
+                    *  will be wrong. This will be corrected in the call to genpred preceeding the creation of the outcome. ;
+                    %if &lagged = 1 %then %do;
+                        if &time = 0  then do;
+                            &&cov&i.._timestart = -1 ;
+                            &&cov&i.._cumavg_l3 = 0 ;
+                            &&cov&i.._cumavg_l2 = 0 ;
+                            &&cov&i.._cumavg_l1 = 0 ;
+                        end;
+                    %end;
+                    %if &current = 1 %then %do;
+                        if &&cov&i.cumint = 0 then &&cov&i.._cumavg = 0 ;
+                        if &&cov&i.cumint = 1 then do;
+                           if &&cov&i.._timestart = -1 then do;
+                               &&cov&i.._timestart = &time ;
+                               &&cov&i.._normalization_factor = 1 ;                           
+                               &&cov&i.._cumavg = &&cov&i ;
+                           end;
+                           else if &&cov&i.._timestart > -1 then do ;
+                            &&cov&i.._cumavg =  ( (&&cov&i.._normalization_factor -1) * &&cov&i.._cumavg_l1 + &&cov&i)/(&&cov&i.._normalization_factor ) ;
+                             
+                          end;
+                       end;
+                      
+                    %end;      
+
+                %end;
+               /* need > 2 for splines, when covXknots = 0 there are no splines used */
+                 
+                %if &&cov&i.etype = cumavg AND %numargs(&&cov&i.knots) > 2 %then %do;
+                    %if &current = 1 %then %rcspline(&&cov&i.._cumavg, &&cov&i.knots);
+                    %if &lagged = 1  %then %rcspline(&&cov&i.._cumavg_l1, &&cov&i.knots);
+                %end;
+                %else %if (&&cov&i.etype = lag1cumavg or &&cov&i.etype = lag2cumavg ) AND %numargs(&&cov&i.knots) > 2  %then %do;
+                    %if &current = 1 %then %rcspline(&&cov&i ,&&cov&i.knots);  
+                    %if &lagged = 1 %then %do;
+                         %rcspline(&&cov&i.._l1 ,&&cov&i.knots);                                                                                                              
+                         %rcspline(&&cov&i.._cumavg_l1 ,&&cov&i._cumavg_l1_knots);
+                         %rcspline(&&cov&i.._cumavg_l2 ,&&cov&i._cumavg_l1_knots);
+                         %if &&cov&i.etype= lag2cumavg %then %do ;
+                             %rcspline(&&cov&i.._l2 ,&&cov&i.knots); 
+                             %rcspline(&&cov&i.._cumavg_l3 ,&&cov&i._cumavg_l1_knots);
+                         %end;
+                     %end;
+                 %end ;
+                 %else %if &&cov&i.etype = cumavgcat %then %do ;                      
+                    %if &current = 1 %then  %makecat(&&cov&i.._cumavg, &&cov&i.knots, &&cov&i.lev);
+                    %if &lagged = 1  %then  %makecat(&&cov&i.._cumavg_l1, &&cov&i.knots, &&cov&i.lev);                                           
+                 %end;
+                  %else %if &&cov&i.etype = lag1cumavgcat OR &&cov&i.etype = lag2cumavgcat %then %do ;                      
+                    %if &current = 1 %then  %makecat(&&cov&i, &&cov&i.knots, &&cov&i.lev);
+                    %if &lagged = 1  %then  %do;
+                        %makecat(&&cov&i.._l1, &&cov&i.knots , &&cov&i.lev) ;
+                        %makecat(&&cov&i.._cumavg_l1, &&cov&i._cumavg_l1_knots, &&cov&i._cumavg_l1_lev);                                           
+                        %makecat(&&cov&i.._cumavg_l2,&&cov&i._cumavg_l1_knots, &&cov&i._cumavg_l1_lev);
+                        %if &&cov&i.etype = lag2cumavgcat %then %do;
+                            %makecat(&&cov&i.._l2, &&cov&i._cumavg_l1_knots, &&cov&i._cumavg_l1_lev);
+                            %makecat(&&cov&i.._l3, &&cov&i._cumavg_l1_knots, &&cov&i._cumavg_l1_lev);
+                        %end;
+                    %end;
+                 %end;
+            %end;
+
+            
+        %end;
+
+        %if &&cov&i.etype=rcumavg   %then %do;
+            %if &type = main %then %do;
+                 retain  &&cov&i.._rcumavg ;
+                 if first.newid then do ;                                  
+                       &&cov&i.._rcumavg = 0 ;
+                 end;                 
+                 * at time = 1 the lagged average is x(0)  = x at baseline ;
+                 * at time = 2 the lagged value would be  (x(0) + x(1) ) / 2 , different from baseline value  ; 
+                 &&cov&i.._rcumavg_l1 = &&cov&i.._rcumavg ;
+                 if &time = 0 then &&cov&i.._rcumavg =  &&cov&i ;
+                 else &&cov&i.._rcumavg = ( &&cov&i.._rcumavg_l1 + &&cov&i ) / 2.0 ;
+           %end;
+           %else %if &type = sim %then %do;
+               if &time = 0 then do ;
+                  %if &lagged = 1 %then &&cov&i.._rcumavg_l1 = 0 ;;
+                  %if &current = 1 %then  &&cov&i.._rcumavg = &&cov&i ;;
+               end ;
+               %if &current = 1 %then else &&cov&i.._rcumavg = ( &&cov&i.._rcumavg_l1 + &&cov&i ) / 2.0 ; ;
+               
+           %end;        
+
+        %end;
+
+       /* for user-defined functions of cov&i and any cov&j where j < i (or possibly lagged values of cov&h where h > i ) */
+        %if &&cov&i.genmacro^=  %then %do;
+            %&&cov&i.genmacro;
+       %end;
+
+	%if &type = main %then %do;
+
+	/* GET THE Z VARIABLES FOR 0TYPE 4 COVARIATES, AND LOG-TRANSFORM THE NONZEROS. */
+		%if &&cov&i.otype = 4 %then %do;
+				/* IF COV&I NE 0, THEN ZCOV&I=1, IF COV&I=0, THEN ZCOV&I=0. */
+				z&&cov&i = (&&cov&i ne 0);
+				if z&&cov&i = 1 then l&&cov&i = log(&&cov&i);
+				
+				z&&cov&i.._l1 = (&&cov&i.._l1 ne 0);
+				if z&&cov&i.._l1 = 1 then l&&cov&i.._l1 = log(&&cov&i.._l1);
+				
+				%if &&cov&i.skip = -1 %then %do;
+					%if &&cov&i.etype = lag2bin or &&cov&i.etype = lag2qdc or &&cov&i.etype = lag2zqdc
+						or &&cov&i.etype = lag2cub or &&cov&i.etype = lag2cat or &&cov&i.etype = lag2spl 
+						or &&cov&i.etype = lag3bin or &&cov&i.etype = lag3qdc or &&cov&i.etype = lag3zqdc
+						or &&cov&i.etype = lag3cub or &&cov&i.etype = lag3cat or &&cov&i.etype = lag3spl
+						%then %do;
+						z&&cov&i.._l2 = (&&cov&i.._l2 ne 0);
+						if z&&cov&i.._l2 = 1 then l&&cov&i.._l2 = log(&&cov&i.._l2);
+						%end;
+
+					%if &&cov&i.etype = lag3bin or &&cov&i.etype = lag3qdc or &&cov&i.etype = lag3zqdc
+						or &&cov&i.etype = lag3cub or &&cov&i.etype = lag3cat or &&cov&i.etype = lag3spl
+						%then %do;
+						z&&cov&i.._l3 = (&&cov&i.._l3 ne 0);
+						if z&&cov&i.._l3 = 1 then l&&cov&i.._l3 = log(&&cov&i.._l3);
+						%end;
+					%end;
+				
+				%else %do;
+					%maketi(z&&cov&i,&time,&time._l1,&&cov&i.skip, &interval);
+					%maketi(z&&cov&i.._l1,&time._l1,&time._l2,&&cov&i.skip, &interval);
+					%end;
+					
+				%end;
+
+
+		 
+		%end;     
+	%end ;
+%end ; /* main = eof */
+
 
 
 
