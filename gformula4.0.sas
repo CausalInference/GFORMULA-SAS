@@ -5256,7 +5256,396 @@ intusermacro7=,
              %end;
          %end;
    %end;
+/* code for including complete history in eof-type outcome models */
+	%local timeindex  ;
+	%if &main=eof %then %do;
+        %do index = 1 %to &ncov;
+		    %do timeindex = 1 %to &timepoints - 1 ;
+				%if %upcase(&&cov&index.mtype) = ALL %then %do;
+					%if &&cov&index.etype = bin %then %do;  
+                        &&cov&index.._&timeindex  
+					%end;
+					%if &&cov&index.etype = qdc  %then %do;  
+                       &&cov&index.._&timeindex &&cov&index..s_&timeindex  
+					%end;
+					%if &&cov&index.etype = zqdc %then %do; 
+                       z&&cov&index.._&timeindex &&cov&index.._&timeindex &&cov&index..s_&timeindex 
+					%end;
+					%if &&cov&index.etype = cub %then %do;  
+                        &&cov&index.._&timeindex &&cov&index..s_&timeindex &&cov&index..c_&timeindex  
+					%end;
+					%if &&cov&index.etype = spl  %then %do; 
+						&&cov&index.._&timeindex
+						%do knot = 1 %to %eval(&&cov&index.lev - 2); 
+                          &&cov&index.._&timeindex._spl&knot 
+						%end; 
+					%end;
+					%if &&cov&index.etype = cat %then %do;
+						%do lev = 1 %to %eval(&&cov&index.lev - 1); 
+							&&cov&index.._&timeindex._&lev 
+						%end; 
+					%end;
 
+                 
+					%if &&cov&index.etype = skpbin  %then %do; 
+                       &&cov&index.._&timeindex &&cov&index.._&timeindex._ti 
+					%end;
+					%if &&cov&index.etype = skpqdc  %then %do; 
+                       &&cov&index.._&timeindex &&cov&index.._&timeindex._ti &&cov&index..s_&timeindex &&cov&index..s_&timeindex._ti 
+					%end;
+					%if &&cov&index.etype = skpzqdc  %then %do; 
+                       z&&cov&index.._&timeindex z&&cov&index.._&timeindex._ti &&cov&index.._&timeindex &&cov&index.._&timeindex._ti &&cov&index..s_&timeindex &&cov&index..s_&timeindex._ti  
+					%end;
+					%if &&cov&index.etype = skpcub  %then %do; 
+                         &&cov&index.._&timeindex &&cov&index.._&timeindex._ti &&cov&index..s_&timeindex &&cov&index..s_&timeindex._ti &&cov&index..c_&timeindex &&cov&index..c_&timeindex._ti  
+					%end;
+					%if &&cov&index.etype = skpcat %then %do;
+						%do lev = 1 %to %eval(&&cov&index.lev - 1); 
+							&&cov&index.._&timeindex._&lev &&cov&index.._&timeindex._&lev._ti  
+						%end; 
+					%end;
+					%if &&cov&index.etype = skpspl %then %do; 
+                        &&cov&index.._&timeindex &&cov&index.._&timeindex._ti
+                        %do knot = 1 %to %eval(&&cov&index.lev - 2); 
+                               &&cov&index.._&timeindex._spl&knot &&cov&index.._&timeindex._spl&knot._ti  
+                        %end; 
+					%end;
+
+					%if &&cov&index.etype = tsswitch1 %then %do;
+
+						%if &switchind = %then %do; 
+                          &&cov&index.._&timeindex ts&&cov&index.._&timeindex._inter  %if &usespline = 1 %then ts&&cov&index.._&timeindex._inter_spl1   ts&&cov&index.._&timeindex._inter_spl2  ;
+						%end;
+						%else %do;
+                          %if %eval(&index)>%eval(&switchind) %then %do;
+                                  &&cov&index.._&timeindex ts&&cov&index.._&timeindex._inter  %if &usespline = 1 %then  ts&&cov&index.._&timeindex._inter_spl1 ts&&cov&index.._&timeindex._inter_spl2;
+                          %end;
+                          %else %if %eval(&index)<%eval(&switchind) %then %do;
+                                  &&cov&index.._&timeindex ts&&cov&index.._&timeindex._inter %if &usespline = 1 %then  ts&&cov&index.._&timeindex._inter_spl1 ts&&cov&index.._&timeindex._inter_spl2 ;
+                          %end;
+						%end;
+					%end; /*end tsswitch1*/
+                  
+					%if &&cov&index.etype=cumavg  %then %do;
+                     
+                                                                  
+						%if &prep = 0 %then   %do;
+							%if &index ge &switchind %then %do;							   
+								%if %bquote(&&cov&index.knots ) ^= %then %do; 								
+									%if %numargs(&&cov&index.knots ) = 1 %then %do;
+
+										%if &&cov&index.knots = 0 %then  &&cov&index.._cumavg_&timeindex   ;
+										%if &&cov&index.knots = 3 %then  
+											&&cov&index.._cumavg_&timeindex   &&cov&index.._cumavg_&timeindex._spl1   ;
+										%if &&cov&index.knots = 4 %then                                                                     
+											&&cov&index.._cumavg_&timeindex &&cov&index.._cumavg_&timeindex._spl1 &&cov&index.._cumavg_&timeindex._spl2;
+										%if &&cov&index.knots = 5 %then                                                 
+											&&cov&index.._cumavg_&timeindex  &&cov&index.._cumavg_&timeindex._spl1 &&cov&index.._cumavg_&timeindex._spl2 &&cov&index.._cumavg_&timeindex._spl3;
+									%end;                                
+									%else %do;
+										&&cov&index.._cumavg&t1
+										%do knotcount = 1 %to %eval(%numargs(&&cov&index.knots ) - 2) ;
+											&&cov&index.._cumavg&t1._spl&knotcount  
+										%end;
+									%end; 
+								%end;
+							%end;
+							%else %if &index < &switchind %then %do;
+								%if %bquote(&&cov&index..knots ) ^= %then %do; 
+									%if %numargs(&&cov&index.knots ) = 1 %then %do;
+
+										%if &&cov&index.knots = 0 %then    &&cov&index.._cumavg_&timeindex ;
+										%if &&cov&index.knots = 3 %then   
+											&&cov&index.._cumavg_&timeindex &&cov&index.._cumavg_&timeindex._spl1 ;
+										%if &&cov&index.knots = 4 %then 						  
+											&&cov&index.._cumavg_&timeindex &&cov&index.._cumavg_&timeindex._spl1 &&cov&index.._cumavg_&timeindex._spl2;
+										%if &&cov&index.knots = 5 %then 
+											&&cov&index.._cumavg_&timeindex  &&cov&index.._cumavg_&timeindex._spl1 &&cov&index.._cumavg_&timeindex._spl2 &&cov&index.._cumavg_&timeindex._spl3;
+									%end;                                
+									%else %do;
+
+										&&cov&index.._cumavg_&timeindex 
+										%do knotcount = 1 %to %eval(%numargs(&&cov&index.knots ) - 2) ;
+											&&cov&index.._cumavg_&timeindex._spl&knotcount 
+										%end;
+									%end; 
+								%end;
+							%end;
+						%end;                              
+						%else %if &prep = 1 %then &&cov&index.._&timeindex  ;
+
+
+					%end;
+
+                     
+					%if &&cov&index.etype=cumavgcat  %then %do;
+                      /* prep = 1 option needed for cumavg type variables to keep the original variable and not the cumavg variable in the data used
+                        for the simulated data sets . this option is only used in the dataprep macro */
+
+                        %if &index ge &switchind %then %do;
+                            %do lev = 1 %to %eval(&&cov&index.lev - 1); 
+                          
+                     
+                                %if &prep = 0 %then   &&cov&index.._cumavg_&timeindex._&lev ;
+                                %else %if &prep = 1 %then &&cov&index.._&timeindex._&lev  ;
+                             %end;
+                        %end;
+
+					%end;
+
+                    %if &&cov&index.etype=lag1cumavgcat  %then %do;
+                      /* prep = 1 option needed for cumavg type variables to keep the original variable and not the cumavg variable in the data used
+                        for the simulated data sets . this option is only used in the dataprep macro */
+
+                      
+                           
+                 
+                  
+                                %if &prep = 0 %then  %do;
+                                      %if &index ge &switchind %then %do;
+                                            %do lev = 1 %to %eval(&&cov&index.lev - 1);
+                                                &&cov&index.._&timeindex._&lev 
+                                            %end;
+                                            %do lev = 1 %to %eval(&&cov&index.lev - 1);
+                                                &&cov&index.._cumavg&t1._&lev
+                                            %end;
+                                       %end;
+                                       %else %if &index < &switchind %then %do;
+                                             %do lev = 1 %to %eval(&&cov&index.lev - 1) ;
+                                                &&cov&index.._&timeindex._&lev 
+                                             %end;
+                                              
+                                             
+                                              %do lev = 1 %to %eval( &&cov&index.lev - 1) ;
+                                                  &&cov&index.._cumavg_&timeindex._&lev  
+                                             %end;
+                                        %end;
+                                 %end;
+                                 %else %if &prep = 1 %then &&cov&index.._&timeindex  ;
+                            
+                        
+
+					%end;
+                   
+
+                    %if &&cov&index.etype=lag1cumavg  %then %do;
+                      /* prep = 1 option needed for cumavg type variables to keep the original variable and not the cumavg variable in the data used
+                        for the simulated data sets . this option is only used in the dataprep macro */
+ 
+                                                                                                       
+                                 %if &prep = 0 %then   %do;
+                                     %if &index ge &switchind %then %do;
+                                     %if %bquote(&&cov&index.knots ) ^= %then %do; 
+                                         %if %numargs(&&cov&index.knots ) = 1 %then %do;
+                                          
+                                             %if &&cov&index.knots = 0 %then  &&cov&index.._&timeindex &&cov&index.._cumavg&t1 ;
+                                             %if &&cov&index.knots = 3 %then  &&cov&index.._&timeindex   &&cov&index.._&timeindex._spl1  
+                                                                            &&cov&index.._cumavg&t1 &&cov&index.._cumavg&t1._spl1 ;
+                                             %if &&cov&index.knots = 4 %then 
+                                                                   &&cov&index.._&timeindex  &&cov&index.._&timeindex._spl1 &&cov&index.._&timeindex._spl2
+                                                              &&cov&index.._cumavg&t1 &&cov&index.._cumavg&t1._spl1 &&cov&index.._cumavg&t1._spl2;
+                                             %if &&cov&index.knots = 5 %then 
+                                                &&cov&index.._&timeindex  &&cov&index.._&timeindex._spl1 &&cov&index.._&timeindex._spl2  &&cov&index.._&timeindex._spl3
+                                                &&cov&index.._cumavg&t1  &&cov&index.._cumavg&t1._spl1 &&cov&index.._cumavg&t1._spl2 &&cov&index.._cumavg&t1._spl3;
+                                         %end;                                
+                                         %else %do;
+                                             &&cov&index.._&timeindex  
+                                             %do knotcount = 1 %to %eval(%numargs(&&cov&index.knots ) - 2) ;
+                                                 &&cov&index.._&timeindex._spl&knotcount   
+                                             %end;
+                                             &&cov&index.._cumavg&t1
+                                             %do knotcount = 1 %to %eval(%numargs(&&cov&index.knots ) - 2) ;
+                                                   &&cov&index.._cumavg&t1._spl&knotcount  
+                                             %end;
+                                         %end; 
+                                     %end;
+                                     %end;
+                                     %else %if &index < &switchind %then %do;
+                                        %if %bquote(&&cov&index..knots ) ^= %then %do; 
+                                         %if %numargs(&&cov&index.knots ) = 1 %then %do;
+                                          
+                                             %if &&cov&index.knots = 0 %then  &&cov&index.._&timeindex &&cov&index.._cumavg_&timeindex ;
+                                             %if &&cov&index.knots = 3 %then  &&cov&index.._&timeindex   &&cov&index.._&timeindex._spl1  
+                                                                            &&cov&index.._cumavg_&timeindex &&cov&index.._cumavg_&timeindex._spl1 ;
+                                             %if &&cov&index.knots = 4 %then 
+                                                                   &&cov&index.._&timeindex  &&cov&index.._&timeindex._spl1 &&cov&index.._&timeindex._spl2
+                                                              &&cov&index.._cumavg_&timeindex &&cov&index.._cumavg_&timeindex._spl1 &&cov&index.._cumavg_&timeindex._spl2;
+                                             %if &&cov&index.knots = 5 %then 
+                                                &&cov&index.._&timeindex  &&cov&index.._&timeindex._spl1 &&cov&index.._&timeindex._spl2  &&cov&index.._&timeindex._spl3
+                                                &&cov&index.._cumavg_&timeindex  &&cov&index.._cumavg_&timeindex._spl1 &&cov&index.._cumavg_&timeindex._spl2 &&cov&index.._cumavg_&timeindex._spl3;
+                                         %end;                                
+                                         %else %do;
+                                            &&cov&index.._&timeindex   
+                                             %do knotcount = 1 %to %eval(%numargs(&&cov&index.knots ) - 2) ;
+                                                 &&cov&index.._&timeindex._spl&knotcount   
+                                             %end;
+                                             &&cov&index.._cumavg_&timeindex 
+                                              %do knotcount = 1 %to %eval(%numargs(&&cov&index.knots ) - 2) ;
+                                                  &&cov&index.._cumavg_&timeindex._spl&knotcount 
+                                             %end;
+                                         %end; 
+                                     %end;
+                                     %end;
+                                 %end;                              
+                                 %else %if &prep = 1 %then &&cov&index.._&timeindex  ;
+                             
+                              
+                                             
+					%end;
+
+                    %if &&cov&index.etype=lag2cumavgcat  %then %do;
+                      /* prep = 1 option needed for cumavg type variables to keep the original variable and not the cumavg variable in the data used
+                        for the simulated data sets . this option is only used in the dataprep macro */
+
+                      
+                           
+                          
+                     
+                                %if &prep = 0 %then  %do;
+                                      %if &index ge &switchind %then %do;
+                                            %do lev = 1 %to %eval(&&cov&index.lev - 1);
+                                                &&cov&index.._&timeindex._&lev  
+                                            %end;
+                                            %do lev = 1 %to %eval(&&cov&index.lev - 1);
+                                                &&cov&index..&t1._&lev 
+                                             %end;
+                                             %do lev = 1 %to %eval(&&cov&index.lev - 1);
+                                                 &&cov&index.._cumavg&t0._&lev 
+
+                                             %end;
+
+                                       %end;
+                                       %else %if &index < &switchind %then %do;
+                                            
+                                             %do lev = 1 %to %eval(&&cov&index.lev - 1);
+                                                &&cov&index.._&timeindex._&lev  
+                                            %end;
+                                            %do lev = 1 %to %eval(&&cov&index.lev - 1);
+                                                &&cov&index.._&timeindex._&lev 
+                                             %end;
+                                             %do lev = 1 %to %eval(&&cov&index.lev - 1);
+                                                 &&cov&index.._cumavg&t1._&lev 
+
+                                             %end;
+                                        %end;
+                                 %end;
+                                 %else %if &prep = 1 %then &&cov&index.._&timeindex  ;
+                            
+                        
+
+                    %end;
+
+                    %if &&cov&index.etype=lag2cumavg  %then %do;
+                      /* prep = 1 option needed for cumavg type variables to keep the original variable and not the cumavg variable in the data used
+                        for the simulated data sets . this option is only used in the dataprep macro */
+                       
+                        
+                               
+                                 %if &prep = 0 %then   %do;
+                                     %if &index ge &switchind %then %do;
+                                          
+                                         %if %bquote(&&cov&index.knots ) ^= %then %do; 
+                                             %if %numargs(&&cov&index.knots ) = 1 %then %do;
+
+                                                 %if &&cov&index.knots = 0 %then  &&cov&index.._&timeindex &&cov&index..&t1 &&cov&index.._cumavg&t0 ;
+                                                 %if &&cov&index.knots = 3 %then  &&cov&index.._&timeindex &&cov&index.._&timeindex._spl1  
+                                                                                    &&cov&index..&t1 &&cov&index..&t1._spl1
+                                                                                    &&cov&index.._cumavg&t0 &&cov&index.._cumavg&t0._spl1 ;
+                                                 %if &&cov&index.knots = 4 %then 
+                                                                             &&cov&index.._&timeindex  &&cov&index.._&timeindex._spl1 &&cov&index.._&timeindex._spl2 
+                                                                             &&cov&index..&t1  &&cov&index..&t1._spl1 &&cov&index..&t1._spl2 
+                                                                             &&cov&index.._cumavg&t0 &&cov&index.._cumavg&t0._spl1 &&cov&index.._cumavg&t0._spl2;
+                                                 %if &&cov&index.knots = 5 %then 
+                                                         &&cov&index.._&timeindex  &&cov&index.._&timeindex._spl1 &&cov&index.._&timeindex._spl2  &&cov&index.._&timeindex._spl3 
+                                                         &&cov&index..&t1  &&cov&index..&t1._spl1 &&cov&index..&t1._spl2  &&cov&index..&t1._spl3 
+                                                         &&cov&index.._cumavg&t0  &&cov&index.._cumavg&t0._spl1 &&cov&index.._cumavg&t0._spl2 &&cov&index.._cumavg&t0._spl3;
+                                             %end;                                
+                                             %else %do;
+                                                 &&cov&index.._&timeindex
+                                                 %do knotcount = 1 %to %eval(%numargs(&&cov&index.knots ) - 2) ;
+                                                     &&cov&index.._&timeindex._spl&knotcount  
+                                                 %end;
+                                                 &&cov&index..&t1
+                                                 %do knotcount = 1 %to %eval(%numargs(&&cov&index.knots ) - 2) ;
+                                                     &&cov&index..&t1._spl&knotcount 
+                                                 %end;
+                                                 &&cov&index.._cumavg&t0
+                                                 %do knotcount = 1 %to %eval(%numargs(&&cov&index.knots ) - 2) ;
+                                                     &&cov&index.._cumavg&t0._spl&knotcount 
+                                                 %end;
+                                             %end; 
+                                         %end;
+                                     %end;
+                                     %else %if &index < &switchind %then %do;
+                                        
+                                         %if %bquote(&&cov&index.knots ) ^= %then %do; 
+                                             %if %numargs(&&cov&index.knots ) = 1 %then %do;
+
+                                                 %if &&cov&index.knots = 0 %then  &&cov&index.._&timeindex &&cov&index.._&timeindex &&cov&index.._cumavg&t1 ;
+                                                 %if &&cov&index.knots = 3 %then  &&cov&index.._&timeindex &&cov&index.._&timeindex._spl1  
+                                                                                    &&cov&index.._&timeindex &&cov&index.._&timeindex._spl1
+                                                                                    &&cov&index.._cumavg&t1 &&cov&index.._cumavg&t1._spl1 ;
+                                                 %if &&cov&index.knots = 4 %then 
+                                                                         &&cov&index.._&timeindex  &&cov&index.._&timeindex._spl1 &&cov&index.._&timeindex._spl2 
+                                                                         &&cov&index.._&timeindex  &&cov&index.._&timeindex._spl1 &&cov&index.._&timeindex._spl2 
+                                                                         &&cov&index.._cumavg&t1 &&cov&index.._cumavg&t1._spl1 &&cov&index.._cumavg&t1._spl2;
+                                                 %if &&cov&index.knots = 5 %then 
+                                                         &&cov&index.._&timeindex  &&cov&index.._&timeindex._spl1 &&cov&index.._&timeindex._spl2  &&cov&index.._&timeindex._spl3 
+                                                         &&cov&index.._&timeindex  &&cov&index.._&timeindex._spl1 &&cov&index.._&timeindex._spl2  &&cov&index.._&timeindex._spl3 
+                                                         &&cov&index.._cumavg&t1  &&cov&index.._cumavg&t1._spl1 &&cov&index.._cumavg&t1._spl2 &&cov&index.._cumavg&t1._spl3;
+                                             %end;                                
+                                             %else %do;
+                                                 &&cov&index.._&timeindex
+                                                 %do knotcount = 1 %to %eval(%numargs(&&cov&index.knots ) - 2) ;
+                                                     &&cov&index.._&timeindex._spl&knotcount  
+                                                 %end;
+                                                 &&cov&index.._&timeindex
+                                                 %do knotcount = 1 %to %eval(%numargs(&&cov&index.knots ) - 2) ;
+                                                     &&cov&index.._&timeindex._spl&knotcount  
+                                                 %end;
+                                                 &&cov&index.._cumavg&t1
+                                                 %do knotcount = 1 %to %eval(%numargs(&&cov&index.knots ) - 2) ;
+                                                     &&cov&index.._cumavg&t1._spl&knotcount 
+                                                 %end;
+                                             %end; 
+                                         %end;
+                                     %end;           
+                                 %end;                              
+                                 %else %if &prep = 1 %then &&cov&index.._&timeindex ;
+                             
+                             
+					%end;
+					%if &&cov&index.etype =rcumavg %then %do ;
+                           /* prep = 1 option needed for cumavg type variables to keep the original variable and not the cumavg variable in the data used
+                        for the simulated data sets this option is only used in the dataprep macro */
+                          %if &index ge &switchind %then %do ;
+                              %if &prep = 0 %then &&cov&index.._rcumavg_&timeindex;
+                              %else %if &prep = 1 %then &&cov&index.._&timeindex ;
+                           %end;
+					%end;
+
+                  
+                    %if &&usevisitp&index = 1   %then %do; 
+                        /* this combines the main and temp options for including the ts_last portion of the visit 
+                           process into a single call using main = main and the switchind variable */
+
+                        %let mycov = ;
+                        %if &switchind = %then %let mycov= ts_last_&&cov&index ;
+                        %else %if &index >= &switchind  %then %let mycov = ts_last_&&cov&index.._l1 ; 
+                        %else %if &index < &switchind %then %let mycov = ts_last_&&cov&index ;
+                     
+                        &mycov                       
+                    %end;
+                %end ; /* for mtype = all */
+			%end; /* end timeindex */
+		%end /* end of ncov */	
+	%end ; /* main = eof */	
+
+ 
+ 
+ 
+ 
+ 
 
 %mend listpred;    
 
