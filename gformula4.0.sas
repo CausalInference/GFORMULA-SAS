@@ -5350,16 +5350,16 @@ intusermacro7=,
 
                  
 					%if &&cov&index.etype = skpbin  %then %do; 
-                       &&cov&index.._&timeindex._eof &&cov&index.._&timeindex._eof._ti 
+					   %if not( &timeindex in &&cov&index.skip ) %then &&cov&index.._&timeindex._eof /* &&cov&index.._&timeindex._eof_ti */ ;
 					%end;
 					%if &&cov&index.etype = skpqdc  %then %do; 
-                       &&cov&index.._&timeindex._eof &&cov&index.._&timeindex._eof._ti &&cov&index..s_&timeindex._eof &&cov&index..s_&timeindex._eof._ti 
+                       &&cov&index.._&timeindex._eof &&cov&index.._&timeindex._eof_ti &&cov&index..s_&timeindex._eof &&cov&index..s_&timeindex._eof_ti 
 					%end;
 					%if &&cov&index.etype = skpzqdc  %then %do; 
-                       z&&cov&index.._&timeindex._eof z&&cov&index.._&timeindex._eof._ti &&cov&index.._&timeindex._eof &&cov&index.._&timeindex._eof._ti &&cov&index..s_&timeindex._eof &&cov&index..s_&timeindex._eof._ti  
+                       z&&cov&index.._&timeindex._eof z&&cov&index.._&timeindex._eof_ti &&cov&index.._&timeindex._eof &&cov&index.._&timeindex._eof_ti &&cov&index..s_&timeindex._eof &&cov&index..s_&timeindex._eof_ti  
 					%end;
 					%if &&cov&index.etype = skpcub  %then %do; 
-                         &&cov&index.._&timeindex._eof &&cov&index.._&timeindex._eof._ti &&cov&index..s_&timeindex._eof &&cov&index..s_&timeindex._eof._ti &&cov&index..c_&timeindex._eof &&cov&index..c_&timeindex._eof._ti  
+                         &&cov&index.._&timeindex._eof &&cov&index.._&timeindex._eof_ti &&cov&index..s_&timeindex._eof &&cov&index..s_&timeindex._eof_ti &&cov&index..c_&timeindex._eof &&cov&index..c_&timeindex._eof_ti  
 					%end;
 					%if &&cov&index.etype = skpcat %then %do;
 						%do lev = 1 %to %eval(&&cov&index.lev - 1); 
@@ -5367,7 +5367,7 @@ intusermacro7=,
 						%end; 
 					%end;
 					%if &&cov&index.etype = skpspl %then %do; 
-                        &&cov&index.._&timeindex._eof &&cov&index.._&timeindex._eof._ti
+                        &&cov&index.._&timeindex._eof &&cov&index.._&timeindex._eof_ti
                         %do knot = 1 %to %eval(&&cov&index.lev - 2); 
                                &&cov&index.._&timeindex._eof._spl&knot &&cov&index.._&timeindex._eof._spl&knot._ti  
                         %end; 
@@ -6792,7 +6792,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
 %local timeindex ;
 %if &useeof = 1 %then %do ;
 	%do timeindex = 0 %to &timepoints - 1 ;
-
+        %let timeindex_l1 = %eval(&timeindex - 1 );
         %if &&cov&i.etype = qdc or &&cov&i.etype = zqdc    %then %do;
             &&cov&i.._&timeindex._eofs = &&cov&i.._&timeindex._eof *&&cov&i.._&timeindex._eof ;  /* SQUARE */
 			%if &&cov&i.etype = zqdc %then %do;
@@ -6818,7 +6818,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
 			/*****/
             %if &&cov&i.otype = 5 %then %do;
                 %do lev = 1 %to %eval(&&cov&i.lev - 1);
-                     &&cov&i.._&timeindex._eof._&lev = (&&cov&i.._&timeindex._eof = &lev);
+                     &&cov&i.._&timeindex._eof_&lev = (&&cov&i.._&timeindex._eof = &lev);
                 %end;
            %end; 
           /****/ 
@@ -6828,15 +6828,15 @@ not the time-varying covariates, which are handled below in %interactionsb*/
  
   
       %if &&cov&i.etype = skpbin    %then %do;
-           %if &current = 1 %then  %maketi(&&cov&i.._&timeindex._eof., &timeindex, &timeindex-1, &&cov&i.skip, &interval);
+           %if &current = 1 %then  %maketi(&&cov&i.._&timeindex._eof , &timeindex, &timeindex_l1, &&cov&i.skip, &interval);
                   
       %end;
 
         %if &&cov&i.etype = skpqdc or &&cov&i.etype = skpzqdc   
                %then %do;
-            %if &current = 1 %then %maketi(&&cov&i.._&timeindex._eof., &timeindex, &timeindex-1, &&cov&i.skip, &interval);
-            %if &current = 1 %then &&cov&i.._&timeindex._eof.s = &&cov&i._&timeindex._eof *&&cov&i.._&timeindex._eof ;;
-            %if &current = 1 %then %maketi(&&cov&i.._&timeindex._eof.s, &timeindex, &timeindex-1, &&cov&i.skip, &interval);
+            %if &current = 1 %then %maketi(&&cov&i.._&timeindex._eof, &timeindex, &timeindex_l1, &&cov&i.skip, &interval);
+            %if &current = 1 %then &&cov&i.._&timeindex._eofs = &&cov&i._&timeindex._eof *&&cov&i.._&timeindex._eof ;;
+            %if &current = 1 %then %maketi(&&cov&i.._&timeindex._eofs, &timeindex, &timeindex_l1, &&cov&i.skip, &interval);
                      
        %end;
 
