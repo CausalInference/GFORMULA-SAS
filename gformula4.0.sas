@@ -562,7 +562,9 @@ options mautosource minoperator ;
       /* create cov&i.lev = number of levels (or knots) for ptype -cat and -spl variables.*/
        %if &&cov&i.otype ne 5 and ( (&&cov&i.ptype=skpcat or &&cov&i.ptype=concat or 
          &&cov&i.ptype=lag1cat or &&cov&i.ptype=lag2cat or &&cov&i.ptype=lag3cat  or  
-         &&cov&i.ptype = cumavgcat or &&cov&i.ptype = lag1cumavgcat or &&cov&i.ptype = lag2cumavgcat or &&cov&i.etype = cat ) 
+         &&cov&i.ptype = cumavgcat or &&cov&i.ptype = lag1cumavgcat or &&cov&i.ptype = lag2cumavgcat or &&cov&i.etype = cat or
+		 &&cov&i.etype = skpcat
+         ) 
            ) 
          %then %do;
              %local cov&i._cumavg_l1_knots cov&i._cumavg_l1_lev ;
@@ -583,7 +585,7 @@ options mautosource minoperator ;
              %if &printlogstats = 1 %then %put  Number of categories of &&cov&i : cov&i.lev=&&cov&i.lev;
         %end;
        %if (&&cov&i.ptype=conspl or &&cov&i.ptype=skpspl or
-          &&cov&i.ptype=lag1spl or &&cov&i.ptype=lag2spl or &&cov&i.ptype=lag3spl )  
+          &&cov&i.ptype=lag1spl or &&cov&i.ptype=lag2spl or &&cov&i.ptype=lag3spl or &&cov&i.etype = skpspl )  
           %then %do;
               %let cov&i.lev=%numargs(&&cov&i.knots);
               %if &printlogstats = 1 %then %put  Number of knots of &&cov&i : cov&i.lev=&&cov&i.lev;         
@@ -5353,23 +5355,23 @@ intusermacro7=,
 					   %if not( &timeindex in &&cov&index.skip ) %then &&cov&index.._&timeindex._eof /* &&cov&index.._&timeindex._eof_ti */ ;
 					%end;
 					%if &&cov&index.etype = skpqdc  %then %do; 
-                       &&cov&index.._&timeindex._eof &&cov&index.._&timeindex._eof_ti &&cov&index..s_&timeindex._eof &&cov&index..s_&timeindex._eof_ti 
+                       &&cov&index.._&timeindex._eof &&cov&index.._&timeindex._eof_ti &&cov&index.._&timeindex._eofs &&cov&index.._&timeindex._eofs_ti 
 					%end;
 					%if &&cov&index.etype = skpzqdc  %then %do; 
-                       z&&cov&index.._&timeindex._eof z&&cov&index.._&timeindex._eof_ti &&cov&index.._&timeindex._eof &&cov&index.._&timeindex._eof_ti &&cov&index..s_&timeindex._eof &&cov&index..s_&timeindex._eof_ti  
+                       z&&cov&index.._&timeindex._eof z&&cov&index.._&timeindex._eof_ti &&cov&index.._&timeindex._eof &&cov&index.._&timeindex._eof_ti &&cov&index.._&timeindex._eofs &&cov&index.._&timeindex._eofs_ti  
 					%end;
 					%if &&cov&index.etype = skpcub  %then %do; 
-                         &&cov&index.._&timeindex._eof &&cov&index.._&timeindex._eof_ti &&cov&index..s_&timeindex._eof &&cov&index..s_&timeindex._eof_ti &&cov&index..c_&timeindex._eof &&cov&index..c_&timeindex._eof_ti  
+                         &&cov&index.._&timeindex._eof &&cov&index.._&timeindex._eof_ti &&cov&index.._&timeindex._eofs &&cov&index.._&timeindex._eofs_ti &&cov&index.._&timeindex._eofc &&cov&index.._&timeindex._eofc_ti  
 					%end;
 					%if &&cov&index.etype = skpcat %then %do;
 						%do lev = 1 %to %eval(&&cov&index.lev - 1); 
-							&&cov&index.._&timeindex._eof._&lev &&cov&index.._&timeindex._eof._&lev._ti  
+							&&cov&index.._&timeindex._eof_&lev &&cov&index.._&timeindex._eof_&lev._ti  
 						%end; 
 					%end;
 					%if &&cov&index.etype = skpspl %then %do; 
                         &&cov&index.._&timeindex._eof &&cov&index.._&timeindex._eof_ti
                         %do knot = 1 %to %eval(&&cov&index.lev - 2); 
-                               &&cov&index.._&timeindex._eof._spl&knot &&cov&index.._&timeindex._eof._spl&knot._ti  
+                               &&cov&index.._&timeindex._eof_spl&knot &&cov&index.._&timeindex._eof_spl&knot._ti  
                         %end; 
 					%end;
 
@@ -6834,42 +6836,42 @@ not the time-varying covariates, which are handled below in %interactionsb*/
 
         %if &&cov&i.etype = skpqdc or &&cov&i.etype = skpzqdc   
                %then %do;
-            %if &current = 1 %then %maketi(&&cov&i.._&timeindex._eof, &timeindex, &timeindex_l1, &&cov&i.skip, &interval);
-            %if &current = 1 %then &&cov&i.._&timeindex._eofs = &&cov&i._&timeindex._eof *&&cov&i.._&timeindex._eof ;;
-            %if &current = 1 %then %maketi(&&cov&i.._&timeindex._eofs, &timeindex, &timeindex_l1, &&cov&i.skip, &interval);
+            %maketi(&&cov&i.._&timeindex._eof, &timeindex, &timeindex_l1, &&cov&i.skip, &interval);
+            &&cov&i.._&timeindex._eofs = &&cov&i.._&timeindex._eof *&&cov&i.._&timeindex._eof ;;
+            %maketi(&&cov&i.._&timeindex._eofs , &timeindex, &timeindex_l1, &&cov&i.skip, &interval);
                      
        %end;
 
 
         %if &&cov&i.etype = skpcub   %then %do;
-            %if &current = 1 %then %maketi(&&cov&i.._&timeindex._eof., &timeindex, &timeindex-1, &&cov&i.skip, &interval);
+            %maketi(&&cov&i.._&timeindex._eof , &timeindex, &timeindex_l1, &&cov&i.skip, &interval);
          
             
-            %if &current = 1 %then  &&cov&i.._&timeindex._eof.s = &&cov&i_&timeindex._eof * &&cov&i_&timeindex._eof ;;
-            %if &current = 1 %then  &&cov&i..c = &&cov&i*&&cov&i*&&cov&i;;
+            &&cov&i.._&timeindex._eofs = &&cov&i.._&timeindex._eof * &&cov&i.._&timeindex._eof ;;
+            &&cov&i.._&timeindex._eofc = &&cov&i.._&timeindex._eof*&&cov&i.._&timeindex._eof*&&cov&i.._&timeindex._eof ;;
             
-            %if &current = 1 %then %maketi(&&cov&i.._&timeindex._eof.s, &timeindex, &timeindex-1, &&cov&i.skip, &interval);
-            %if &current = 1 %then  %maketi(&&cov&i.._&timeindex._eof.c, &timeindex, &timeindex-1, &&cov&i.skip, &interval);
+            %maketi(&&cov&i.._&timeindex._eofs, &timeindex, &timeindex_l1, &&cov&i.skip, &interval);
+            %maketi(&&cov&i.._&timeindex._eofc, &timeindex, &timeindex_l1, &&cov&i.skip, &interval);
            
        %end;
 
                         
         %if &&cov&i.etype = skpspl   %then %do;
-            %if &current = 1 %then %maketi(&&cov&i.._&timeindex._eof,&timeindex,&timeindex-1,&&cov&i.skip, &interval);
-            %if &current = 1 %then  %rcspline(&&cov&i.._&timeindex._eof ,&&cov&i.knots);
+             %maketi(&&cov&i.._&timeindex._eof,&timeindex,&timeindex_l1,&&cov&i.skip, &interval);
+             %rcspline(&&cov&i.._&timeindex._eof ,&&cov&i.knots);
              
             
             %do knot = 1 %to %eval(&&cov&i.lev - 2);
-               %if &current = 1 %then  %maketi(&&cov&i.._&timeindex._eof._spl&knot,&timeindex,&timeindex-1,&&cov&i.skip, &interval);
+                %maketi(&&cov&i.._&timeindex._eof_spl&knot,&timeindex,&timeindex_l1,&&cov&i.skip, &interval);
             %end;
         %end;
             
         %if &&cov&i.etype = skpcat   %then %do;
 
-            %if &current = 1 %then  %makecat(&&cov&i.._&timeindex._eof , &&cov&i.knots, &&cov&i.lev);
+             %makecat(&&cov&i.._&timeindex._eof , &&cov&i.knots, &&cov&i.lev);
             
             %do lev = 1 %to %eval(&&cov&i.lev - 1);
-               %if &current = 1 %then  %maketi(&&cov&i.._&timeindex._eof._&lev,&timeindex,&timeindex-1,&&cov&i.skip, &interval);
+                %maketi(&&cov&i.._&timeindex._eof_&lev ,&timeindex,&timeindex_l1,&&cov&i.skip, &interval);
               
             %end;
         %end; /* SKPCAT */
@@ -7881,7 +7883,6 @@ not the time-varying covariates, which are handled below in %interactionsb*/
  run;
  quit;
 *****/
-
  %local nperiods mintime mydate mywork anydoubles  idouble word simlist i ivar vartmp ngraph mycount myextra mypair graphlist graph1
         graph2 graph3 graph4 graph5 graph6 ;
 
