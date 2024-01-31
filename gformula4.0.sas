@@ -1118,7 +1118,15 @@ options mautosource minoperator ;
    
   %let rc = %sysfunc(close(&dsid)) ;
 
-   
+  %if  &outctype = bineofu or &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3  %then %do;
+       data &data._eof ;
+	   set &data ;
+	   if &time >= &timepoints then delete ; * will use upto time = timepoints - 1 ;
+	   run;
+
+	   %let data = &data._eof ;
+  %end ;	   
+
    data _null_(drop=);
    set &data;
 
@@ -3729,7 +3737,9 @@ intusermacro7=,
 						%if &usehistory_eof = 1 %then %do ;
 							if &time = %eval(&timepoints - 1) then do ;
                                 %do i = 1 %to &ncov;
- 									array a&&cov&i{0:%eval(&timepoints - 1) } &&cov&i.._0 - &&cov&i.._%eval(&timepoints - 1) ;
+ 									array a&&cov&i{0:%eval(&timepoints - 1) }  %do ii = 0 %to %eval(&timepoints - 1) ;
+                                                                                     &&cov&i.._&ii._eof 
+																				%end; ;
 									do _time_ = 0 to %eval(&timepoints - 1) ;
          	   							a&&cov&i [_time_ ] = s&&cov&i[ _time_ ]  ;
 									end;
