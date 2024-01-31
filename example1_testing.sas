@@ -1,7 +1,11 @@
 /*Example: outctype=binsurv*/
-
-%include '/proj/sas_macros/gformula/master_branch/new_censoring/GFORMULA-SAS/gformula4.0.sas';
+%let macropath = C:\Users\Roger\OneDrive - Harvard University\Gformula work\GitHub files\GFORMULA-SAS ; 
+%include "&macropath\gformula4.0.sas";
 options linesize=88 pagesize=54;
+
+
+libname mytmp 'C:\' ;
+
 
 *options mprint mprintnest;
 *options mlogic mlogicnest;
@@ -146,9 +150,12 @@ cov2  = act,    cov2otype  = 4, cov2ptype = lag2cub, cov2etype = cub ,
 
 hazardratio = 0 ,
 intcomp = 0 1 ,
-seed= 9458, nsamples = 5, numint=1 ,
+seed= 9458, nsamples = 10, numint=1 ,
 rungraphs = 0 ,
-usespline = 0 
+usespline = 0 ,
+testing = no ,
+simuldata =  ,
+savelib = work 
 );
 
 
