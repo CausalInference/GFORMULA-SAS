@@ -114,7 +114,14 @@ conteof = . ;
 call streaminit(1234321);
 if time = 5 then do ;
    conteof = -1+2*rand('uniform');
+   bineof = rand('bernoulli',0.4);
 end;
+if time = 3 then do;
+   act = act_l1 ;
+   act_l1 = act_l2;
+end;
+if time = 4 then act_l1 = act_l2 ;
+
 censor = (dead = 1 or censlost = 1) ;
 run;
 
@@ -126,13 +133,15 @@ quit;
 title 'GFORMULA SAMPLE';
 options mprint notes ;
 *options nomprint nonotes ;
+options mlogic symbolgen ;
+options nomlogic nosymbolgen ;
 %gformula(
 data= sample,
 id=id,
 time=time,
 timepoints = 6,
-outc=conteof ,
-outctype=conteofu,
+outc=bineof ,
+outctype=bineofu ,
 compevent=,
 compevent_cens  = 0   ,
 censor = censor ,
@@ -145,12 +154,12 @@ timeptype= concat,
 timeknots = 1 2 3 4 5,
 
 ncov=2,
-cov1  = hbp,    cov1otype  = 2, cov1ptype = tsswitch1, cov1etype = tsswitch1 ,
-cov2  = act,    cov2otype  = 4, cov2ptype = lag2cub, cov2etype = cub ,
+cov1  = hbp,    cov1otype  = 2, cov1ptype = tsswitch1, cov1etype = tsswitch1 none ,
+cov2  = act,    cov2otype  = 4, cov2ptype = skpcub, cov2skip = 3 , cov2etype = skpzqdc all , cov2knots  = 10 20 30   , 
 
 hazardratio = 0 ,
 intcomp = 0 1 ,
-seed= 9458, nsamples = 10, numint=1 ,
+seed= 9458, nsamples = 0, numint=1 ,
 rungraphs = 0 ,
 usespline = 0 ,
 testing = no ,
