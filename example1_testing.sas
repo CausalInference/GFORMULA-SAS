@@ -155,7 +155,7 @@ timeknots = 1 2 3 4 5,
 
 ncov=2,
 cov1  = hbp,    cov1otype  = 2, cov1ptype = tsswitch1, cov1etype = tsswitch1 none ,
-cov2  = act,    cov2otype  = 4, cov2ptype = skpcub, cov2skip = 3 , cov2etype = skpzqdc all , cov2knots  = 10 20 30   , 
+cov2  = act,    cov2otype  = 4, cov2ptype = skpcub, cov2skip = 3 , cov2etype = cumavgcatnew 2 , cov2knots  = 10 20 30  , 
 
 hazardratio = 0 ,
 intcomp = 0 1 ,
