@@ -61,7 +61,7 @@ options mautosource minoperator ;
                                given time*/
     outcnosimelsemacro =,   /* user defined macro to evaluate when  outcwherenosim holds*/
     usehistory_eof = 0 ,   /* for eof type outcomes use complete history of all modeled covariates */
-    history_max =  ALL ,  /* maximum number of periods to use in the eof models when usehistory_eof = 1 */
+
     compevent =,             /* competing risk event */   
     compeventinteract =,     /* interaction terms (between dichotomous covariates) to include in model for censoring by death from other causes */
     compeventwherem = (1=1), /* compevent: (optional) condition under which to model outcome */
@@ -403,6 +403,11 @@ options mautosource minoperator ;
 
 			%let cov&i.etype = &&cov&i.etype_part1 ;
 
+			%if &&cov&i.etype = tsswitch1 %then %do;
+					%let cov&i.etype_part1 = bin ; 
+                   %let cov&i.etype = bin ;
+                   %put CHANGING cov&i.etype FROM TSSWITCH1 TO BIN. ;
+			%end;
                
 
 
@@ -4385,7 +4390,7 @@ intusermacro7=,
      %*Printing results;
 
      %if &outctype=binsurv or &outctype=bineofu %then %do;    
-          title4 'PREDICTED RISK UNDER SEVERAL INTERVENTIONS';
+          title4 'PREDICTED PROPORTION UNDER SEVERAL INTERVENTIONS';
      %end;
      %else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 %then %do;
           title4 "PREDICTED MEAN &outc UNDER SEVERAL INTERVENTIONS";
@@ -4401,14 +4406,22 @@ intusermacro7=,
          %if &bootstrap_hazard = 1 %then %let additional_text = &additional_text (&hrlb , &hrub) ;
      %end;
 
-     %if &outctype=binsurv or &outctype=bineofu %then %do;
+     %if &outctype=binsurv  %then %do;
 	     %if %bquote(&censor) ^= %then %do ;
 		     title6 "IP-weighted natural course risk= %sysevalf(&obspm) % &additional_text "; 	
 		 %end;
 		 %else %do;
              title6 "Observed risk= %sysevalf(&obspm) % &additional_text ";
 		 %end;
-     %end;      
+     %end;    
+	%else %if  &outctype=bineofu %then %do;
+	     %if %bquote(&censor) ^= %then %do ;
+		     title6 "IP-weighted natural course proportion= %sysevalf(&obspm) % &additional_text "; 	
+		 %end;
+		 %else %do;
+             title6 "Observed proportion= %sysevalf(&obspm) % &additional_text ";
+		 %end;
+     %end;     
      %else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 %then %do;
           title6 "Observed mean= %sysevalf(&obspm) ";
      %end;
@@ -5376,7 +5389,7 @@ intusermacro7=,
 			%else %let startindex = %eval(&timepoints - &&cov&index.etype_part2 ) ;
 
 			%let stopindex = %eval(&timepoints - 1);
-			%if &&cov&index.etype = cumavg or &&cov&index.etype = cumavgcat  %then %do;
+			%if &&cov&index.etype = cumavg or &&cov&index.etype = cumavgcat or &&cov&index.etype = cumsum %then %do;
 	     		%if &&cov&index.etype_part2 = &timepoints %then %do;
 					%let startindex = 0;
             		%let stopindex =  0;
@@ -5386,7 +5399,7 @@ intusermacro7=,
             		%let stopindex = %eval(&timepoints - &&cov&index.etype_part2 ) ;
 		 		%end;
 			%end;	 
-			%if &&cov&index.etype = cumavgnew or &&cov&index.etype = cumavgcatnew  %then %do;
+			%if &&cov&index.etype = cumavgnew or &&cov&index.etype = cumavgcatnew or &&cov&index.etype = cumsumnew  %then %do;
 	     		%if &&cov&index.etype_part2 = &timepoints %then %do;
 					%let startindex = 0;
             		%let stopindex =  0;
@@ -5463,70 +5476,81 @@ intusermacro7=,
 						%end;
 					%end; /*end tsswitch1*/
                   
-					%if &&cov&index.etype=cumavg  %then %do;
+					%if &&cov&index.etype=cumsum  %then %do;
                      
-                                %put MYCHECK &&cov&index.knots  ;                             
+                                                          
 					 
-						 						   
-								%if %bquote(&&cov&index.knots ) ^= %then %do; 								
-									%if %numargs(&&cov&index.knots ) = 1 %then %do;
-
-										%if &&cov&index.knots = 0 %then  &&cov&index.._cumavg_&timeindex._eof   ;
-										%if &&cov&index.knots = 3 %then  
-											&&cov&index.._cumavg_&timeindex._eof   &&cov&index.._cumavg_&timeindex._eof_spl1   ;
-										%if &&cov&index.knots = 4 %then                                                                     
-											&&cov&index.._cumavg_&timeindex._eof &&cov&index.._cumavg_&timeindex._eof_spl1 &&cov&index.._cumavg_&timeindex._eof_spl2;
-										%if &&cov&index.knots = 5 %then                                                 
-											&&cov&index.._cumavg_&timeindex._eof  &&cov&index.._cumavg_&timeindex._eof_spl1 &&cov&index.._cumavg_&timeindex._eof_spl2 &&cov&index.._cumavg_&timeindex._eof_spl3;
-									%end;                                
-									%else %do;
-										&&cov&index.._cumavg_&timeindex._eof 
-										%do knotcount = 1 %to %eval(%numargs(&&cov&index.knots ) - 2) ;
-											&&cov&index.._cumavg_&timeindex._eof_spl&knotcount  
-										%end;
-									%end; 
-								%end;
-								%else %do;
-									&&cov&index.._cumavg_&timeindex._eof 
-								%end;
+						 	%if %bquote(&&cov&index.knots ) ^= AND &usespline = 1 %then %do; 								
+								
+								&&cov&index.._cumsum_&timeindex._eof
+								%do knotcount = 1 %to %eval(%numargs(&&cov&index.knots ) - 2) ;
+									&&cov&index.._cumsum_&timeindex._eof_spl&knotcount  
+								%end;								
+						   %end; 						
+						   %else %do;
+								&&cov&index.._cumsum_&timeindex._eof 							    
+						   %end;			   
+								
 						                           
 					
 
 					%end;
-					%if &&cov&index.etype=cumavgnew  %then %do;
-                     
-                                                                  
-						%if &prep = 0 %then   %do;
-							%if &index ge &switchind %then %do;							   
-								%if %bquote(&&cov&index.knots ) ^= %then %do; 								
-									%if %numargs(&&cov&index.knots ) = 1 %then %do;
+					%if &&cov&index.etype=cumsumnew  %then %do;                                                                                       												   
+							%if %bquote(&&cov&index.knots ) ^= AND &usespline = 1 %then %do; 								
+								
+									&&cov&index.._cumsum_&timeindex._eof
+									%do knotcount = 1 %to %eval(%numargs(&&cov&index.knots ) - 2) ;
+										&&cov&index.._cumsum_&timeindex._eof_spl&knotcount  
+									%end;
+									 %do iii = %eval(&timeindex + 1) %to %eval(&timepoints - 1) ;
+									   &&cov&index.._&iii._eof  
+									%end;
+						   %end; 						
+						   %else %do;
+								&&cov&index.._cumsum_&timeindex._eof 
+							    %do iii = %eval(&timeindex + 1) %to %eval(&timepoints - 1) ;
+								   &&cov&index.._&iii._eof  
+								%end;
+						 %end;																		                         				
+					%end;
 
-										%if &&cov&index.knots = 0 %then  &&cov&index.._cumavg_&timeindex._eof   ;
-										%if &&cov&index.knots = 3 %then  
-											&&cov&index.._cumavg_&timeindex._eof   &&cov&index.._cumavg_&timeindex._eof._spl1   ;
-										%if &&cov&index.knots = 4 %then                                                                     
-											&&cov&index.._cumavg_&timeindex._eof &&cov&index.._cumavg_&timeindex._eof._spl1 &&cov&index.._cumavg_&timeindex._eof._spl2;
-										%if &&cov&index.knots = 5 %then                                                 
-											&&cov&index.._cumavg_&timeindex._eof  &&cov&index.._cumavg_&timeindex._eof._spl1 &&cov&index.._cumavg_&timeindex._eof._spl2 &&cov&index.._cumavg_&timeindex._eof._spl3;
-									%end;                                
-									%else %do;
-										&&cov&index.._cumavg&t1
-										%do knotcount = 1 %to %eval(%numargs(&&cov&index.knots ) - 2) ;
-											&&cov&index.._cumavg&t1._spl&knotcount  
-										%end;
-									%end; 
-								%end;
-								%else %do;
-									&&cov&index.._cumavg_&timeindex._eof 
-									    %do iii = %eval(&timeindex + 1) %to %eval(&timepoints - 1) ;
-										   &&cov&index.._&iii._eof  
-										%end;
-								%end;
-							%end;
-							
-						%end;                              
+
+					%if &&cov&index.etype=cumavg  %then %do;
+                     
+                                %put MYCHECK &&cov&index.knots  ;                             
+					 
+						 	%if %bquote(&&cov&index.knots ) ^= AND &usespline = 1 %then %do; 								
+								
+								&&cov&index.._cumavg_&timeindex._eof
+								%do knotcount = 1 %to %eval(%numargs(&&cov&index.knots ) - 2) ;
+									&&cov&index.._cumavg_&timeindex._eof_spl&knotcount  
+								%end;								
+						   %end; 						
+						   %else %do;
+								&&cov&index.._cumavg_&timeindex._eof 							    
+						   %end;			   
+								
+						                           
 					
 
+					%end;
+					%if &&cov&index.etype=cumavgnew  %then %do;                                                                                       												   
+							%if %bquote(&&cov&index.knots ) ^= AND &usespline = 1 %then %do; 								
+								
+									&&cov&index.._cumavg_&timeindex._eof
+									%do knotcount = 1 %to %eval(%numargs(&&cov&index.knots ) - 2) ;
+										&&cov&index.._cumavg_&timeindex._eof_spl&knotcount  
+									%end;
+									 %do iii = %eval(&timeindex + 1) %to %eval(&timepoints - 1) ;
+									   &&cov&index.._&iii._eof  
+									%end;
+						   %end; 						
+						   %else %do;
+								&&cov&index.._cumavg_&timeindex._eof 
+							    %do iii = %eval(&timeindex + 1) %to %eval(&timepoints - 1) ;
+								   &&cov&index.._&iii._eof  
+								%end;
+						 %end;																		                         				
 					%end;
 
                      
@@ -5580,9 +5604,9 @@ intusermacro7=,
                     %end;
                 %end ; /* for mtype = all */
 			%end; /* end timeindex */
-		%end /* end of ncov */	
+		%end ;/* end of ncov */	
 	%end ; /* main = eof */	
-%end;
+
  
  
  
@@ -6676,7 +6700,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
 	%else %let startindex = %eval(&timepoints - &&cov&i.etype_part2 ) ;
 
 	%let stopindex = %eval(&timepoints - 1);
-    %if &&cov&i.etype = cumavg or &&cov&i.etype = cumavgcat %then %do;
+    %if &&cov&i.etype = cumavg or &&cov&i.etype = cumavgcat or &&cov&i.etype = cumsum %then %do;
 	     %if &&cov&i.etype_part2 = &timepoints %then %do;
 			%let startindex = 0;
             %let stopindex =  0;
@@ -6686,7 +6710,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
             %let stopindex = %eval(&timepoints - &&cov&i.etype_part2 ) ;
 		 %end;
 	%end;
-	%if &&cov&i.etype = cumavgnew or &&cov&i.etype = cumavgcatnew  %then %do;
+	%if &&cov&i.etype = cumavgnew or &&cov&i.etype = cumavgcatnew or &&cov&i.etype = cumsumnew  %then %do;
 	     		%if &&cov&i.etype_part2 = &timepoints %then %do;
 					%let startindex = 0;
             		%let stopindex =  0;
@@ -6812,10 +6836,31 @@ not the time-varying covariates, which are handled below in %interactionsb*/
             %end;
         %end;
 
-        %if ( &&cov&i.etype=cumavg |  &&cov&i.etype = cumavgcat | &&cov&i.etype = cumavgnew | &&cov&i.etype = cumavgcatnew ) 
+        %if ( &&cov&i.etype=cumavg |  &&cov&i.etype = cumavgcat | &&cov&i.etype = cumavgnew | &&cov&i.etype = cumavgcatnew | &&cov&i.etype = cumsum | &&cov&i.etype = cumsumnew) 
            %then %do;
             
 		
+		      %if &&cov&i.etype = cumsum  %then %do;
+				    %if &timeindex = 0 %then %do;
+						&&cov&i.._cumsum_&timeindex._eof  = sum(of a&&cov&i{*});
+					%end;
+					%else %if &timeindex > 0 %then %do;
+	                     mysum = 0 ;
+						 do myi = &startindex to %eval(&timepoints - 1);
+						     mysum = mysum + a&&cov&i [ myi ];
+						  end;
+						 &&cov&i.._cumsum_&timeindex._eof  = mysum  ;
+						 DROP MYSUM MYI ;
+					%end;
+				%end ;
+				%else %if &&cov&i.etype = cumsumnew  %then %do;
+               		 mysum = 0 ;
+					 do myi = 0 to %eval(&startindex);
+					     mysum = mysum + a&&cov&i [ myi ];
+					  end;
+					 &&cov&i.._cumavg_&timeindex._eof  = mysum  ;
+					 DROP MYSUM MYI ;
+			    %end;
                 
 
                %if &&cov&i.etype = cumavg or &&cov&i.etype = cumavgcat %then %do;
@@ -6840,9 +6885,9 @@ not the time-varying covariates, which are handled below in %interactionsb*/
 					 DROP MYSUM MYI ;
 			    %end;
 
-              %PUT MYCHECK &&cov&i.knots ;
+             
 
-				%if &&cov&i.etype = cumavg AND %numargs(&&cov&i.knots) > 2 %then %do;
+				%if (&&cov&i.etype = cumavg OR &&cov&i.etype = cumavgnew )   AND &usespline=1 %then %do;
                     %rcspline(&&cov&i.._cumavg_&timeindex._eof , &&cov&i.knots);
                    
                 %end;
@@ -6850,6 +6895,10 @@ not the time-varying covariates, which are handled below in %interactionsb*/
                      %makecat(&&cov&i.._cumavg_&timeindex._eof , &&cov&i.knots, &&cov&i.lev);
                                                             
                  %end;
+				 %else %if (&&cov&i.etype = cumsum OR &&cov&i.etype = cumsumnew )   AND &usespline=1 %then %do;
+                    %rcspline(&&cov&i.._cumsum_&timeindex._eof , &&cov&i.knots);
+                   
+                %end;
                
             
                 
@@ -7629,7 +7678,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
    label int       = 'Interv.';
    label int2      = 'Description';
    
-%if &outctype=binsurv or &outctype=bineofu %then %do;
+%if &outctype=binsurv  %then %do;
  	label pD_ulim95 = 'Upper limit 95% CI';
    label pD_llim95 = 'Lower limit 95% CI';
    label pD        = 'Risk (%)';
@@ -7637,6 +7686,20 @@ not the time-varying covariates, which are handled below in %interactionsb*/
    label pD_mean   = 'Bootstrap Risk Mean';
    label rr        = 'Risk ratio';
    label RD        = 'Risk difference';
+   label NNT       = '# Needed to Treat';
+   label NNT_ulim95 = 'Upper limit 95% CI';
+   label NNT_llim95 = 'Lower limit 95% CI';
+   %end;
+
+ 
+%else %if &outctype=bineofu %then %do;
+ label s&outc._ulim95 = 'Upper limit 95% CI';
+   label s&outc._llim95 = 'Lower limit 95% CI';
+   label s&outc        = 'Proportion';
+   label s&outc._std    = 'Bootstrap Proportion SE';
+   label s&outc._mean   = 'Bootstrap Proportion Mean';
+   label rr        = 'Ratio';
+   label RD        = 'Difference';
    label NNT       = '# Needed to Treat';
    label NNT_ulim95 = 'Upper limit 95% CI';
    label NNT_llim95 = 'Lower limit 95% CI';
