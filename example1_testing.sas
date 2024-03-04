@@ -31,7 +31,7 @@ options nonotes nomprint ;
 
 
 **SAMPLE Data;
-    data sample(drop = i j ahbp1-ahbp8 aact1-aact8);
+    data sample(drop = i j ahbp1-ahbp8 aact1-aact8 ax1-ax8 );
 
         call streaminit(5027);
 
@@ -40,16 +40,18 @@ options nonotes nomprint ;
 
             array ahbp(8);
             array aact(8);
+			array ax{8} ;
 
             do j=1 to 8;
                 ahbp(j) = (0.2>rand('uniform'));
                 if j > 1 & ahbp(j-1) = 1 then ahbp(j) = 1 ;
 
-        aact(j)=(0.7>rand('uniform'));
-        if aact(j)=1 then do;
+        		aact(j)=(0.7>rand('uniform'));
+        		if aact(j)=1 then do;
                    aact(j) = int(exp(3.5+0.4*(rand('normal'))));
-        end;
-                end;
+        		end;
+				ax(j ) = 2* rand('normal') ;
+            end;
 
             do j=3 to 8  until ( &condition   ) ;
                 id=i;
@@ -65,6 +67,9 @@ options nonotes nomprint ;
                 act_l1  = aact(j-1);
                 act_l2  = aact(j-2);
                 
+				x = ax(j);
+                x_l1 = ax(j-1);
+				x_l2 = ax(j-2);
 
               dia = ( (j/500) >rand('uniform'));
                 censlost  = (0.05>rand('uniform'));
@@ -144,7 +149,7 @@ outc=bineof ,
 outctype=bineofu ,
 compevent=,
 compevent_cens  = 0   ,
-censor = censor ,
+censor =/* censor */ ,
 
 usehistory_eof = 1 ,
 
@@ -153,15 +158,16 @@ fixedcov = baseage,
 timeptype= concat, 
 timeknots = 1 2 3 4 5,
 
-ncov=2,
-cov1  = hbp,    cov1otype  = 2, cov1ptype = tsswitch1, cov1etype = tsswitch1 none ,
-cov2  = act,    cov2otype  = 4, cov2ptype = skpcub, cov2skip = 3 , cov2etype = cumavgcatnew 2 , cov2knots  = 10 20 30  , 
+ncov=3,
+cov1  = hbp,    cov1otype  = 2, cov1ptype = tsswitch1, cov1etype = cumsumnew 2  , cov1knots = 3 ,
+cov2  = act,    cov2otype  = 4, cov2ptype = lag1cumavg , cov2skip = 3 , cov2etype =  cumavg all  , cov2knots  = 3  , 
+cov3 = x , cov3otype = 3 , cov3ptype = lag1bin , cov3etype = bin all ,
 
 hazardratio = 0 ,
 intcomp = 0 1 ,
 seed= 9458, nsamples = 0, numint=1 ,
 rungraphs = 0 ,
-usespline = 0 ,
+usespline = 1 ,
 testing = no ,
 simuldata =  ,
 savelib = work 
