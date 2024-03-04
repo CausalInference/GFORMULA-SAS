@@ -366,7 +366,8 @@ options mautosource minoperator ;
     %do i=0 %to %eval(&ncov);
        %local  cov&i.simstart cov&i.else cov&i.infixed cov&i.fixedcov cov&i.visitpelse ;          
        
-       
+       %let cov&i.ptype = %sysfunc(left(&&cov&i.ptype)) ;
+
        %let cov&i.simstart = 1 ;        
        %let tmp = &&cov&i ;        
        %let cov&i.else =  &tmp._b;  
@@ -1519,8 +1520,10 @@ options mautosource minoperator ;
 
             %end;
 
+
             %if (( %upcase(&&cov&i.ptype) in  CUMAVG LAG1CUMAVG LAG2CUMAVG ) OR 
-                ( %upcase(&&cov&i.etype) in  CUMSUM CUMSUMNEW CUMAVG CUMAVGNEW  ) ) AND (%upcase(&&cov&i.ptype) ^= TSSWITCH1 )  %then %do;
+                ( %upcase(&&cov&i.etype) in  CUMSUM CUMSUMNEW CUMAVG CUMAVGNEW  ) ) AND 
+                (%upcase(&&cov&i.ptype) ^= TSSWITCH1 AND %upcase(%substr(&&cov&i.ptype, 5,3)) ^= SPL )   %then %do;
                       %local cumavgwhere cumavgvar numberofknots ;
                       %let numberofknots = &&cov&i.knots ;
                       %let cumavgwhere = ;
@@ -1529,8 +1532,7 @@ options mautosource minoperator ;
                           %let cumavgwhere = (where = (&&cov&i.cumint = 1)) ;
                           
                       %end;
-                             
-                   %put _LOCAL_ ;
+                                              
 
                     %if &numberofknots > 0  %then %do;  
                     proc univariate data = _inputd_ 
