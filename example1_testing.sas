@@ -159,9 +159,9 @@ timeptype= concat,
 timeknots = 1 2 3 4 5,
 
 ncov=3,
-cov1  = hbp,    cov1otype  = 2, cov1ptype = tsswitch1, cov1etype = cumsumnew 2  , cov1knots = 3 ,
-cov2  = act,    cov2otype  = 4, cov2ptype = lag1cumavg , cov2skip = 3 , cov2etype =  cumavgnew 1  , cov2knots  = 3  , 
-cov3 = x , cov3otype = 3 , cov3ptype = lag1spl , cov3knots = -2 0 2 , cov3etype = cumavg all ,
+cov1  = hbp,    cov1otype  = 2, cov1ptype = tsswitch1, cov1etype = cumsum all, cov1knots = 3 ,cov1eknots =  3 ,
+cov2  = act,    cov2otype  = 4, cov2ptype = skpspl , cov2skip = 3 , cov2etype =  skpspl all  , cov2knots  = 3  , cov2eknots = 10 20 30 ,
+cov3 = x , cov3otype = 3 , cov3ptype = lag1spl , cov3knots = -2 0 2 , cov3etype = cat all  , cov3eknots =  5 ,
 
 hazardratio = 0 ,
 intcomp = 0 1 ,
