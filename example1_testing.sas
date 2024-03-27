@@ -31,7 +31,7 @@ options nonotes nomprint ;
 
 
 **SAMPLE Data;
-    data sample(drop = i j ahbp1-ahbp8 aact1-aact8 ax1-ax8 );
+    data sample(drop = i j ahbp1-ahbp8 aact1-aact8 ax1-ax8 az1-az8 );
 
         call streaminit(5027);
 
@@ -41,6 +41,7 @@ options nonotes nomprint ;
             array ahbp(8);
             array aact(8);
 			array ax{8} ;
+			array az{8};
 
             do j=1 to 8;
                 ahbp(j) = (0.2>rand('uniform'));
@@ -51,6 +52,7 @@ options nonotes nomprint ;
                    aact(j) = int(exp(3.5+0.4*(rand('normal'))));
         		end;
 				ax(j ) = 2* rand('normal') ;
+				az(j) = rand('binomial',0.4,5) + 1 ;
             end;
 
             do j=3 to 8  until ( &condition   ) ;
@@ -70,6 +72,10 @@ options nonotes nomprint ;
 				x = ax(j);
                 x_l1 = ax(j-1);
 				x_l2 = ax(j-2);
+
+				z = az(j);
+				z_l1 = az(j-1);
+				z_l2 = az(j - 2);
 
               dia = ( (j/500) >rand('uniform'));
                 censlost  = (0.05>rand('uniform'));
@@ -140,6 +146,7 @@ options mprint notes ;
 *options nomprint nonotes ;
 options mlogic symbolgen ;
 options nomlogic nosymbolgen ;
+
 %gformula(
 data= sample,
 id=id,
@@ -151,17 +158,21 @@ compevent=,
 compevent_cens  = 0   ,
 censor =/* censor */ ,
 
-usehistory_eof = 1 ,
+usehistory_eof = 0,
 
 
 fixedcov = baseage,
 timeptype= concat, 
 timeknots = 1 2 3 4 5,
 
-ncov=3,
-cov1  = hbp,    cov1otype  = 2, cov1ptype = tsswitch1, cov1etype = cumsum all, cov1knots = 3 ,cov1eknots =  3 ,
-cov2  = act,    cov2otype  = 4, cov2ptype = skpspl , cov2skip = 3 , cov2etype =  skpspl all  , cov2knots  = 3  , cov2eknots = 10 20 30 ,
-cov3 = x , cov3otype = 3 , cov3ptype = lag1spl , cov3knots = -2 0 2 , cov3etype = cat all  , cov3eknots =  5 ,
+ncov=4,
+cov1  = hbp,    cov1otype  = 2, cov1ptype = tsswitch1,  cov1knots = 3 , 
+     cov1etype = none  all ,cov1eknots =  2 4 6 ,
+cov2  = act,    cov2otype  = 4, cov2ptype = skpspl , cov2skip = 3 ,  cov2knots  = 10 20 30  ,
+ cov2etype =  skpspl all  , cov2eknots = 10 20 30 ,
+cov3 = x , cov3otype = 3 , cov3ptype = lag1cat , cov3knots = 4 ,
+       cov3etype = none  none , cov3eknots =  3 ,
+cov4 = z , cov4otype = 5 , cov4ptype = lag1cat , cov4knots =  , cov4etype = bin 1 ,
 
 hazardratio = 0 ,
 intcomp = 0 1 ,
