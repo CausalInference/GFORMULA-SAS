@@ -745,6 +745,19 @@ options mautosource minoperator ;
             quit ;
             %let cov&i.knots=%unquote(%makeknots5(&&cov&i.lev));
             %if &printlogstats = 1 %then %put  Knots defining the categories for &&cov&i : cov&i.knots=&&cov&i.knots;
+
+			%if &usehistory_eof = 1 %then %do;
+				   %let cov&i.eknots = &&cov&i.knots ;
+				   %if &&cov&i.etype ne none %then %do;
+                             %let cov&i.etype = cat ;
+				   		     %let cov&i.elev = %eval(%numargs(&&cov&i.eknots) + 1) ;
+
+				   			%put SETTING &&cov&i otype 5 to have etype = cat and eknots = &&cov&i.eknots  and elev = &&cov&i.elev ;
+				   %end ;
+
+			%end;
+
+			
       %end;
               
        %end;
