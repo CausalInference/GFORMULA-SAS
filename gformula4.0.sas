@@ -1277,7 +1277,7 @@ options mautosource minoperator ;
    
   %let rc = %sysfunc(close(&dsid)) ;
 
-  %if  &outctype = bineofu or &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3  %then %do;
+  %if  &outctype = bineofu or &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype = conteofu4  %then %do;
        data &data._eof ;
 	   set &data ;
 	   if &time >= &timepoints then delete ; * will use upto time = timepoints - 1 ;
@@ -1481,8 +1481,25 @@ options mautosource minoperator ;
                     call symput("outcmax",trim(left(&outc._max)) );
                     end;
         %end;
+		%else %if &outctype=conteofu4    %then %do;
+
+             retain &outc._min &outc._max;
+
+                if _n_ = 1 then do;
+                    &outc._min =  1.0e100;
+                    &outc._max = 0 ;
+                    end; 
+
+                if &outc > 0 and &outc < &outc._min then &outc._min = &outc;
+                if &outc > 0 and &outc > &outc._max then &outc._max = &outc;
+                
+                if _end_ then do;
+                    call symput("outcmin",trim(left(&outc._min)) );
+                    call symput("outcmax",trim(left(&outc._max)) );
+                    end;
+        %end;
         _sample_ = 0 ;
-        keep  _sample_ %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3  %then  &outc._min &outc._max ;
+        keep  _sample_ %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype = conteofu4 %then  &outc._min &outc._max ;
                 %do i = 0 %to &ncov ; 
                     %if &&cov&i.otype=3 or &&cov&i.otype=4 or &&cov&i.otype=6 or &&cov&i.otype=7   or &&cov&i.otype = -1  %then &&cov&i.._min &&cov&i.._max ;
                 %end ;
@@ -1495,7 +1512,7 @@ options mautosource minoperator ;
             %if &printlogstats = 1 %then %put  &&cov&i range is &&cov&i.min to &&cov&i.max;                    
             %end;
         %end;
-    %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 %then %do;
+    %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype = conteofu4 %then %do;
       %if &printlogstats = 1 %then %put  &outc range is &outcmin to &outcmax;
       %end;
    
@@ -2016,7 +2033,10 @@ options mautosource minoperator ;
 
        
       
-    
+      %if &outctype = conteofu4 %then %do;
+		  z&outc = (&outc > 0) ;
+		  if z&outc = 1 then l&outc = log(&outc);
+	  %end ;
       
              %interactions(outc,,1,createvar);
              %if %bquote(&compevent)^= %then %do;
@@ -2043,6 +2063,7 @@ options mautosource minoperator ;
 													   &censor %if %bquote(&censor)^=  %then %do; &censorpred %end; 
 													 /*  &censorcomp */
                                              &time  &wherevars  
+		   %if &outctype = conteofu4 %then z&outc l&outc ;
             %do i = 0 %to &ncov ;
                  &&cov&i  &&cov&i.array 
                 %if &&cov&i.otype=2 %then %do;  
@@ -2259,7 +2280,7 @@ options mautosource minoperator ;
                 
                 %end;
             %end;
-        %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3  %then %do;
+        %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype = conteofu4  %then %do;
 
              retain &outc._min &outc._max;
 
@@ -2276,8 +2297,25 @@ options mautosource minoperator ;
                     call symput("outcmax",trim(left(&outc._max)) );
                     end;
         %end;
+		%else %if &outctype=conteofu4    %then %do;
+
+             retain &outc._min &outc._max;
+
+                if _n_ = 1 then do;
+                    &outc._min =  1.0e100;
+                    &outc._max = 0 ;
+                    end; 
+
+                if &outc > 0 and &outc < &outc._min then &outc._min = &outc;
+                if &outc > 0 and &outc > &outc._max then &outc._max = &outc;
+                
+                if _end_ then do;
+                    call symput("outcmin",trim(left(&outc._min)) );
+                    call symput("outcmax",trim(left(&outc._max)) );
+                    end;
+        %end;
          _sample_ = &bsample ;
-        keep  _sample_ %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3  %then  &outc._min &outc._max ;
+        keep  _sample_ %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype = conteofu4 %then  &outc._min &outc._max ;
                 %do i = 0 %to &ncov ; 
                     %if &&cov&i.otype=3 or &&cov&i.otype=4 or &&cov&i.otype=6 or &&cov&i.otype=7   or &&cov&i.otype = -1  %then &&cov&i.._min &&cov&i.._max ;
                 %end ;
@@ -2290,7 +2328,7 @@ options mautosource minoperator ;
             %if &printlogstats = 1 %then %put  bootstrap sample &bsample &&cov&i range is &&cov&i.min to &&cov&i.max;                    
             %end;
         %end;
-    %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu %then %do;
+    %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 %then %do;
       %if &printlogstats = 1 %then %put  bootstrap sample &bsample &outc range is &outcmin to &outcmax;
       %end;
    
@@ -2550,6 +2588,68 @@ options mautosource minoperator ;
     quit;
         
          %end ;
+		%else %if &outctype=conteofu4  %then %do;
+             
+			    data param2 ;
+			    set param ;
+			    by newid ;   
+			    if &time = &timepoints -1 ;  
+			    run;
+
+                proc logistic descending 
+                    data=param2(keep =  _weight_  &compevent   &time z&outc   &outcpred )
+                    outest=z&outc ;
+                    &ods_logit ;
+                    %if %bquote(&outcwherem )^= %then where  &outcwherem    ;; 
+                    model z&outc = &outcpred %if &uselabelc = 1 %then / parmlabel ;;
+                    weight _weight_ ;
+                run;
+            
+        
+            proc reg
+                data=param2(keep =  _weight_  &compevent   &time z&outc l&outc  &outcpred )
+                outest=&outc ;
+                &ods_reg ;
+                %if %bquote(&outcwherem )^= %then where  &outcwherem    ;;  
+                model l&outc = &outcpred;
+                weight _weight_ ;
+            run;
+
+
+			data z&outc;
+            set z&outc;
+            if _type_='PARMS';
+            _sample_ = &bsample;
+            array avar intercept &outcpred;
+            array abeta boutcz_00-boutcz_&dimoutc;
+            do j=1 to dim(avar); 
+				abeta(j)=avar(j); 
+            end;
+            keep _sample_ boutcz_00-boutcz_&dimoutc ;
+            run;
+                
+            data &outc;
+            set &outc;
+            if _type_='PARMS';
+            _sample_ = &bsample;
+            array avar intercept &outcpred;
+            array abeta boutc00-boutc&dimoutc;
+            do j=1 to dim(avar); 
+				abeta(j)=avar(j); 
+			end;
+            se&outc=_rmse_;
+            keep _sample_ boutc00-boutc&dimoutc;
+            run;
+
+            data outc;                 
+            merge &outc z&outc;                    
+            by _sample_;
+            run;
+
+			proc datasets library = work nolist ;
+    		delete param2 z&outc &outc ;
+    		quit;
+        %end;
 
 
     %* Censoring;    
@@ -3791,7 +3891,8 @@ intusermacro7=,
 		%put FOR INTVAR &i : &&intvar&i intcovmap&i  = &&intcovmap&i ;  
 		%if &&intcovmap&i = -1 %then %put ERROR WITH MAPPING INTVAR TO COV NUMBER ;
    %end;
-   
+ 
+
     data simulated&intno   ( keep = &fixedcov
                                     intervened averinterv 
                                      
@@ -3860,6 +3961,9 @@ intusermacro7=,
         uno=1;
 
         array aboutc boutc00-boutc&dimoutc;
+		%if &outctype = conteofu4 %then %do ; 			                 
+             array abzoutc boutcz_00-boutcz_&dimoutc;                 
+        %end;
         array s&outc {0:%eval(&timepoints - 1) }   ;
         %if %bquote(&compevent)^= AND &compevent_cens = 0  %then %do;
             array abcompevent bcompevent00-bcompevent&dimcompevent;
@@ -4267,6 +4371,49 @@ intusermacro7=,
                                         &outc = &outc._max; 
                                         &outc._limit = &outc._limit +1;
                                     end;
+                                end;
+                                 
+                            end;                        
+                            else do;
+                                &outc. = . ;
+                            end;
+
+                            s&outc [ &time] = &outc ;
+                        %end;
+						%else %if &outctype=conteofu4 %then %do;                                              
+                            if &time = (&timepoints - 1) then do ;
+
+                                if &outcwherenosim then do; * at no sim time ; 
+                                    /* evaluate user defined macro  because of some condition other than its too early to start simulating*/
+                                    %if %bquote(&outcnosimelsemacro)^= %then %&outcnosimelsemacro ;                              
+                                end;
+                                else do ;
+                                    /* outc_min and outc_max are read into the data from the _covbounds_ data set and can change based on the bootstrap sample */
+
+										z&outc = 0 ;
+                        				do i=1 to dim(abzoutc);
+                         	   				z&outc =sum(z&outc,abzoutc(i)*as&outc(i));
+                        				end;
+										p&outc = 1/(1.0+exp(-1*z&outc ) );
+										if U&outc <= p&outc then &outc = 1 ;
+										else &outc = 0 ;
+
+									    m&outc = 0 ;
+			                        	do i=1 to dim(aboutc);
+			                            	m&outc =sum(m&outc,aboutc(i)*as&outc(i));
+			                        	end;
+
+										if &outc = 1 then &outc = exp(m&outc) ;
+									
+                                                                                      
+	                                    if  0 < &outc < &outc._min then do;
+	                                        &outc = &outc._min; 
+	                                        &outc._limit = &outc._limit +1;                  
+	                                    end;                       
+	                                    if &outc > &outc._max then do;
+	                                        &outc = &outc._max; 
+	                                        &outc._limit = &outc._limit +1;
+	                                    end;
                                 end;
                                  
                             end;                        
@@ -7549,6 +7696,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
     
     %*Generate random numbers for standard errors;
    %local i  lev;
+   %if &outctype = conteofu4 %then U&outc = rand('uniform');;
     %do i = &start %to &stop;
         %if &&usevisitp&i = 1 %then %do;            
              U&&cov&i.randomvisitp = rand('uniform');
