@@ -630,7 +630,14 @@ options mautosource minoperator ;
    %do i = 1 %to %numargs(&compeventinteract) ;
         %local compevent_I&i ;
    %end;
- 
+   %if &outctype = binomeofu %then %do;
+      proc sql noprint ;
+                select max(&outc) as maxlev into :outclev from &data ;
+            quit ;
+            %let outcknots=%unquote(%makeknots5(&outclev));
+            %if &printlogstats = 1 %then %put  Knots defining the categories for &outc : outcknots=&outcknots;
+
+    %end;
     %do i = 0 %to  %eval(&ncov) ;     
        %local dimpred&i dimvar&i dimvar&i.z cov&i.lev cov&i.elev cov&i.min cov&i.max cov&i.array cov&i.zarray 
         cov&i.ninterx dimvar&i.class  ;
@@ -803,7 +810,6 @@ options mautosource minoperator ;
 
         %end;   
 
- 
         ods select all ; 
 
         data _betar_ ;
@@ -1277,7 +1283,7 @@ options mautosource minoperator ;
    
   %let rc = %sysfunc(close(&dsid)) ;
 
-  %if  &outctype = bineofu or &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype = conteofu4  %then %do;
+  %if  &outctype = bineofu or &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype = conteofu4 or &outctype = binomeofu %then %do;
        data &data._eof ;
 	   set &data ;
 	   if &time >= &timepoints then delete ; * will use upto time = timepoints - 1 ;
@@ -2037,6 +2043,11 @@ options mautosource minoperator ;
 		  z&outc = (&outc > 0) ;
 		  if z&outc = 1 then l&outc = log(&outc);
 	  %end ;
+	  %if &outctype = binomeofu %then %do;
+                %do lev = 1 %to %eval(&outclev - 1);
+                     outc_&lev = (&outc = &lev);
+                %end;
+     %end; 
       
              %interactions(outc,,1,createvar);
              %if %bquote(&compevent)^= %then %do;
@@ -2064,6 +2075,11 @@ options mautosource minoperator ;
 													 /*  &censorcomp */
                                              &time  &wherevars  
 		   %if &outctype = conteofu4 %then z&outc l&outc ;
+		   %if &outctype = binomeofu %then %do;
+                %do lev = 1 %to %eval(&outclev - 1);
+                     outc_&lev 
+                %end;
+           %end;
             %do i = 0 %to &ncov ;
                  &&cov&i  &&cov&i.array 
                 %if &&cov&i.otype=2 %then %do;  
@@ -2650,6 +2666,53 @@ options mautosource minoperator ;
     		delete param2 z&outc &outc ;
     		quit;
         %end;
+		%else %if &outctype = binomeofu %then %do;
+
+		 data param2 ;
+    set param ;
+    by newid ;   
+    if &time = &timepoints -1 ;  
+    run;
+			%do lev = 1 %to %eval(&outclev-1);
+                proc logistic descending data=param2(keep =  _weight_   &compevent   &time   &outcpred
+                    outc_&lev 
+                    %do lowerlev = 1 %to %eval(&lev-1);
+                        outc_&lowerlev
+                     %end;
+                        )
+                    outest=outc_&lev ;
+                        &ods_logit ;
+                        where  &time > 0  and %unquote(&outcwherem)  
+                            %do lowerlev = 1 %to %eval(&lev-1);
+                                and outc_&lowerlev ne 1
+                            %end;
+                               
+                                ;
+                        model outc_&lev = &outcpred %if &uselabelc = 1 %then / parmlabel ;;
+                        weight _weight_ ;
+                run;
+            %end;
+
+ 			%do lev = 1 %to %eval(&outclev - 1);
+                data outc_&lev;
+                set outc_&lev ;
+                if _type_='PARMS';
+                _sample_ = &bsample;
+                    array avar_&lev intercept &outcpred;
+                    array about_&lev about_&lev._00-about_&lev._&dimoutc;
+                    do j=1 to dim(avar_&lev); 
+                         about_&lev(j)=avar_&lev.(j);
+                    end;
+                        keep _sample_ about_&lev._00-about_&lev._&dimoutc  ;
+                run;
+            %end;
+            data outc;
+            merge %do lev = 1 %to %eval(&outclev - 1); outc_&lev %end; ;
+            by _sample_;
+            run;
+
+
+		%end;
 
 
     %* Censoring;    
@@ -3964,6 +4027,11 @@ intusermacro7=,
 		%if &outctype = conteofu4 %then %do ; 			                 
              array abzoutc boutcz_00-boutcz_&dimoutc;                 
         %end;
+		%else %if &outctype = binomeofu %then %do;
+		     %do lev = 1 %to %eval(&outclev - 1);
+                    array about_&lev about_&lev._00-about_&lev._&dimoutc;
+             %end;
+		%end;
         array s&outc {0:%eval(&timepoints - 1) }   ;
         %if %bquote(&compevent)^= AND &compevent_cens = 0  %then %do;
             array abcompevent bcompevent00-bcompevent&dimcompevent;
@@ -4423,6 +4491,24 @@ intusermacro7=,
 
                             s&outc [ &time] = &outc ;
                         %end;
+						%else %if &outctype = binomeofu %then %do;
+ 
+                            &outc = . ;
+                            %do lev = 1 %to %eval(&outclev - 1);
+                                if &outc = . then do;
+                                    moutc_lev = 0 ;
+                                    do j=1 to dim(about_&lev);
+                                        moutc_lev=sum(moutc_lev,about_&lev(j)*as&outc(j));
+                                    end;
+                                    poutc_&lev=1/(1+exp(-moutc_lev));
+                                    if Uoutc_&lev<=poutc_&lev  then &outc=&lev;
+                                end;
+                           %end;
+
+                           if &outc = . then &outc = &outclev;                        
+
+
+						%end;
 
 
 
@@ -4938,7 +5024,7 @@ intusermacro7=,
      %if &outctype=binsurv or &outctype=bineofu %then %do;    
           title4 'PREDICTED PROPORTION UNDER SEVERAL INTERVENTIONS';
      %end;
-     %else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 %then %do;
+     %else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 or &outctype = binomeofu %then %do;
           title4 "PREDICTED MEAN &outc UNDER SEVERAL INTERVENTIONS";
      %end;
      proc print data=finfin noobs label double;
@@ -4968,7 +5054,7 @@ intusermacro7=,
              title6 "Observed proportion= %sysevalf(&obspm) % &additional_text ";
 		 %end;
      %end;     
-     %else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 %then %do;
+     %else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 or &outctype = binomeofu %then %do;
           title6 "Observed mean= %sysevalf(&obspm) ";
      %end;
      title7 "Data= &data, Sample size= &ssize, Monte Carlo sample size= &nsimul";
@@ -4983,11 +5069,12 @@ intusermacro7=,
      %if &outctype=binsurv or &outctype=bineofu %then %do;
           var int &pd &pd._llim95 &pd._ulim95 rd rd_llim95 rd_ulim95 nnt nnt_llim95 nnt_ulim95;
      %end;
-     %else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 %then %do;
+     %else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 or &outctype = binomeofu %then %do;
           var int s&outc s&outc._llim95 s&outc._ulim95 rd rd_llim95 rd_ulim95 ;    
      %end;
      run;
 
+	 data roger; set finfin ; run ;
 
      %if &outctype=binsurv %then %do ;
           data ausc (keep = _sample_ int ausc&timepoints ) ;
@@ -7697,6 +7784,11 @@ not the time-varying covariates, which are handled below in %interactionsb*/
     %*Generate random numbers for standard errors;
    %local i  lev;
    %if &outctype = conteofu4 %then U&outc = rand('uniform');;
+   %if &outctype = multinomeofu %then %do;
+       %do lev = 1 %to %eval(&outclev - 1);
+                Uoutc_&lev=rand('uniform');
+       %end;
+   %end;
     %do i = &start %to &stop;
         %if &&usevisitp&i = 1 %then %do;            
              U&&cov&i.randomvisitp = rand('uniform');
@@ -8229,7 +8321,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
    
    
 %end;
-%else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 %then %do;
+%else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 or &outctype = binomeofu %then %do;
    
    obsp= round(&obsp*100)/100;
    call symput('obspm',obsp);
