@@ -117,7 +117,7 @@ proc freq data = sample ;
 table 
 time ;
 run;
-
+ 
 
 data sample ;
 set sample ;
@@ -126,6 +126,9 @@ call streaminit(1234321);
 if time = 5 then do ;
    conteof = -1+2*rand('uniform');
    bineof = rand('bernoulli',0.4);
+   myconteof4 = rand('bernoulli',0.7);
+   if myconteof4 = 1 then myconteof4 = 1 + 5*abs(rand('normal')) ;
+   mybinom = rand('binomial',0.5,4) + 1 ;
 end;
 if time = 3 then do;
    act = act_l1 ;
@@ -143,7 +146,7 @@ quit;
 **GFORMULA Call;
 title 'GFORMULA SAMPLE';
 options mprint notes ;
-*options nomprint nonotes ;
+options nomprint nonotes ;
 options mlogic symbolgen ;
 options nomlogic nosymbolgen ;
 
@@ -152,8 +155,8 @@ data= sample,
 id=id,
 time=time,
 timepoints = 6,
-outc=bineof ,
-outctype=bineofu ,
+outc=mybinom ,
+outctype= binomeofu  ,
 compevent=,
 compevent_cens  = 0   ,
 censor =/* censor */ ,
@@ -176,9 +179,9 @@ cov4 = z , cov4otype = 5 , cov4ptype = lag1cat , cov4knots =  , cov4etype = bin 
 
 hazardratio = 0 ,
 intcomp = 0 1 ,
-seed= 9458, nsamples = 0, numint=1 ,
+seed= 9458, nsamples = 10, numint=1 ,
 rungraphs = 0 ,
-usespline = 1 ,
+usespline = 0 ,
 testing = no ,
 simuldata =  ,
 savelib = work 
