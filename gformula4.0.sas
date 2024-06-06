@@ -4,6 +4,11 @@ GFORMULA SAS MACRO
 
 Authors: Roger W. Logan, Jessica  G. Young, Sarah L. Taubman, Yu-Han Chiu, Sally Picciotto, Goodarz Danaei, Miguel A. Hernán
 
+*** EM edited ***
+Version June 2024. This version includes additions and fixes for (i) the parametric outcome models available for end of follow-up 
+outcomes, (ii) the functional forms of covariate histories allowed in these models, and (iii) the options for carrying forward
+covariates during skipped times (i.e., when no measurement of a covariate occurs).
+
 Version April 2022. This version includes additions and fixes for the inclusion of censoring in the calculation of the natural 
 course risks and means of covariates under the simulation of the natural course.
 
@@ -13,7 +18,6 @@ including variabls of ptype cumavg twice in the model lists.
 Version January 2019. This version includes options and improvements that are not compatible with previous versions 
 of the software. For questions and comments, email rwlogan@hsph.harvard.edu or jyoung@hsph.harvard.edu
  
-
 Copyright (c) 2007, 2021, The President and Fellows of Harvard College
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated 
@@ -54,7 +58,12 @@ options mautosource minoperator ;
 
     outc =,                   /* outcome variable: if dichotomous, then 1=event, 0=no event */
     outctype = binsurv,        /* outcome type: default=binsurv (binary survival time analysis), 
-                               other values: bineofu (binary end of follow-up), conteofu (continuous end of follow-up) */
+                               other options: bineofu (binary end of follow-up),
+                                              cateofu (categorical or ordinal end of follow-up), *** EM edited ***
+                                              conteofu (continuous end of follow-up modeled using linear regression), 
+                                              conteofu2 (continuous end of follow-up modeled using truncated normal regression), *** EM edited ***
+                                              conteofu3 (continuous end of follow-up modeled using Tobit regression), *** EM edited *** 
+                                              conteofu4 (continuous end of follow-up modeled using logistic to log-linear approach), *** EM edited *** */
     outcinteract =,           /* interaction terms (between dichotomous covariates) to include in model for outc */
     outcwherem = (1=1),     /* outcome: (optional) condition under which to model outcome */
     outcwherenosim =(1=0),  /* outcome: (optional) condition under which not to simulate the outcome under intervention but assign some fixed value at a 
@@ -630,7 +639,7 @@ options mautosource minoperator ;
    %do i = 1 %to %numargs(&compeventinteract) ;
         %local compevent_I&i ;
    %end;
-   %if &outctype = binomeofu %then %do;
+   %if &outctype = cateofu %then %do;
       proc sql noprint ;
                 select max(&outc) as maxlev into :outclev from &data ;
             quit ;
@@ -1283,7 +1292,7 @@ options mautosource minoperator ;
    
   %let rc = %sysfunc(close(&dsid)) ;
 
-  %if  &outctype = bineofu or &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype = conteofu4 or &outctype = binomeofu %then %do;
+  %if  &outctype = bineofu or &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype = conteofu4 or &outctype = cateofu %then %do;
        data &data._eof ;
 	   set &data ;
 	   if &time >= &timepoints then delete ; * will use upto time = timepoints - 1 ;
@@ -2043,7 +2052,7 @@ options mautosource minoperator ;
 		  z&outc = (&outc > 0) ;
 		  if z&outc = 1 then l&outc = log(&outc);
 	  %end ;
-	  %if &outctype = binomeofu %then %do;
+	  %if &outctype = cateofu %then %do;
                 %do lev = 1 %to %eval(&outclev - 1);
                      outc_&lev = (&outc = &lev);
                 %end;
@@ -2075,7 +2084,7 @@ options mautosource minoperator ;
 													 /*  &censorcomp */
                                              &time  &wherevars  
 		   %if &outctype = conteofu4 %then z&outc l&outc ;
-		   %if &outctype = binomeofu %then %do;
+		   %if &outctype = cateofu %then %do;
                 %do lev = 1 %to %eval(&outclev - 1);
                      outc_&lev 
                 %end;
@@ -2474,7 +2483,7 @@ options mautosource minoperator ;
 
 
     %if &outctype=conteofu %then %do;    
-    %* Continuous Outcome;
+    %* Continuous outcome modeled using linear regression *** EM edited ***;
 
     data param2 ;
     set param ;
@@ -2507,8 +2516,9 @@ options mautosource minoperator ;
     quit;
 
    %end;
+
    %else %if &outctype=conteofu2 %then %do ;
-               /* true truncated normal using new proc qlim and bounds shifted by small ammount  */
+               /* Continuous outcome modeled using truncated normal using new proc qlim and bounds shifted by small ammount, similar to otype = 6   *** EM edited *** */
  
             data _null_ ;
             cmin  = &outcmin ;
@@ -2569,7 +2579,7 @@ options mautosource minoperator ;
          %end ;
       
           %else %if  &outctype=conteofu3 %then %do ;
-               /*  tobit density, similar to what is being done using otype = 3   */
+               /*  Continuous outcome modeled using tobit density, similar to what is being done using otype = 7 *** EM edited ***  */
         
 
             data param2 ;
@@ -2604,7 +2614,9 @@ options mautosource minoperator ;
     quit;
         
          %end ;
+
 		%else %if &outctype=conteofu4  %then %do;
+        /*  Continuous outcome modeled using logistic to log-linear approach, similar to what is being done using otype = 4 *** EM edited ***  */
              
 			    data param2 ;
 			    set param ;
@@ -2666,13 +2678,17 @@ options mautosource minoperator ;
     		delete param2 z&outc &outc ;
     		quit;
         %end;
-		%else %if &outctype = binomeofu %then %do;
+
+		%else %if &outctype = cateofu %then %do;
+        /*  Categorical or ordinal outcomes modeled using nested logistic regression models *** EM edited *** */
+        
 
 		 data param2 ;
-    set param ;
-    by newid ;   
-    if &time = &timepoints -1 ;  
-    run;
+            set param ;
+            by newid ;   
+            if &time = &timepoints -1 ;  
+         run;
+
 			%do lev = 1 %to %eval(&outclev-1);
                 proc logistic descending data=param2(keep =  _weight_   &compevent   &time   &outcpred
                     outc_&lev 
@@ -4027,7 +4043,7 @@ intusermacro7=,
 		%if &outctype = conteofu4 %then %do ; 			                 
              array abzoutc boutcz_00-boutcz_&dimoutc;                 
         %end;
-		%else %if &outctype = binomeofu %then %do;
+		%else %if &outctype = cateofu %then %do;
 		     %do lev = 1 %to %eval(&outclev - 1);
                     array about_&lev about_&lev._00-about_&lev._&dimoutc;
              %end;
@@ -4491,7 +4507,7 @@ intusermacro7=,
 
                             s&outc [ &time] = &outc ;
                         %end;
-						%else %if &outctype = binomeofu %then %do;
+						%else %if &outctype = cateofu %then %do;
  
                             &outc = . ;
                             %do lev = 1 %to %eval(&outclev - 1);
@@ -5021,10 +5037,10 @@ intusermacro7=,
 
      %*Printing results;
 
-     %if &outctype=binsurv or &outctype=bineofu %then %do;    
+     %if &outctype=binsurv or &outctype=bineofu or &outctype = cateofu %then %do;    /*** EM edited ***/
           title4 'PREDICTED PROPORTION UNDER SEVERAL INTERVENTIONS';
      %end;
-     %else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 or &outctype = binomeofu %then %do;
+     %else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4  %then %do;
           title4 "PREDICTED MEAN &outc UNDER SEVERAL INTERVENTIONS";
      %end;
      proc print data=finfin noobs label double;
@@ -5046,7 +5062,7 @@ intusermacro7=,
              title6 "Observed risk= %sysevalf(&obspm) % &additional_text ";
 		 %end;
      %end;    
-	%else %if  &outctype=bineofu %then %do;
+	%else %if  &outctype=bineofu or &outctype = cateofu  %then %do; /*** EM edited ***/
 	     %if %bquote(&censor) ^= %then %do ;
 		     title6 "IP-weighted natural course proportion= %sysevalf(&obspm) % &additional_text "; 	
 		 %end;
@@ -5054,7 +5070,7 @@ intusermacro7=,
              title6 "Observed proportion= %sysevalf(&obspm) % &additional_text ";
 		 %end;
      %end;     
-     %else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 or &outctype = binomeofu %then %do;
+     %else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 %then %do;
           title6 "Observed mean= %sysevalf(&obspm) ";
      %end;
      title7 "Data= &data, Sample size= &ssize, Monte Carlo sample size= &nsimul";
@@ -5069,7 +5085,7 @@ intusermacro7=,
      %if &outctype=binsurv or &outctype=bineofu %then %do;
           var int &pd &pd._llim95 &pd._ulim95 rd rd_llim95 rd_ulim95 nnt nnt_llim95 nnt_ulim95;
      %end;
-     %else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 or &outctype = binomeofu %then %do;
+     %else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 or &outctype = cateofu %then %do;
           var int s&outc s&outc._llim95 s&outc._ulim95 rd rd_llim95 rd_ulim95 ;    
      %end;
      run;
@@ -8321,7 +8337,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
    
    
 %end;
-%else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 or &outctype = binomeofu %then %do;
+%else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 or &outctype = cateofu %then %do;
    
    obsp= round(&obsp*100)/100;
    call symput('obspm',obsp);
