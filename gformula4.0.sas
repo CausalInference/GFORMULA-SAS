@@ -2,7 +2,7 @@
   
 GFORMULA SAS MACRO
 
-Authors: Roger W. Logan, Jessica  G. Young, Sarah L. Taubman, Yu-Han Chiu, Sally Picciotto, Goodarz Danaei, Miguel A. Hernán
+Authors: Roger W. Logan, Jessica  G. Young, Sarah L. Taubman, Yu-Han Chiu,  Emma McGee , Sally Picciotto, Goodarz Danaei, Miguel A. Hernán
 
 *** EM edited ***
 Version June 2024. This version includes additions and fixes for (i) the parametric outcome models available for end of follow-up 
@@ -307,8 +307,7 @@ options mautosource minoperator ;
     tsize = 1,
     runnc = 1,
     weight =,
-    printlogstats = 1,
-    usespline = 1,
+    printlogstats = 1,   
     checkaddvars = 1,
     minimalistic = no, /* only keep results for outcome variables */
     testing = no       /* keep each simulated data set for each intervention. will be named savelib.simulated&intno */
@@ -378,14 +377,39 @@ options mautosource minoperator ;
     %createcov0vars ;   
    
     %do i=0 %to %eval(&ncov);
-       %local  cov&i.simstart cov&i.else cov&i.infixed cov&i.fixedcov cov&i.visitpelse cov&i.findknots ;          
+       %local  cov&i.simstart cov&i.else cov&i.infixed cov&i.fixedcov cov&i.visitpelse cov&i.findknots cov&i.findeknots ;          
        
        %let cov&i.ptype = %sysfunc(left(&&cov&i.ptype)) ;
-
+       %let cov&i.ptype = %lowcase(&&cov&i.ptype ) ;  
+	   %let cov&i.etype = %lowcase(&&cov&i.etype) ;	  
+       
        %let cov&i.simstart = 1 ;        
        %let tmp = &&cov&i ;        
        %let cov&i.else =  &tmp._b;  
        %let cov&i.infixed = 0 ;
+
+ 		/* create indicator of if the knots need to be found for the ptypes that are splines. Indicator variable is covXfindknots.
+	      The knots will be found in the dataprep macro. For any categorical variables we will require the user to supply the knots. */
+	   %let cov&i.findknots = 0 ;
+	   %let cov&i.findeknots = 0 ;
+	   %if ( %index(%upcase(&&cov&i.ptype),SPL) > 0 OR &&cov&i.ptype = tsswitch1  )  %then %do;
+	   		%if %quote(%upcase(&&cov&i.knots)) = NONE  or  %numargs(&&cov&i.knots)   =  0  %then %let cov&i.knots = 0 ;
+
+			
+			%if %numargs(&&cov&i.knots) = 1 %then %do;
+				%if &&cov&i.knots = 1 %then %let cov&i.knots = 3 ;
+				%else %if &&cov&i.knots = 2 %then %let cov&i.knots = 4 ;
+				%if &&cov&i.knots in (3 4 5) %then %let cov&i.findknots = 1 ; 
+			%end;
+	   %end;
+
+      %if  %index(%upcase(&&cov&i.ptype),CAT) > 0   %then %do;
+	   		%if %quote(%upcase(&&cov&i.knots)) = NONE  or %numargs(&&cov&i.knots)  = 0  %then %do  ;
+				%put ERROR: WHEN USING COVARIATES OF TYPE -CAT, USER MUST DEFINE COV&I.KNOTS TO BE NON-EMPTY ;
+				%GOTO exit;
+	        %end;	 
+	  %end;
+
 
        %if &&cov&i.otype=0 and &&cov&i.inc=  %then %do; 
            %put ERROR: Otype 0 increment must be specified;
@@ -404,18 +428,10 @@ options mautosource minoperator ;
 
        %if not(%upcase(&&cov&i.mtype)  in (  ALL , SOME , NOCHECK ) )   %then %let cov&i.mtype = all ; 
 
-       /* create indicator of if the knots need to be found for the ptypes that are splines or categorical. Indicator variable is covXfindknots.
-	      The knots will be found in the dataprep macro. */
-	   %let cov&i.findknots = 0 ;
-	   %if (( %index(%upcase(&&cov&i.ptype),SPL) > 0 OR  %index(%upcase(&&cov&i.ptype),CAT) > 0 ) AND (%numargs(&&cov&i.knots) = 1 )) OR 
-               (&usehistory_eof = 1 AND 
-                  ((%index(%upcase(&&cov&i.etype),SPL)> 0 OR %index(%upcase(&&cov&i.etype),CAT) > 0 ) AND %numargs(&&cov&i.eknots) = 1 )) %then
-                %let cov&i.findknots = 1 ; 
-
+      
 	   %if &usehistory_eof = 1 AND &i > 0 %then %do;
 			%local cov&i.etype_part1 cov&i.etype_part2 ;
-			%let cov&i.etype = %sysfunc(compbl(&&cov&i.etype));
-			%*put &&cov&i.etype ;
+			%let cov&i.etype = %sysfunc(compbl(&&cov&i.etype));		
 			%let cov&i.etype_part1 = %scan(&&cov&i.etype,1, %str(' '));
 			%let cov&i.etype_part2 = %scan(&&cov&i.etype,2,%str(' '));
 
@@ -426,31 +442,32 @@ options mautosource minoperator ;
 
 			%let cov&i.etype = &&cov&i.etype_part1 ;
 
-			%if &&cov&i.ptype = tsswitch1 AND (&&cov&i.etype in tsswitch1 cumsum cumsumnew ) %then %do;
+			%if &&cov&i.ptype = tsswitch1 AND (&&cov&i.etype in ( tsswitch1 cumsum cumsumnew )) %then %do;
 				%if &&cov&i.etype_part1 = tsswitch1 %then %do;
 				   %let cov&i.etype_part1 = cumsum ; 
                    %let cov&i.etype = cumsum ;
                    %put CHANGING cov&i.etype FROM TSSWITCH1 TO CUMSUM. ;
                 %end;
-				/***
-				   %IF &usespline = 1 AND %numargs(&&cov&i.knots) = 1 %then %do;
-				   	   %if &&cov&i.knots > 0  %then %let cov&i.knots = 4 ;
-					   %PUT CHANGING NUMBER OF KNOTS FOR &&cov&i etype &&cov&i.etype TO 4. ;
-				   %end;
-				****/
+			
 			%end;
 
-			%if %lowcase(&&cov&i.etype) in (cumsum cumsumnew cumavg cumavgnew ) and &usespline = 1 %then %do;
-				%if %bquote(&&cov&i.eknots) =  AND %bquote(&&cov&i.knots) ^= %then %let cov&i.eknots = &&cov&i.knots ;
-				%if %bquote(&&cov&i.eknots) = %then %do;
-					%put ERROR: WHEN USING AN ETYPE IN (CUMSUM CUMSUMNEW CUMAVG CUMAVGNEW ) REQUIRES THE SETTING OF COV&i.KNOTS OR COV&i.KNOTS) ;
-					%goto exit ;
-				%end;
-
+			%if %lowcase(&&cov&i.etype) in (cumsum cumsumnew cumavg cumavgnew ) /*and &usespline = 1 */ %then %do;
+			
+                %if (%quote(%upcase(&&cov&i.eknots)) = NONE ) OR ( %numargs(&&cov&i.eknots) = 0 )   %then %let cov&i.eknots = 0 ;			
+                %if %numargs(&&cov&i.eknots) = 1 %then %do;
+					%if &&cov&i.eknots = 1 %then %let cov&i.eknots = 3 ;
+			    	%else %if &&cov&i.eknots = 2 %then %let cov&i.eknots = 4 ;
+				    %if &&cov&i.eknots in (3 4 5) %then %let cov&i.findknots = 1 ; 
+			    %end;
 
 			%end;
                
-
+			%if %index(&&cov&i.ptype,cat ) > 0  %then %do;
+					%if %quote(%upcase(&&cov&i.knots)) = NONE  or %numargs(&&cov&i.knots) = 0 %then %do  ;
+						%put ERROR: WHEN USING COVARIATES OF ETYPE -CAT, USER MUST DEFINE COV&I.EKNOTS TO BE NON-EMPTY ;
+						%GOTO exit;
+	        		%end;
+			%end;
 
 			%if &&cov&i.etype_part2 = %then %let cov&i.etype_part2 = %eval(&timepoints) ;
             %if %upcase(&&cov&i.etype_part2) = ALL %then %let cov&i.etype_part2 = %eval(&timepoints) ;
@@ -460,7 +477,7 @@ options mautosource minoperator ;
 
        %if &usehistory_eof = 0 %then %do;
              %let cov&i.etype = ;
-			 %let cov&i.eknots= ;
+			 %let cov&i.eknots= 0;
 	  %end;
  
 
@@ -469,27 +486,47 @@ options mautosource minoperator ;
             %then %do;
                 %let anylagcumavg = 1;
                 %local cov&i._cumavg_l1_knots   ;
-                %if &usespline = 0 %then %let cov&i.knots = 0 ;
-               
+			
+				%if %quote(%upcase(&&cov&i.knots)) = NONE or %numargs(&&cov&i.knots) = 0 %then %let cov&i.knots = 0 ;
+				
+
+                %if %numargs(&&cov&i.knots) > 1  %then %do;
+					%let cov&i.lev=%numargs(&&cov&i.knots);
+					%let cov&i._cumavg_l1_knots  = &&cov&i.knots ;
+				%end;
+			    %else %do ;
+					%if &&cov&i.knots = 1 %then %let cov&i.knots = 3 ;
+					%else %if &&cov&i.knots = 2 %then %let cov&i.knots = 4 ;
+					%let cov&i.lev = &&cov&i.knots ;
+					%let anyfindpknots = 1 ;
+					%if &&cov&i.knots > 0 %then %let cov&i.findknots = 1 ;
+			   %end;
+			   %if &&cov&i.lev = 0 %then %let cov&i.lev = 2 ;
+               %if &printlogstats = 1 %then %put  Number of levels of &&cov&i : cov&i.lev=&&cov&i.lev;                     
        %end;
 
 	   %if &i > 0 AND &usehistory_eof = 1  %then %do;
 	   		%if (%upcase(&&cov&i.etype) in CUMSUM CUMSUMNEW CUMAVG CUMAVGNEW )  %then %do; 
-			    %if &usespline = 1 AND %numargs(&&cov&i.eknots) = 1 %then %let cov&i.findknots = 1 ;
+			    %if  %numargs(&&cov&i.eknots) = 1 %then %do;
+                     %if &&cov&i.eknots > 0 %then %let cov&i.findknots = 1 ;
+			    %end ;
 	   			%let anyecumavg = 1 ;
-				%if &usespline = 0 %then %let covk&i.knots = 0 ;
+			/*	%if &usespline = 0 %then %let covk&i.knots = 0 ; */
 			%end;
-			%if (%upcase(&&cov&i.etype) in CUMSUMCAT CUMSUMCATNEW CUMAVGCAT CUMAVGCATNEW )  %then %do; 
+			%if (%upcase(&&cov&i.etype) in ( CUMSUMCAT CUMSUMCATNEW CUMAVGCAT CUMAVGCATNEW ) )  %then %do; 
+			    %if %quote(%upcase(&&cov&i.eknots)) = NONE or %numargs(&&cov&i.eknots)  = 0  %then %do;
+					%put ERROR: WHEN USING AN ETYPE IN (CUMSUMCAT CUMSUMCATNEW CUMAVGCAT CUMAVGCATNEW ) REQUIRES THE SETTING OF COV&i.EKNOTS ) ;
+					%goto exit ;
+				%end;
 	   			%let anyecumcat = 1 ;
 				
 			%end;
 	   %end;
 
 
-	%put &&cov&i : &&cov&i.ptype , &&cov&i.knots , &&cov&i.etype , &&cov&i.eknots , &&cov&i.findknots ;
+	/* %put &&cov&i : &&cov&i.ptype , &&cov&i.knots , &&cov&i.etype , &&cov&i.eknots , &&cov&i.findknots ; */
     %end;      
   
-
     %createfixedcov ;
     
     %if &printlogstats = 1 %then %put ;
@@ -650,19 +687,15 @@ options mautosource minoperator ;
     %do i = 0 %to  %eval(&ncov) ;     
        %local dimpred&i dimvar&i dimvar&i.z cov&i.lev cov&i.elev cov&i.min cov&i.max cov&i.array cov&i.zarray 
         cov&i.ninterx dimvar&i.class  ;
-       %let cov&i.ptype = %lowcase(&&cov&i.ptype) ;
-	   %let cov&i.etype = %lowcase(&&cov&i.etype) ;
-
-     
-
-       
+      
 
        %do j = 1 %to %eval(%numargs(&&cov&i.interact)) ;
            %let uselabelc = 1 ;
            %local cov&i._I&j ;
        %end;
 
-	   %put i = &i , &&cov&i ,&&cov&i.ptype, &&cov&i.knots , &&cov&i.etype , &&cov&i.eknots ;
+	 /*  %put i = &i ,var =  &&cov&i , pytpe= &&cov&i.ptype , knots =  &&cov&i.knots , etype = &&cov&i.etype , eknots =  &&cov&i.eknots ;
+       %put &&cov&i -- &&cov&i.etype -- %numargs(&&cov&i.eknots ) ;  */
 
        /* create cov&i.lev = number of levels (or knots) for ptype -cat  variables.*/
 	   
@@ -684,43 +717,51 @@ options mautosource minoperator ;
                     %let cov&i.knots = %scan(&&cov&i.knots,1,%str(:));
                 %end;
                 %put (knots, lev) for &&cov&i.ptype  &&cov&i : ( &&cov&i.knots , %eval(%numargs(&&cov&i.knots) + 1) )  _cumavg   (&&cov&i._cumavg_l1_knots , &&cov&i._cumavg_l1_lev );
-            %end;						        
-
+            %end;	
+ 
 			%if %index(&&cov&i.ptype, cat) > 0 %then %do;
-             	%if %numargs(&&cov&i.knots) > 1 %then %let cov&i.lev=%eval(%numargs(&&cov&i.knots)+1); /* in this case covXknots is a true list of knots */
-             	%else %do;
-					%let cov&i.lev = %eval(&&cov&i.knots + 1 ); 
-					%let anyfindpknots = 1 ;
-				%end;
+                %let cov&i.lev=%eval(%numargs(&&cov&i.knots)+1); /* in this case covXknots is a true list of knots */             	
             %end;
-			/***
+			/* User must supply knots for categorical etype variables. */
 			%if %index(&&cov&i.etype, cat) > 0 %then %do;
-             	%if %numargs(&&cov&i.eknots) > 1 %then %let cov&i.elev=%eval(%numargs(&&cov&i.eknots)+1); 
-             	%else  %let cov&i.elev = %eval(&&cov&i.eknots + 1 ); 
-            %end;
-			***/
+                %let cov&i.elev=%eval(%numargs(&&cov&i.eknots)+1);              	 
+            %end;		
              
              %if &printlogstats = 1 AND %index(&&cov&i.ptype, cat) > 0  %then %put  Number of categories of &&cov&i : cov&i.lev=&&cov&i.lev ;
-			 %if &usehistory_eof = 1 AND &i > 0  %then %do;
-			 	%if %numargs(&&cov&i.eknots) > 1 %then %let       cov&i.elev = %eval(%numargs(&&cov&i.eknots)+1);
-				%else %if %numargs(&&cov&i.eknots) = 1 %then %do;
-					%let cov&i.elev = %eval(&&cov&i.eknots + 1) ;
-					%let anyfindeknots = 1 ;
-				%end;
-			 	%if &printlogstats = 1  %then %put  Number of (e)levels of &&cov&i , &&cov&i.etype : cov&i.elev=&&cov&i.elev ;
+			 %if &usehistory_eof = 1 AND &i > 0   %then %do;
+			    %if ( %index(&&cov&i.etype, spl) > 0 or ( &&cov&i.etype in (cumsum cumsumnew cumavg cumavgnew )) ) %then %do;
+				 	%if %numargs(&&cov&i.eknots) > 1 %then %let cov&i.elev = %eval(%numargs(&&cov&i.eknots)+1);
+					%else %if %numargs(&&cov&i.eknots) = 1 and &&cov&i.eknots > 0 %then %do;
+						%let cov&i.elev = %eval(&&cov&i.eknots + 1) ;
+						%let anyfindeknots = 1 ;
+						%let cov&i.findeknots = 1 ;
+					%end;
+				 	%if &printlogstats = 1  %then %put  Number of (e)levels of &&cov&i , &&cov&i.etype : cov&i.elev=&&cov&i.elev ;
+				 %end ;
 			 %end;
         %end;
-	   %if &&cov&i.ptype = tsswitch1 AND &usespline = 1 %then %do;
-			%let anyfindpknots = 1 ;
-			%if &&cov&i.knots = %then %let cov&i.knots = 4 ;
-	        %let cov&i.lev = %eval(&&cov&i.knots + 1);
-			%put  Number of categories of &&cov&i(tsswitch1) : cov&i.lev=&&cov&i.lev ;
+	   %if &&cov&i.ptype = tsswitch1  /* AND &usespline = 1 */ /* AND &&cov&i.knots ne 0 */  %then %do;
+			 /*%if %numargs(&&cov&i.knots) = 1 %then %let anyfindpknots = 1 ; &/
+			/* %if &&cov&i.knots = %then %let cov&i.knots = 4 ; */
+	        %if %numargs(&&cov&i.knots) > 1 %then %let cov&i.lev = %eval(%numargs(&&cov&i.knots));
+			%else %do;
+			    %if &&cov&i.knots = 0 %then %do;
+					%let cov&i.lev = 1; /* for splines the loop is over 1 to lev - 2, and default is to incriment by +1 */
+				%end;
+				%else %do ;
+  					%let cov&i.lev = &&cov&i.knots ;
+					%let anyfindpknots = 1 ;
+					%let cov&i.findknots = 1 ;
+				%end;
+			%end;
+			%if &printlogstats = 1 %then %put  Number of categories of &&cov&i(tsswitch1) : cov&i.lev=&&cov&i.lev ;
 	   %end;
        %if %index(&&cov&i.ptype, spl) > 0   %then %do;
               %if %numargs(&&cov&i.knots) > 1  %then %let cov&i.lev=%numargs(&&cov&i.knots);
 			  %else %do ;
 					%let cov&i.lev = &&cov&i.knots ;
 					%let anyfindpknots = 1 ;
+					%let cov&i.findknots = 1 ;
 			  %end;
               %if &printlogstats = 1 %then %put  Number of levels of &&cov&i : cov&i.lev=&&cov&i.lev;         
        %end;
@@ -729,16 +770,17 @@ options mautosource minoperator ;
 			  %else %do;
 				%let cov&i.elev = &&cov&i.eknots ;
 				%let anyfindeknots = 1 ;
+				%let cov&i.findeknots = 1 ;
               %end;
               %if &printlogstats = 1 %then %put  Number of (e)level for &&cov&i using &&cov&i.etype : cov&i.elev=&&cov&i.elev;         
-       %end;
-       %if (&&cov&i.ptype = lag1cumavg or &&cov&i.ptype = lag2cumavg ) and %bquote(&&cov&i.knots) ne %then %let cov&i.lev = &&cov&i.knots ;
+       %end;       
 	   %if &i > 0  AND &usehistory_eof = 1 %then %do;
 	   		%if (%upcase(&&cov&i.etype) in CUMSUM CUMSUMNEW CUMAVG CUMAVGNEW )  %then %do; 
 			  	%if %numargs(&&cov&i.eknots) > 1 %then %let cov&i.elev=%numargs(&&cov&i.eknots);
 			  	%else %do;
 					%let cov&i.elev = &&cov&i.eknots ;
 					%let anyfindeknots = 1 ;
+					%let cov&i.findeknots = 1 ;
 				%end;
               	%if &printlogstats = 1 %then %put  Number of (e)level for &&cov&i using &&cov&i.etype : cov&i.elev=&&cov&i.elev; 
 			%end;
@@ -747,6 +789,7 @@ options mautosource minoperator ;
 				%else %if %numargs(&&cov&i.eknots) = 1 %then %do;
 					%let cov&i.elev = %eval(&&cov&i.eknots + 1) ;
 					%let anyfindeknots = 1 ;
+					%let cov&i.findeknots = 1 ;
 				%end;
 			 	%if &printlogstats = 1  %then %put  Number of (e)levels of &&cov&i , &&cov&i.etype : cov&i.elev=&&cov&i.elev ;
 				
@@ -768,7 +811,7 @@ options mautosource minoperator ;
                              %let cov&i.etype = cat ;
 				   		     %let cov&i.elev = %eval(%numargs(&&cov&i.eknots) + 1) ;
 
-				   			%put SETTING &&cov&i otype 5 to have etype = cat and eknots = &&cov&i.eknots  and elev = &&cov&i.elev ;
+				   		%if &printlogstats = 1 %then %put SETTING &&cov&i otype 5 to have etype = cat and eknots = &&cov&i.eknots  and elev = &&cov&i.elev ;
 				   %end ;
 
 			%end;
@@ -780,7 +823,8 @@ options mautosource minoperator ;
    
     %*Preparing data;    
     %dataprep;
-     
+ 
+ 
    %*return ;
 
     %if %bquote(&nparam)= %then %let nparam=&ssize;
@@ -1612,19 +1656,29 @@ options mautosource minoperator ;
    %end;
 
     run;
-
+/***
 %put ANYFINDPKNOTS = &anyfindpknots ;
+%put ANYFINDEKNOTS = &anyfindeknots ;
+****/
 
- %if ((&anytsswitch1 = 1 OR &anylagcumavg = 1  ) & &usespline = 1 ) OR &anyfindpknots = 1  %then %do;
+/* anyfindpknots is an indicator if we need to find the knots based on the percentiles of at least one variable. In this case, it should be that 
+   covXpknots is in {3,4,5} for the number of percentiles to use.
+
+   In the loop below, numberofknots is the number of knots being generated. Will need this for the case where anyfindpknots = 0 so that all knots are being
+   specified in the covXknots variable.
+     
+*/
+
+ %if ((&anytsswitch1 = 1 OR &anylagcumavg = 1  )/* & &usespline = 1 */ ) OR &anyfindpknots = 1  %then %do;
 
       %do i = 1 %to &ncov ;
            %local numberofknots&i ;
            %let numberofknots&i = 0 ; 
-
-           %if %upcase(&&cov&i.ptype) = TSSWITCH1 AND &usespline = 1   %then %do;
+/* %put &&cov&i , &&cov&i.ptype , &&cov&i.knots , &&cov&i.findknots  ; */
+           %if %upcase(&&cov&i.ptype) = TSSWITCH1 AND /* &usespline = 1 */  &&cov&i.findknots = 1 /*%quote(&&cov&i.knots) ^= 0 */  %then %do;
 
 		            %let numberofknots&i = &&cov&i.knots ;
-					%let numberofknots&i = 4 ; /* temporarily hard code to use 4 percentiles as originally coded */
+				/*	%let numberofknots&i = 4 ; */ /* temporarily hard code to use 4 percentiles as originally coded */
                     proc univariate data = _inputd_ (where = (&&cov&i = 1))  noprint  ;
                     var ts&&cov&i.._inter ;
                     output out = tsscov_pct   
@@ -1646,7 +1700,7 @@ options mautosource minoperator ;
                     proc sql  noprint ;
                     select col1 into : cov&i.knots separated by ' ' from ttsscov_pct ;
                     quit ;
-                    %put knots for &&cov&i.._inter  = &&cov&i.knots ;
+                    %if &printlogstats = 1 %then %put knots for &&cov&i.._inter  = &&cov&i.knots ;
                     proc datasets library = work nolist ;
                     delete tsscov_pct ttsscov_pct ;
                     quit;
@@ -1654,7 +1708,7 @@ options mautosource minoperator ;
             %end;
 
 
-            %if ( %upcase(&&cov&i.ptype) in  CUMAVG LAG1CUMAVG LAG2CUMAVG ) and &usespline = 1 %then %do;
+            %if ( %upcase(&&cov&i.ptype) in  CUMAVG LAG1CUMAVG LAG2CUMAVG ) and /*&usespline*/ &&cov&i.findknots = 1 %then %do;
                       %local cumavgwhere cumavgvar numberofknots ;
                       %let numberofknots = &&cov&i.knots ;
                       %let cumavgwhere = ;
@@ -1689,7 +1743,7 @@ options mautosource minoperator ;
                      proc sql noprint  ;
                      select col1 into : cov&i.knots separated by ' ' from &&cov&i.._pct ;
                      quit ;
-                    %put knots for &&cov&i  = &&cov&i.knots ;
+                    %if &printlogstats = 1 %then %put knots for &&cov&i  = &&cov&i.knots ;
    
                     %if %upcase(&&cov&i.ptype) ne CUMAVG  %then %do;
                         proc univariate data = _inputd_  &cumavgwhere   noprint  ;
@@ -1717,7 +1771,7 @@ options mautosource minoperator ;
                         select col1 into : cov&i._cumavg_l1_knots separated by ' ' from cumavg_l1_pct ;
                         quit ;
 
-                        %put knots for &cumavgvar  = &&cov&i._cumavg_l1_knots ;
+                        %if &printlogstats = 1 %then %put knots for &cumavgvar  = &&cov&i._cumavg_l1_knots ;
                     %end ;
                     proc datasets library = work nolist ;
                     delete &&cov&i.._pct  %if %upcase(&&cov&i.ptype) ne CUMAVG %then cumavg_l1_pct ; ;
@@ -1725,6 +1779,7 @@ options mautosource minoperator ;
                 %end;
             %end;
 
+			/******** require user to supply the knots for -cat type variables 
 			%if ( &&cov&i.ptype in lag1cat lag2cat lag3cat lag1spl lag2spl lag3spl skpcat skpspl ) AND %numargs(&&cov&i.knots) = 1 %then %do;
 
  				  
@@ -1756,7 +1811,7 @@ options mautosource minoperator ;
                      proc sql noprint  ;
                      select col1 into : cov&i.knots separated by ' ' from &&cov&i.._pct ;
                      quit ;
-                    %put knots for &&cov&i  = &&cov&i.knots ;
+                    %if &printlogstats = 1 %then %put knots for &&cov&i  = &&cov&i.knots ;
    
                     
                     proc datasets library = work nolist ;
@@ -1765,18 +1820,19 @@ options mautosource minoperator ;
                 
 
 			%end;
+			********/
        %end;
 
      %end;
 
-	 %if  ((( &anyecumavg = 1  AND &usespline = 1 ) OR &anyecumcat = 1 ) AND &usehistory_eof = 1) OR &anyfindeknots = 1 %then %do;
+	 %if  ((( &anyecumavg = 1 /* AND &usespline = 1 */) OR &anyecumcat = 1 ) AND &usehistory_eof = 1) OR &anyfindeknots = 1 %then %do;
 
 
 
       %do i = 1 %to &ncov ; /* etype is only for non-time variables */
         
 
-		 %if &&cov&i.etype in cumavg cumavgcat cumsum cumsumcat  %then %do;
+		 %if &&cov&i.etype in cumavg /* cumavgcat */ cumsum /* cumsumcat */  %then %do;
 			     %if &&cov&i.etype_part2 = &timepoints %then %do;
 					%let timeindex = 0;		            
 				 %end;
@@ -1799,8 +1855,8 @@ options mautosource minoperator ;
            
 
 
-            %if ( &&cov&i.etype in  cumsum cumsumnew cumsumcat cumsumcatnew cumavg cumavgnew cumavgcat cumavgcatnew   )  %then %do;
-			   %if %numargs(&&cov&i.eknots ) = 1 %then %do ;
+            %if ( &&cov&i.etype in  cumsum cumsumnew  /* cumsumcat cumsumcatnew */ cumavg cumavgnew /* cumavgcat cumavgcatnew */   )  %then %do;
+			   %if /*%numargs(&&cov&i.eknots ) = 1  */  &&cov&i.findeknots = 1 %then %do ;
                       
                       %let numberofeknots&i = &&cov&i.eknots ;   
  
@@ -1829,7 +1885,7 @@ options mautosource minoperator ;
 	                     select col1 into : cov&i.eknots separated by ' ' from &&cov&i.._pct ;
 	                     quit ;
 
-	                    %put eknots for &&cov&i , &&cov&i.etype  : &&cov&i.eknots ;
+	                    %if &printlogstats = 1 %then  %put eknots for &&cov&i , &&cov&i.etype  : &&cov&i.eknots ;
 	   
 	                    
 
@@ -1841,7 +1897,8 @@ options mautosource minoperator ;
             %end; /* etype is one of the cumsum type variables */
 
 
-			%if ( &&cov&i.etype in cat spl skpcat skpspl ) AND %numargs(&&cov&i.eknots) = 1 %then %do;
+			/* require user to supply knots in -cat type variables 
+			%if ( &&cov&i.etype in cat spl skpcat skpspl ) AND   &&cov&i.findeknots = 1 %then %do;
 
  				  
                       %let numberofeknots&i = &&cov&i.eknots ;
@@ -1870,7 +1927,7 @@ options mautosource minoperator ;
                      proc sql noprint  ;
                      select col1 into : cov&i.eknots separated by ' ' from &&cov&i.._pct ;
                      quit ;
-                    %put eknots for &&cov&i  = &&cov&i.eknots ;
+                    %if &printlogstats = 1 %then %put eknots for &&cov&i  = &&cov&i.eknots ;
    
                     
                     proc datasets library = work nolist ;
@@ -1879,7 +1936,7 @@ options mautosource minoperator ;
                 
 
 			%end;
-
+            *****/
 
        %end; /* end of loop over i */
 
@@ -1888,16 +1945,24 @@ options mautosource minoperator ;
 
 	%if &usehistory_eof = 0 %then %do;
 	   %do i = 1 %to &ncov ;
-           %local numberofeknots&i ;
+           %local numberofeknots&i numberofknots&i   ;
+		   %let numberofknots&i = %numargs(&&cov&i.knots) ;
 		   %let numberofeknots&i = 0 ;
 	   %end;
 	%end;
-
+	%else %if &usehistory_eof = 1  /*AND &anyfindpknots = 0 */  %then %do;
+		%do i = 1 %to &ncov ;
+			%local numberofknots&i numberofeknots&i ;		
+			%let numberofknots&i = %numargs(&&cov&i.knots) ;
+			%let numberofeknots&i = %numargs(&&cov&i.eknots );		
+		%end;
+	%end;
+  
 
        data _inputd_;
        set _inputd_;
        %do i = 1 %to &ncov ;
-         %if (%upcase(&&cov&i.ptype) = TSSWITCH1  ) AND &usespline = 1 %then %do;
+         %if (%upcase(&&cov&i.ptype) = TSSWITCH1  ) AND  &&numberofknots&i >= 3 %then %do;
               %rcspline(ts&&cov&i.._inter ,&&cov&i.knots);
               %rcspline(ts&&cov&i.._l1_inter ,&&cov&i.knots);
          %end;
@@ -1939,8 +2004,8 @@ options mautosource minoperator ;
          %if %upcase(&&cov&i.ptype) = CUMAVG or %upcase(&&cov&i.ptype) = LAG1CUMAVG or %upcase(&&cov&i.ptype) = LAG2CUMAVG  
                        %then %do;
                 %let cumavgvar = &&cov&i.._cumavg_l1 ;
-                %if %bquote(&&cov&i.cumint)^= %then %let cumavgvar = &&cov&i.._avg_l1 ;
-                     
+                %if %bquote(&&cov&i.cumint)^= %then %let cumavgvar = &&cov&i.._avg_l1 ;                
+
               %if %numargs(&&cov&i.knots) > 2 %then %do;
                 %if %upcase(&&cov&i.ptype) ne CUMAVG %then %do;
                     %rcspline(&&cov&i ,&&cov&i.knots);
@@ -1983,7 +2048,7 @@ options mautosource minoperator ;
        %end;
 
 
-        %if &usehistory_eof = 1 AND &&numberofeknots&i > 0  %then %do;
+        %if &usehistory_eof = 1 AND &&numberofeknots&i > 0  %then %do; /* at this point covXeknots should be 0 or a list of 3 or more knots */
 
                  
 			%if &&cov&i.etype in cumavg cumavgcat cumsum cumsumcat %then %do;
@@ -2003,16 +2068,13 @@ options mautosource minoperator ;
 		 		%end;
 			%end;	
 
- 
-
-
-		  %if (&&cov&i.etype in cumavg cumavgnew ) AND &usespline = 1   %then %do;
+		  %if (&&cov&i.etype in cumavg cumavgnew ) AND  &&numberofeknots&i >= 3   %then %do;
 	            %rcspline(&&cov&i.._cumavg_&timeindex._eof , &&cov&i.eknots );	                   
 	      %end;		  
 		  %else %if &&cov&i.etype in cumavgcat cumavgcatnew %then %do;
 		  		%makecat(&&cov&i.._cumavg_&timeindex._eof , &&cov&i.eknots , &&cov&i.elev );
 		  %end;
-		  %else %if (&&cov&i.etype in cumsum cumsumnew ) AND &usespline = 1   %then %do;
+		  %else %if (&&cov&i.etype in cumsum cumsumnew ) /*AND &usespline = 1 */   %then %do;
 	             %rcspline(&&cov&i.._cumsum_&timeindex._eof , &&cov&i.eknots);	                   
 	      %end;
 		  %else %if &&cov&i.etype = cumsumcat or &&cov&i.etype = cumsumcatnew %then %do;
@@ -3967,7 +4029,7 @@ intusermacro7=,
 		%do covind = 1 %to &ncov ;
 			%if &&intvar&i = &&cov&covind %then %let intcovmap&i = &covind ;
 		%end ;
-		%put FOR INTVAR &i : &&intvar&i intcovmap&i  = &&intcovmap&i ;  
+		/* %put FOR INTVAR &i : &&intvar&i intcovmap&i  = &&intcovmap&i ; */ 
 		%if &&intcovmap&i = -1 %then %put ERROR WITH MAPPING INTVAR TO COV NUMBER ;
    %end;
  
@@ -5597,14 +5659,27 @@ intusermacro7=,
                  %if &&cov&index.ptype = tsswitch1 %then %do;
 
                      %if &switchind = %then %do; 
-                          &pre.&&cov&index..&t2 &pre.ts&&cov&index..&t2._inter  %if &usespline = 1 %then &pre.ts&&cov&index..&t2._inter_spl1   &pre.ts&&cov&index..&t2._inter_spl2  ;
+                          &pre.&&cov&index..&t2 &pre.ts&&cov&index..&t2._inter   
+					          %do knot = 1 %to %eval(&&cov&index.lev - 2);
+                                &pre.ts&&cov&index..&t2._inter_spl&knot    
+							   %end;
+																				  
+
                      %end;
                      %else %do;
                           %if %eval(&index)>%eval(&switchind) %then %do;
-                                  &pre.&&cov&index..&t2 &pre.ts&&cov&index..&t2._inter  %if &usespline = 1 %then  &pre.ts&&cov&index..&t2._inter_spl1 &pre.ts&&cov&index..&t2._inter_spl2;
+                                  &pre.&&cov&index..&t2 &pre.ts&&cov&index..&t2._inter  
+									%do knot = 1 %to %eval(&&cov&index.lev - 2); 
+										&pre.ts&&cov&index..&t2._inter_spl&knot 
+									%end; 
+																					     
                           %end;
                           %else %if %eval(&index)<%eval(&switchind) %then %do;
-                                  &pre.&&cov&index..&t3 &pre.ts&&cov&index..&t3._inter %if &usespline = 1 %then  &pre.ts&&cov&index..&t3._inter_spl1 &pre.ts&&cov&index..&t3._inter_spl2 ;
+                                  &pre.&&cov&index..&t3 &pre.ts&&cov&index..&t3._inter  
+									%do knot = 1 %to %eval(&&cov&index.lev - 2); 
+										&pre.ts&&cov&index..&t3._inter_spl&knot
+									%end;
+																						 
                           %end;
                      %end;
 
@@ -5624,7 +5699,8 @@ intusermacro7=,
 
 				   /* when listpred is called to create initial model lists cov&index.knots is either 0 or 3,4,5. and the first part of the code is run. After the 
 				      various knots have been determined cov&index.knots is a list of at least 3 knots and the second part of the code is run */
-  
+
+/* for new version, allow for setting of the acutal knots to use. Here covX.knots is a list with at least 3 values */ 
                                                                   
 						%if &prep = 0 %then   %do;
 							%if &index ge &switchind %then %do;							   
@@ -5640,9 +5716,9 @@ intusermacro7=,
 											&pre.&&cov&index.._cumavg&t2  &pre.&&cov&index.._cumavg&t2._spl1 &pre.&&cov&index.._cumavg&t2._spl2 &pre.&&cov&index.._cumavg&t2._spl3;
 									%end;                                
 									%else %do;
-										&pre.&&cov&index.._cumavg&t1
+										&pre.&&cov&index.._cumavg&t2
 										%do knotcount = 1 %to %eval(%numargs(&&cov&index.knots ) - 2) ;
-											&pre.&&cov&index.._cumavg&t1._spl&knotcount  
+											&pre.&&cov&index.._cumavg&t2._spl&knotcount  
 										%end;
 									%end; 
 								%end;
@@ -5661,9 +5737,9 @@ intusermacro7=,
 									%end;                                
 									%else %do;
 
-										&pre.&&cov&index.._cumavg&t2 
+										&pre.&&cov&index.._cumavg&t3 
 										%do knotcount = 1 %to %eval(%numargs(&&cov&index.knots ) - 2) ;
-											&pre.&&cov&index.._cumavg&t2._spl&knotcount 
+											&pre.&&cov&index.._cumavg&t3._spl&knotcount 
 										%end;
 									%end; 
 								%end;
@@ -6134,26 +6210,9 @@ GENERAL FORM FOR SPLINE VARIABLES WHEN COV&I..KNOTS HAS ONE ENTRY OR THREE ENTRI
 
 ********/
 
-
-
-					%if &&cov&index.etype = tsswitch1 %then %do;
-
-						%if &switchind = %then %do; 
-                          &&cov&index.._&timeindex._eof /* ts&&cov&index.._&timeindex._eof._inter  %if &usespline = 1 %then ts&&cov&index.._&timeindex._eof._inter_spl1   ts&&cov&index.._&timeindex._eof._inter_spl2  ; */
-						%end;
-						%else %do;
-                          %if %eval(&index)>%eval(&switchind) %then %do;
-                                  &&cov&index.._&timeindex._eof ts&&cov&index.._&timeindex._eof._inter  %if &usespline = 1 %then  ts&&cov&index.._&timeindex._eof._inter_spl1 ts&&cov&index.._&timeindex._eof._inter_spl2;
-                          %end;
-                          %else %if %eval(&index)<%eval(&switchind) %then %do;
-                                  &&cov&index.._&timeindex._eof ts&&cov&index.._&timeindex._eof._inter %if &usespline = 1 %then  ts&&cov&index.._&timeindex._eof._inter_spl1 ts&&cov&index.._&timeindex._eof._inter_spl2 ;
-                          %end;
-						%end;
-					%end; /*end tsswitch1*/
                   
-					%if &&cov&index.etype=cumsum  %then %do;                                                                               					 		   								
-						   %if %bquote(&&cov&index.eknots ) ^= AND &usespline = 1  %then %do; 								
-									%if %numargs(&&cov&index.eknots ) = 1 %then %do;
+					%if &&cov&index.etype=cumsum  %then %do; 						   								
+									%if %numargs(&&cov&index.eknots ) = 1 %then %do; /* {0,3,4,5} */
 
 										%if &&cov&index.eknots = 0 %then  &&cov&index.._cumsum_&timeindex._eof   ;
 										%if &&cov&index.eknots = 3 %then  
@@ -6163,38 +6222,16 @@ GENERAL FORM FOR SPLINE VARIABLES WHEN COV&I..KNOTS HAS ONE ENTRY OR THREE ENTRI
 										%if &&cov&index.eknots = 5 %then                                                 
 											&&cov&index.._cumsum_&timeindex._eof  &&cov&index.._cumsum_&timeindex._eof_spl1 &&cov&index.._cumsum_&timeindex._eof_spl2 &&cov&index.._cumsum_&timeindex._eof_spl3;
 									%end;                                
-									%else %do;
+									%else %do; /* list of 3 or more knots */
 										 &&cov&index.._cumsum_&timeindex._eof
 										%do knotcount = 1 %to %eval(%numargs(&&cov&index.eknots ) - 2) ;
 											&&cov&index.._cumsum_&timeindex._eof_spl&knotcount  
 										%end;
-									%end; 
-
-                           %end;
-						    %else %do;
-								&&cov&index.._cumsum_&timeindex._eof 
-						   %end;						                           				
+									%end;                             						                           				
 					%end;
 					%if &&cov&index.etype=cumsumnew  %then %do;   
-/*********** 
-							%if %bquote(&&cov&index.knots ) ^= AND &usespline = 1 %then %do; 								
-								
-									&&cov&index.._cumsum_&timeindex._eof
-									%do knotcount = 1 %to %eval(%numargs(&&cov&index.knots ) - 2) ;
-										&&cov&index.._cumsum_&timeindex._eof_spl&knotcount  
-									%end;
-									 %do iii = %eval(&timeindex + 1) %to %eval(&timepoints - 1) ;
-									   &&cov&index.._&iii._eof  
-									%end;
-						   %end; 						
-						   %else %do;
-								&&cov&index.._cumsum_&timeindex._eof 
-							    %do iii = %eval(&timeindex + 1) %to %eval(&timepoints - 1) ;
-								   &&cov&index.._&iii._eof  
-								%end;
-						 %end;
-******/
-							%if %bquote(&&cov&index.eknots ) ^= AND &usespline = 1  %then %do; 								
+
+						 								
 									%if %numargs(&&cov&index.eknots ) = 1 %then %do;
 
 										%if &&cov&index.eknots = 0 %then  &&cov&index.._cumsum_&timeindex._eof   ;
@@ -6204,6 +6241,7 @@ GENERAL FORM FOR SPLINE VARIABLES WHEN COV&I..KNOTS HAS ONE ENTRY OR THREE ENTRI
 											 &&cov&index.._cumsum_&timeindex._eof &&cov&index.._cumsum_&timeindex._eof_spl1 &&cov&index.._cumsum_&timeindex._eof_spl2;
 										%if &&cov&index.eknots = 5 %then                                                 
 											&&cov&index.._cumsum_&timeindex._eof  &&cov&index.._cumsum_&timeindex._eof_spl1 &&cov&index.._cumsum_&timeindex._eof_spl2 &&cov&index.._cumsum_&timeindex._eof_spl3;
+
                                         %do iii = %eval(&timeindex + 1) %to %eval(&timepoints - 1) ;
 									   		&&cov&index.._&iii._eof  
 										%end;
@@ -6216,16 +6254,7 @@ GENERAL FORM FOR SPLINE VARIABLES WHEN COV&I..KNOTS HAS ONE ENTRY OR THREE ENTRI
 									 	%do iii = %eval(&timeindex + 1) %to %eval(&timepoints - 1) ;
 									   		&&cov&index.._&iii._eof  
 										%end;
-									%end; 
-
-                            %end;
-						    %else %do;
-								&&cov&index.._cumsum_&timeindex._eof 
-							    %do iii = %eval(&timeindex + 1) %to %eval(&timepoints - 1) ;
-								   &&cov&index.._&iii._eof  
-								%end;
-						   %end;	
-	
+									%end;                            	
 					%end;
 
 					%if &&cov&index.etype=cumsumcat  %then %do;
@@ -6247,12 +6276,8 @@ GENERAL FORM FOR SPLINE VARIABLES WHEN COV&I..KNOTS HAS ONE ENTRY OR THREE ENTRI
 					 
 					%end;   
 
-					%if &&cov&index.etype=cumavg  %then %do;
-                     
-                                                      
-					 
-							%if %bquote(&&cov&index.eknots ) ^= AND &usespline = 1 %then %do; 								
-									%if %numargs(&&cov&index.knots ) = 1 %then %do;
+					%if &&cov&index.etype=cumavg  %then %do;  	
+									%if %numargs(&&cov&index.eknots ) = 1 %then %do;
 
 										%if &&cov&index.eknots = 0 %then  &&cov&index.._cumavg_&timeindex._eof   ;
 										%if &&cov&index.eknots = 3 %then  
@@ -6268,21 +6293,10 @@ GENERAL FORM FOR SPLINE VARIABLES WHEN COV&I..KNOTS HAS ONE ENTRY OR THREE ENTRI
 											&&cov&index.._cumavg_&timeindex._eof_spl&knotcount  
 										%end;
 									%end; 
-
-                           %end;
-						   %else %do;
-								&&cov&index.._cumavg_&timeindex._eof 
-						   %end;
-
-						 				   
-								
-						                           
-					
-
 					%end;
 					%if &&cov&index.etype=cumavgnew  %then %do;                                                                                       												   
-						%if %bquote(&&cov&index.eknots ) ^= AND &usespline = 1  %then %do; 								
-									%if %numargs(&&cov&index.knots ) = 1 %then %do;
+					 								
+									%if %numargs(&&cov&index.eknots ) = 1 %then %do;
 
 										%if &&cov&index.eknots = 0 %then  &&cov&index.._cumavg_&timeindex._eof   ;
 										%if &&cov&index.eknots = 3 %then  
@@ -6303,15 +6317,7 @@ GENERAL FORM FOR SPLINE VARIABLES WHEN COV&I..KNOTS HAS ONE ENTRY OR THREE ENTRI
 									 	%do iii = %eval(&timeindex + 1) %to %eval(&timepoints - 1) ;
 									   		&&cov&index.._&iii._eof  
 										%end;
-									%end; 
-
-                            %end;
-						    %else %do;
-								&&cov&index.._cumavg_&timeindex._eof 
-							    %do iii = %eval(&timeindex + 1) %to %eval(&timepoints - 1) ;
-								   &&cov&index.._&iii._eof  
-								%end;
-						   %end;																	                         				
+									%end;                             																                         				
 					%end;
 
                      
@@ -6684,19 +6690,20 @@ not the time-varying covariates, which are handled below in %interactionsb*/
 
 /* when usespline = 1, there can be additional spline variables for types 6,8 and 9.
    for type = 6 there is one spline for each term
+       type = 7 can have spline cov.lev - 2 spline variables
        type = 8, 9 there are cov.lev - 2 spline variables for each variable */
 
 
 %let nlevels1 = 1 ; /* default value for bin type and baseline variables */
 
-%if &type1 = 1 or &type1 = 2 %then %let nlevels1 = %eval(&&cov&first.lev-1); 
+%if &type1 = 1 or &type1 = 2 %then %let nlevels1 = %eval(&&cov&first.lev - 2 + 1); 
 %else %if &type1 = 3 %then %let nlevels1 = 2 ;
 %else %if &type1 = 4 %then %let nlevels1 = 3 ;
 %else %if &type1 = 5 %then %let nlevels1 = 3 ;
-%else %if &type1 = 6 %then %let nlevels1 = %eval(2 + &usespline * 2) ;
-%else %if &type1 = 7 %then %let nlevels1= 1 ;
-%else %if &type1 = 8 %then %let nlevels1 = %eval(2 + &usespline * 2* (&&cov&first.lev - 2)) ;
-%else %if &type1 = 9 %then %let nlevels1 = %eval(3 + &usespline * 3* (&&cov&first.lev - 2)) ;
+%else %if &type1 = 6 %then %let nlevels1 = %eval(2 +  2* (&&cov&first.lev - 2)) ;
+%else %if &type1 = 7 %then %let nlevels1=  %eval(1 +    (&&cov&first.lev - 2));
+%else %if &type1 = 8 %then %let nlevels1 = %eval(2 + 2* (&&cov&first.lev - 2)) ;
+%else %if &type1 = 9 %then %let nlevels1 = %eval(3 + 3* (&&cov&first.lev - 2)) ;
 %else %if &type1 = 10 %then %let nlevels1 = 1;
 
 
@@ -6706,10 +6713,10 @@ not the time-varying covariates, which are handled below in %interactionsb*/
 %else %if &type2 = 3 %then  %let nlevels2 = 2 ;
 %else %if &type2 = 4 %then  %let nlevels2 = 3 ;
 %else %if &type2 = 5 %then  %let nlevels2 = 3 ;
-%else %if &type2 = 6 %then  %let nlevels2 = 2 ;
-%else %if &type2 = 7 %then  %let nlevels2 = 1 ;
-%else %if &type2 = 8 %then  %let nlevels2 = %eval(2 + &usespline * 2* (&&cov&second.lev - 2)) ;
-%else %if &type2 = 9 %then  %let nlevels2 = %eval(3 + &usespline * 3* (&&cov&second.lev - 2)) ;
+%else %if &type2 = 6 %then  %let nlevels2 = %eval(2 +  2* (&&cov&first.lev - 2))  ;
+%else %if &type2 = 7 %then  %let nlevels2 = %eval(1 +     (&&cov&second.lev - 2)) ;
+%else %if &type2 = 8 %then  %let nlevels2 = %eval(2 +  2 *(&&cov&second.lev - 2)) ;
+%else %if &type2 = 9 %then  %let nlevels2 = %eval(3 +  3 *(&&cov&second.lev - 2)) ;
 %else %if &type2 = 10 %then %let nlevels2 = 1;
 
 %do level1=1 %to &nlevels1 ;
@@ -6732,16 +6739,17 @@ not the time-varying covariates, which are handled below in %interactionsb*/
    /* type is indicator of ptype 1 = cat, 2 = spl , 3 = qdc, 4 = cub  , 5 = zqdc
       nlevels changes depding of type, 1 and 2 have lev - 1 , 3 has 2, 4 has 3  , 5 has 3 */
 
-  %let nlevels1 = 1 ; /* for -bin, cumavg, rcumavg, and baseline variables, type1 = -1 (?? baseline conbin )  */
+  %let nlevels1 = 1 ; /* for -bin,  rcumavg, and baseline variables, type1 = -1 (?? baseline conbin )  */
 
 
   %if &type1 = 1 or &type1 = 2 %then %let nlevels1 = %eval(&&cov&first.lev-1); 
   %else %if &type1 = 3 %then %let nlevels1 = 2 ;
   %else %if &type1 = 4 %then %let nlevels1 = 3 ;
   %else %if &type1 = 5 %then %let nlevels1 = 3 ;
-  %else %if &type1 = 6 %then %let nlevels1 = %eval(2+ &usespline  * 2 ) ;
-  %else %if &type1 = 8 %then %let nlevels1 = %eval(2+ &usespline * 2 * %sysfunc(max(0,(&&cov&first.lev - 2 )))) ;
-  %else %if &type1 = 9 %then %let nlevels1 = %eval(3+ &usespline * 3 * %sysfunc(max(0,(&&cov&first.lev - 2 )))) ;
+  %else %if &type1 = 6 %then %let nlevels1 = %eval(2+  2 * %sysfunc(max(0,(&&cov&first.lev - 2 )))) ;
+  %else %if &type1 = 7 %then %let nlevels1 = %eval(1+  1 * %sysfunc(max(0,(&&cov&first.lev - 2 )))) ;
+  %else %if &type1 = 8 %then %let nlevels1 = %eval(2+  2 * %sysfunc(max(0,(&&cov&first.lev - 2 )))) ;
+  %else %if &type1 = 9 %then %let nlevels1 = %eval(3+  3 * %sysfunc(max(0,(&&cov&first.lev - 2 )))) ;
   
 
 
@@ -6751,9 +6759,10 @@ not the time-varying covariates, which are handled below in %interactionsb*/
   %else %if &type2 = 3 %then %let nlevels2 = 2 ;
   %else %if &type2 = 4 %then %let nlevels2 = 3 ;
   %else %if &type2 = 5 %then %let nlevels2 = 3 ;
-  %else %if &type2 = 6 %then %let nlevels2 = %eval(2+ &usespline  * 2   );
-  %else %if &type2 = 8 %then %let nlevels2 = %eval(2+ &usespline * 2 * %sysfunc(max (0,(&&cov&second.lev - 2)))) ;
-  %else %if &type2 = 9 %then %let nlevels2 = %eval(3+ &usespline * 3 * %sysfunc(max(0, (&&cov&second.lev - 2)))) ;
+  %else %if &type2 = 6 %then %let nlevels2 = %eval(2+  2 * %sysfunc(max (0,(&&cov&second.lev - 2)))) ;
+  %else %if &type1 = 7 %then %let nlevels1 = %eval(1+ %sysfunc(max(0,(&&cov&second.lev - 2 )))) ;
+  %else %if &type2 = 8 %then %let nlevels2 = %eval(2+  2 * %sysfunc(max (0,(&&cov&second.lev - 2)))) ;
+  %else %if &type2 = 9 %then %let nlevels2 = %eval(3+  3 * %sysfunc(max(0, (&&cov&second.lev - 2)))) ;
  
 
  %if &vartype = 1 %then %do ;
@@ -7205,7 +7214,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
                    end;
                %end;
                %if &current = 1 %then  ts&&cov&i.._inter = ts&&cov&i.._l1_inter + &&cov&i ;;                                        
-               %if &usespline = 1 %then %do;
+               %if /* &usespline = 1 */ %numargs(&&cov&i.knots) >=  3 %then %do;
                      %if &current = 1 %then  %rcspline(ts&&cov&i.._inter ,&&cov&i.knots);
                      %if &lagged  = 1 %then  %rcspline(ts&&cov&i.._l1_inter ,&&cov&i.knots);
                %end;         
@@ -7608,7 +7617,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
 
              
 
-				%if (&&cov&i.etype in cumavg cumavgnew )   AND  ( %numargs(&&cov&i.eknots) ge 3 ) AND &usespline=1  %then %do;
+				%if (&&cov&i.etype in cumavg cumavgnew )   AND  ( %numargs(&&cov&i.eknots) ge 3 ) /* AND &usespline=1 */  %then %do;
                     %rcspline(&&cov&i.._cumavg_&timeindex._eof , &&cov&i.eknots);
                    
                 %end;
@@ -7616,7 +7625,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
                      %makecat(&&cov&i.._cumavg_&timeindex._eof , &&cov&i.eknots, &&cov&i.elev);
                                                             
                  %end;
-				 %else %if (&&cov&i.etype in cumsum cumsumnew )   AND ( %numargs(&&cov&i.eknots) ge 3 ) AND &usespline=1  %then %do;
+				 %else %if (&&cov&i.etype in cumsum cumsumnew )   AND ( %numargs(&&cov&i.eknots) ge 3 ) /* AND &usespline=1 */  %then %do;
                     %rcspline(&&cov&i.._cumsum_&timeindex._eof , &&cov&i.eknots);
                    
                 %end;
