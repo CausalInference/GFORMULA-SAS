@@ -52,6 +52,7 @@ options nonotes nomprint ;
                    aact(j) = int(exp(3.5+0.4*(rand('normal'))));
         		end;
 				ax(j ) = 2* rand('normal') ;
+				*ax(j) = (ax(j) > 0.2) ;
 				az(j) = rand('binomial',0.4,5) + 1 ;
             end;
 
@@ -135,7 +136,7 @@ if time = 3 then do;
    act_l1 = act_l2;
 end;
 if time = 4 then act_l1 = act_l2 ;
-
+ 
 censor = (dead = 1 or censlost = 1) ;
 run;
 
@@ -146,45 +147,44 @@ quit;
 **GFORMULA Call;
 title 'GFORMULA SAMPLE';
 options mprint notes ;
-options nomprint nonotes ;
+*options nomprint nonotes ;
+options mlogic ;
 options mlogic symbolgen ;
 options nomlogic nosymbolgen ;
-
+ 
 %gformula(
 data= sample,
 id=id,
 time=time,
 timepoints = 6,
-outc=mybinom ,
-outctype= binomeofu  ,
-compevent=,
+outc=conteof ,
+outctype= conteofu  ,
+compevent= ,
 compevent_cens  = 0   ,
 censor =/* censor */ ,
 
-usehistory_eof = 0,
-
+usehistory_eof = 1,
+/* usespline = 0 , */
 
 fixedcov = baseage,
 timeptype= concat, 
 timeknots = 1 2 3 4 5,
 
-ncov=4,
-cov1  = hbp,    cov1otype  = 2, cov1ptype = tsswitch1,  cov1knots = 3 , 
-     cov1etype = none  all ,cov1eknots =  2 4 6 ,
-cov2  = act,    cov2otype  = 4, cov2ptype = skpspl , cov2skip = 3 ,  cov2knots  = 10 20 30  ,
- cov2etype =  skpspl all  , cov2eknots = 10 20 30 ,
-cov3 = x , cov3otype = 3 , cov3ptype = lag1cat , cov3knots = 4 ,
-       cov3etype = none  none , cov3eknots =  3 ,
-cov4 = z , cov4otype = 5 , cov4ptype = lag1cat , cov4knots =  , cov4etype = bin 1 ,
+ncov=1,
+cov1  = hbp, cov1otype  = 2, cov1ptype = tsswitch1   ,  cov1knots =  ,                              cov1etype = tsswitch1  all , cov1eknots =  ,  cov1interact= ,
+cov2  = act, cov2otype  = 3, cov2ptype = lag2cumavg   , cov2knots  =   16 24.70833 33.5   ,         cov2etype = cumavg  all  ,   cov2eknots =   16 24.70833 33.5   ,     cov2interact = ,
+cov3  = x ,  cov3otype = 3 , cov3ptype = lag2spl ,      cov3knots =  -1.30411 0.011829 1.383502   , cov3etype = cumavgcat all  , cov3eknots =   -1.30411 0.011829 1.383502    , cov3interact =  ,
+cov4 = z ,   cov4otype = 5 , cov4ptype = lag1cat ,      cov4knots =  ,             cov4etype = bin 1 ,
 
 hazardratio = 0 ,
 intcomp = 0 1 ,
-seed= 9458, nsamples = 10, numint=1 ,
+seed= 9458, nsamples = 0, numint=0 ,
 rungraphs = 0 ,
-usespline = 0 ,
+
 testing = no ,
 simuldata =  ,
-savelib = work 
+savelib = work ,
+printlogstats = 1 
 );
 
 
