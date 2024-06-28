@@ -399,8 +399,17 @@ options mautosource minoperator ;
 			%if %numargs(&&cov&i.knots) = 1 %then %do;
 				%if &&cov&i.knots = 1 %then %let cov&i.knots = 3 ;
 				%else %if &&cov&i.knots = 2 %then %let cov&i.knots = 4 ;
-				%if &&cov&i.knots in (3 4 5) %then %let cov&i.findknots = 1 ; 
+				%if &&cov&i.knots in (3 4 5) %then %do;
+					%let cov&i.findknots = 1 ; 
+					%let fineanypknots = 1 ;
+				%end;
+				%if %quote(%upcase(&&cov&i.knots)) =  0 AND  %index(%upcase(&&cov&i.ptype),SPL) > 0 %then %do  ;
+				%put ERROR: WHEN USING COVARIATES OF TYPE LAGSPL OR SKPSPL, USER MUST DEFINE COV&I.KNOTS TO BE NON-EMPTY OR NON-ZERO ;
+				%GOTO exit;
+	        %end;
 			%end;
+
+
 	   %end;
 
       %if  %index(%upcase(&&cov&i.ptype),CAT) > 0   %then %do;
@@ -740,9 +749,7 @@ options mautosource minoperator ;
 				 %end ;
 			 %end;
         %end;
-	   %if &&cov&i.ptype = tsswitch1  /* AND &usespline = 1 */ /* AND &&cov&i.knots ne 0 */  %then %do;
-			 /*%if %numargs(&&cov&i.knots) = 1 %then %let anyfindpknots = 1 ; &/
-			/* %if &&cov&i.knots = %then %let cov&i.knots = 4 ; */
+	   %if &&cov&i.ptype = tsswitch1  %then %do;			
 	        %if %numargs(&&cov&i.knots) > 1 %then %let cov&i.lev = %eval(%numargs(&&cov&i.knots));
 			%else %do;
 			    %if &&cov&i.knots = 0 %then %do;
@@ -1669,7 +1676,7 @@ options mautosource minoperator ;
      
 */
 
- %if ((&anytsswitch1 = 1 OR &anylagcumavg = 1  )/* & &usespline = 1 */ ) OR &anyfindpknots = 1  %then %do;
+ %if /* ((&anytsswitch1 = 1 OR &anylagcumavg = 1  ) ) OR */ &anyfindpknots = 1  %then %do;
 
       %do i = 1 %to &ncov ;
            %local numberofknots&i ;
@@ -1703,6 +1710,38 @@ options mautosource minoperator ;
                     %if &printlogstats = 1 %then %put knots for &&cov&i.._inter  = &&cov&i.knots ;
                     proc datasets library = work nolist ;
                     delete tsscov_pct ttsscov_pct ;
+                    quit;
+
+            %end;
+			%if (%upcase(&&cov&i.ptype) in LAG1SPL LAG2SPL LAG3SPL SKPSPL ) AND /* &usespline = 1 */  &&cov&i.findknots = 1 /*%quote(&&cov&i.knots) ^= 0 */  %then %do;
+
+		            %let numberofknots&i = &&cov&i.knots ;
+				/*	%let numberofknots&i = 4 ; */ /* temporarily hard code to use 4 percentiles as originally coded */
+                    proc univariate data = _inputd_   noprint  ;
+					%if &&cov&i.ptype = skpspl %then where &time not in (&&cov&i.skip) ;;
+                    var &&cov&i ;
+                    output out = &&cov&i.._pct   
+                         pctlpre =  &&cov&i  
+                         %if &&numberofknots&i = 3 %then 
+                            pctlname =  _pct25 _pct50 _pct75 
+                             pctlpts =   25 50 75 ;
+                          %else %if &&numberofknots&i = 4 %then
+                                 pctlname = _pct5 _pct25 _pct75 _pct95 
+                                 pctlpts =  5 25 75 95 ;
+                           %else %if  &&numberofknots&i = 5 %then
+                                 pctlname = _pct5 _pct25 _pct50 _pct75 _pct95 
+                                 pctlpts =  5 25 50 75 95 ;
+                          ;
+                    run;
+
+                    proc transpose data = &&cov&i.._pct out = t&&cov&i.._pct  (keep = col1);
+                    run;
+                    proc sql  noprint ;
+                    select col1 into : cov&i.knots separated by ' ' from t&&cov&i.._pct ;
+                    quit ;
+                    %if &printlogstats = 1 %then %put knots for &&cov&i  = &&cov&i.knots ;
+                    proc datasets library = work nolist ;
+                    delete &&cov&i.._pct t&&cov&i.._pct ;
                     quit;
 
             %end;
@@ -1779,48 +1818,7 @@ options mautosource minoperator ;
                 %end;
             %end;
 
-			/******** require user to supply the knots for -cat type variables 
-			%if ( &&cov&i.ptype in lag1cat lag2cat lag3cat lag1spl lag2spl lag3spl skpcat skpspl ) AND %numargs(&&cov&i.knots) = 1 %then %do;
-
- 				  
-                      %let numberofknots&i = &&cov&i.knots ;
-                      
-                                              
-
-                   
-	                    proc univariate data = _inputd_   %if &&cov&i.otype = 4  %then (where = (&&cov&i > 0)) ; noprint  ;
-	                    var   &&cov&i   ;
-	                        
-	                    output out = &&cov&i.._pct   
-	                         pctlpre =  &&cov&i  
-	                         %if &&numberofknots&i = 3 %then 
-	                            pctlname =  _pct25 _pct50 _pct75 
-	                             pctlpts =   25 50 75 ;
-	                          %else %if &&numberofknots&i = 4 %then
-	                                 pctlname = _pct5 _pct25 _pct75 _pct95 
-	                                 pctlpts =  5 25 75 95 ;
-	                           %else %if  &&numberofknots&i = 5 %then
-	                                 pctlname = _pct5 _pct25 _pct50 _pct75 _pct95 
-	                                 pctlpts =  5 25 50 75 95 ;
-	                          ;
-	                      run;
-
-                     proc transpose data = &&cov&i.._pct out = &&cov&i.._pct  (keep = col1);
-                     run;
-
-                     proc sql noprint  ;
-                     select col1 into : cov&i.knots separated by ' ' from &&cov&i.._pct ;
-                     quit ;
-                    %if &printlogstats = 1 %then %put knots for &&cov&i  = &&cov&i.knots ;
-   
-                    
-                    proc datasets library = work nolist ;
-                    delete &&cov&i.._pct ;
-                    quit;
-                
-
-			%end;
-			********/
+		
        %end;
 
      %end;
@@ -1853,6 +1851,40 @@ options mautosource minoperator ;
 			%local numberofeknots&i ;
 			%let numberofeknots&i = 0 ;
            
+
+			%if (&&cov&i.etype in spl skpspl) AND  &&cov&i.findeknots = 1  %then %do;
+
+		            %let numberofeknots&i = &&cov&i.eknots ;
+				/*	%let numberofknots&i = 4 ; */ /* temporarily hard code to use 4 percentiles as originally coded */
+                    proc univariate data = _inputd_   noprint  ;
+					%if &&cov&i.etype = skpspl %then where &time not in (&&cov&i.skip) ;;
+                    var &&cov&i ;
+                    output out = &&cov&i.._pct   
+                         pctlpre =  &&cov&i  
+                         %if &&numberofeknots&i = 3 %then 
+                            pctlname =  _pct25 _pct50 _pct75 
+                             pctlpts =   25 50 75 ;
+                          %else %if &&numberofeknots&i = 4 %then
+                                 pctlname = _pct5 _pct25 _pct75 _pct95 
+                                 pctlpts =  5 25 75 95 ;
+                           %else %if  &&numberofeknots&i = 5 %then
+                                 pctlname = _pct5 _pct25 _pct50 _pct75 _pct95 
+                                 pctlpts =  5 25 50 75 95 ;
+                          ;
+                    run;
+
+                    proc transpose data = &&cov&i.._pct out = t&&cov&i.._pct  (keep = col1);
+                    run;
+                    proc sql  noprint ;
+                    select col1 into : cov&i.eknots separated by ' ' from t&&cov&i.._pct ;
+                    quit ;
+                    %if &printlogstats = 1 %then %put eknots for &&cov&i  = &&cov&i.eknots ;
+                    proc datasets library = work nolist ;
+                    delete &&cov&i.._pct t&&cov&i.._pct ;
+                    quit;
+
+            %end;
+
 
 
             %if ( &&cov&i.etype in  cumsum cumsumnew  /* cumsumcat cumsumcatnew */ cumavg cumavgnew /* cumavgcat cumavgcatnew */   )  %then %do;
@@ -1897,46 +1929,7 @@ options mautosource minoperator ;
             %end; /* etype is one of the cumsum type variables */
 
 
-			/* require user to supply knots in -cat type variables 
-			%if ( &&cov&i.etype in cat spl skpcat skpspl ) AND   &&cov&i.findeknots = 1 %then %do;
-
- 				  
-                      %let numberofeknots&i = &&cov&i.eknots ;
-                                                                    
-                   
-	                    proc univariate data = _inputd_   %if &&cov&i.otype = 4  %then (where = (&&cov&i > 0)) ; noprint  ;
-	                    var   &&cov&i   ;
-	                        
-	                    output out = &&cov&i.._pct   
-	                         pctlpre =  &&cov&i  
-	                         %if &&numberofeknots&i = 3 %then 
-	                            pctlname =  _pct25 _pct50 _pct75 
-	                             pctlpts =   25 50 75 ;
-	                          %else %if &&numberofeknots&i = 4 %then
-	                                 pctlname = _pct5 _pct25 _pct75 _pct95 
-	                                 pctlpts =  5 25 75 95 ;
-	                           %else %if  &&numberofeknots&i = 5 %then
-	                                 pctlname = _pct5 _pct25 _pct50 _pct75 _pct95 
-	                                 pctlpts =  5 25 50 75 95 ;
-	                          ;
-	                      run;
-
-                     proc transpose data = &&cov&i.._pct out = &&cov&i.._pct  (keep = col1);
-                     run;
-
-                     proc sql noprint  ;
-                     select col1 into : cov&i.eknots separated by ' ' from &&cov&i.._pct ;
-                     quit ;
-                    %if &printlogstats = 1 %then %put eknots for &&cov&i  = &&cov&i.eknots ;
-   
-                    
-                    proc datasets library = work nolist ;
-                    delete &&cov&i.._pct ;
-                    quit;
-                
-
-			%end;
-            *****/
+		
 
        %end; /* end of loop over i */
 
@@ -1962,6 +1955,7 @@ options mautosource minoperator ;
        data _inputd_;
        set _inputd_;
        %do i = 1 %to &ncov ;
+       %put &&cov&i --- &&cov&i.ptype --- &&numberofknots&i -- &&cov&i.etype --- &&numberofeknots&i ;
          %if (%upcase(&&cov&i.ptype) = TSSWITCH1  ) AND  &&numberofknots&i >= 3 %then %do;
               %rcspline(ts&&cov&i.._inter ,&&cov&i.knots);
               %rcspline(ts&&cov&i.._l1_inter ,&&cov&i.knots);
@@ -2048,7 +2042,7 @@ options mautosource minoperator ;
        %end;
 
 
-        %if &usehistory_eof = 1 AND &&numberofeknots&i > 0  %then %do; /* at this point covXeknots should be 0 or a list of 3 or more knots */
+        %if &usehistory_eof = 1 AND &&numberofeknots&i >= 3  %then %do; /* at this point covXeknots should be 0 or a list of 3 or more knots */
 
                  
 			%if &&cov&i.etype in cumavg cumavgcat cumsum cumsumcat %then %do;
