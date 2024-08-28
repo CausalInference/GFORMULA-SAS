@@ -294,6 +294,7 @@ options mautosource minoperator ;
     bootstrap_hazard = 0, /* when running bootstrap samples also include calculation of hazard ratios */
     hazardname =,     /* name of data set to hold hazard ratio when runnig bootstraps in parts, data will be saved in savelib. */
     numint = 0,       /* number of interventions */
+	sim_trunc = 1 ,   /* when simulating variables of otype = 3 (continuous regression) truncate values to be within observed bound */
     sample_start = 0, /* first sample to use in bootstraps (can be 0 for original data ) */
     sample_end = -1,  /* last sample to use in bootstraps (should be at most equal to nsamples) */
     savelib = work,   /* location for saving intermediate results for chunks */
@@ -7932,14 +7933,15 @@ not the time-varying covariates, which are handled below in %interactionsb*/
                                 m&&cov&i =sum(m&&cov&i ,ab&&cov&i(j)*as&&cov&i (j));
                             end; 
                             &&cov&i = m&&cov&i  + N&&cov&i *se&&cov&i;
+							%if &sim_trunc = 1 %then %do;
+	                            if &&cov&i  < &&cov&i.._min then do;
+	                                &&cov&i = &&cov&i.._min; &&cov&i.._limit = &&cov&i.._limit +1;
+	                            end;
 
-                            if &&cov&i  < &&cov&i.._min then do;
-                                &&cov&i = &&cov&i.._min; &&cov&i.._limit = &&cov&i.._limit +1;
-                            end;
-
-                            if &&cov&i > &&cov&i.._max then do;
-                                &&cov&i  = &&cov&i.._max; &&cov&i.._limit = &&cov&i.._limit +1;
-                            end;           
+	                            if &&cov&i > &&cov&i.._max then do;
+	                                &&cov&i  = &&cov&i.._max; &&cov&i.._limit = &&cov&i.._limit +1;
+	                            end;
+							%end; 
                         %end;
 
                         %*Generating Type 4 variables;
