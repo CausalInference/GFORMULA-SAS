@@ -912,6 +912,9 @@ options mautosource minoperator ;
                 set simulated0 ;
                 run;
               
+
+
+
                 %if &testing = yes %then %do;
                      %do intcount = 0 %to &numint ;
                         data &savelib..simuldata&intcount  ;
@@ -921,6 +924,23 @@ options mautosource minoperator ;
                 %end;
 
                 %*Outputting the mean of covariates and probability of event;
+
+				%if &outctype = cateofu %then %do;
+				    title "Frequency of &outc under intervention 0";
+					proc freq data = &simuldata ;
+					table &outc / out = interv0 (keep = &outc percent ) nocum  ;
+					run;
+
+					
+					proc transpose data = interv0 out = interv0_&outc  (drop = _name_ _label_)  prefix = smybinom_ ;
+					var percent ;
+					id mybinom ;
+					run;
+
+					
+
+                %end;
+
                 proc means data= &simuldata  mean min max ;                                                                      
                 var %if &outctype = binsurv %then cuminc ;
                     intervened averinterv  
@@ -929,7 +949,9 @@ options mautosource minoperator ;
                             s&outc.&j
                         %end;
                     %end;
-                    %else &outc ;
+                    %else %if &outctype ne cateofu %then %do ;
+                          &outc 
+					%end;
                     %if &minimalistic = no %then %do;
                         %do i = 1 %to &ncov;
                             %do j = 1 %to %eval(&timepoints);
@@ -979,7 +1001,12 @@ options mautosource minoperator ;
 
 
                 data interv0;
-                set interv0;
+                %if &outctype ne cateofu %then %do;
+                	set interv0;
+				%end;
+				%else %do;
+					merge interv0 interv0_&outc ;
+                %end; 
                 _sample_ = 0;
                 length int2 $70 ;
                 int=0;
@@ -992,6 +1019,11 @@ options mautosource minoperator ;
                         s&outc.&j
                     %end;
                 %end;
+				%else %if &outctype = cateofu %then %do;
+					%do j = 1 %to &outclev ;
+					   s&outc._&j
+					%end;
+				%end;
                 %else s&outc ;
                  %if &minimalistic = no %then %do;
                     %do j = 1 %to %eval(&timepoints);
@@ -1066,7 +1098,12 @@ options mautosource minoperator ;
                         int = 0 ;
                         int2 = "Natural course";
                         _sample_ = 0 ;                                        
-                        keep  int int2 _sample_ s&outc  ;
+                        keep  int int2 _sample_ %if &outctype = cateofu %then %do;
+					                                %do j = 1 %to &outclev ;
+					                                   s&outc._&j
+					                                %end;
+				                              %end;
+                                              %else  s&outc  ;;
                     run;
                 %end; 
             %end;  /* end of saving simuldata , needed outside of interv and interv_init macros */
@@ -1119,6 +1156,13 @@ options mautosource minoperator ;
             %do int = &intstart %to %eval(&numint);
                 proc append base = interv&int._all data = interv&int;
                 run;
+
+
+data roger_interv&int ;
+set interv&int._all ;
+run;
+
+
             %end;
         %end;
 
@@ -3608,6 +3652,135 @@ options mautosource minoperator ;
 
   
     %*Outputting the mean of covariates and probability of event;
+	%if &outctype = cateofu %then %do;
+
+		 %put BSAMPLE = &bsample  ;
+
+		proc sql ;
+		create table mytest as 
+		select &outc as &outc._level , count(*) as freq ,  sum (intervened) as intervened , sum(averinterv) as  averinterv  
+		                    
+        %if &minimalistic = no %then %do;
+            %do i = 1 %to &ncov;
+               %do j = 1 %to %eval(&timepoints );
+                  %if &&usevisitp&i = 1 %then , sum(s&&cov&i.randomvisitp.&j ) as s&&cov&i.randomvisitp.&j ;
+                  , sum(s&&cov&i..&j ) as  s&&cov&i..&j
+				  %if &intno = 0   %then  %do;
+					,	sum(ncs&&cov&i..&j) as 	ncs&&cov&i..&j  
+                        %if &&usevisitp&i = 1 %then , sum( ncs&&cov&i.randomvisitp.&j) as  ncs&&cov&i.randomvisitp.&j ;
+				   %end;
+              %end;
+           %end; 
+       %end; 
+ 
+       /**/ 			            
+     , min( intervened ) as intervened_min, min( averinterv ) as averinterv_min  
+            
+            %if &minimalistic = no %then %do;
+                %do i = 1 %to &ncov;
+                   %do j = 1 %to %eval(&timepoints);
+                      %if &&usevisitp&i = 1 %then , min(s&&cov&i.randomvisitp.&j) as s&&cov&i.randomvisitp.&j._min ; 
+                     , min(s&&cov&i..&j) as  s&&cov&i..&j._min 
+					  %if &intno = 0  %then %do;
+					,	min(ncs&&cov&i..&j ) as ncs&&cov&i..&j._min  
+                           %if &&usevisitp&i = 1 %then , min( ncs&&cov&i.randomvisitp.&j) as ncs&&cov&i.randomvisitp.&j._min ;
+					   %end;
+                  %end;
+               %end; 
+            %end;                     
+    /**/
+		              			               			                              
+    /***/
+    , max ( intervened ) as intervened_max, max( averinterv ) as averinterv_max  
+            
+            %if &minimalistic = no %then %do;
+                %do i = 1 %to &ncov;
+                   %do j = 1 %to %eval(&timepoints);
+                      %if &&usevisitp&i = 1 %then , min(s&&cov&i.randomvisitp.&j) as s&&cov&i.randomvisitp.&j._min ; 
+                     , max(s&&cov&i..&j) as  s&&cov&i..&j._max 
+					  %if &intno = 0  %then %do;
+					 ,	max(ncs&&cov&i..&j ) as ncs&&cov&i..&j._max  %if &&usevisitp&i = 1 %then , max( ncs&&cov&i.randomvisitp.&j) as ncs&&cov&i.randomvisitp.&j._max ;
+					   %end;
+                  %end;
+               %end; 
+            %end;                      
+    /***/
+		    from simulated&intno group by &outc ;
+
+     create table mytest2 as 
+	 select  sum (intervened)/&nsimul  as intervened , sum(averinterv) / &nsimul  as  averinterv  
+		                    
+        %if &minimalistic = no %then %do;
+            %do i = 1 %to &ncov;
+               %do j = 1 %to %eval(&timepoints );
+                  %if &&usevisitp&i = 1 %then , sum(s&&cov&i.randomvisitp.&j ) / &nsimul as s&&cov&i.randomvisitp.&j ;
+                  , sum(s&&cov&i..&j ) / &nsimul as  s&&cov&i..&j
+				  %if &intno = 0   %then  %do;
+					,	sum(ncs&&cov&i..&j)/&nsimul as 	ncs&&cov&i..&j  
+                        %if &&usevisitp&i = 1 %then , sum( ncs&&cov&i.randomvisitp.&j)/nsimul as  ncs&&cov&i.randomvisitp.&j ;
+				   %end;
+              %end;
+           %end; 
+       %end; 
+ 
+       /**/ 			            
+     , min( intervened_min ) as intervened_min, min( averinterv_min ) as averinterv_min  
+            
+            %if &minimalistic = no %then %do;
+                %do i = 1 %to &ncov;
+                   %do j = 1 %to %eval(&timepoints);
+                      %if &&usevisitp&i = 1 %then , min(s&&cov&i.randomvisitp.&j._min) as s&&cov&i.randomvisitp.&j._min ; 
+                     , min(s&&cov&i..&j._min) as  s&&cov&i..&j._min 
+					  %if &intno = 0  %then %do;
+					,	min(ncs&&cov&i..&j._min ) as ncs&&cov&i..&j._min  
+                           %if &&usevisitp&i = 1 %then , min( ncs&&cov&i.randomvisitp.&j._min) as ncs&&cov&i.randomvisitp.&j._min ;
+					   %end;
+                  %end;
+               %end; 
+            %end;                     
+    /**/
+		              			               			                              
+    /***/
+    , max ( intervened_max ) as intervened_max, max( averinterv_max ) as averinterv_max  
+            
+            %if &minimalistic = no %then %do;
+                %do i = 1 %to &ncov;
+                   %do j = 1 %to %eval(&timepoints);
+                      %if &&usevisitp&i = 1 %then , min(s&&cov&i.randomvisitp.&j._max) as s&&cov&i.randomvisitp.&j._max ; 
+                     , max(s&&cov&i..&j._max) as  s&&cov&i..&j._max 
+					  %if &intno = 0  %then %do;
+					 ,	max(ncs&&cov&i..&j._max ) as ncs&&cov&i..&j._max  %if &&usevisitp&i = 1 %then , max( ncs&&cov&i.randomvisitp.&j._max) as ncs&&cov&i.randomvisitp.&j._max ;
+					   %end;
+                  %end;
+               %end; 
+            %end;  
+      from mytest ; 
+      quit;
+
+	  data mytest3 ;
+	  set mytest (keep = &outc._level freq ) ;
+	  s&outc = round(freq *100/&nsimul ,0.01) ;
+	  run ;
+	  proc transpose data = mytest3 out = mytest4 (drop = _name_ ) prefix = s&outc._ ;
+	  var s&outc ;
+	  id &outc._level ;
+	  run;
+
+	  data stats_holder  ;
+	  merge mytest4 mytest2 ;
+	  run;
+			               
+			             
+			            
+
+
+
+
+
+	%end;
+    %else %do;
+
+
      proc means data=simulated&intno  noprint /*simulated&intno is a function*/; 
      
       output out=stats_holder
@@ -3751,7 +3924,7 @@ options mautosource minoperator ;
              
             run; 
 
-
+%end;
             data interv&intno;
             set stats_holder;
             _sample_ = &bsample;
@@ -3766,6 +3939,11 @@ options mautosource minoperator ;
                                         %end;
 									
                                      %end;
+                                    %else  %if &outctype = cateofu %then %do;
+										%do j = 1 %to &outclev ;
+											s&outc._&j
+										 %end;
+									%end ;
                                     %else s&outc ;
                                     intervened averinterv 
                 
@@ -3808,6 +3986,13 @@ options mautosource minoperator ;
                delete surv_holder ;
                quit;
            %end;
+		   %else %if &outctype = cateofu %then %do;
+  				data surv_tmp&intno ;
+              	set interv&intno ;
+              
+              	keep _sample_ %do j = 1 %to &outclev ; s&outc._&j %end ; int int2  ;
+              run;
+		   %end;
            %else %do;
               data surv_tmp&intno ;
               set interv&intno ;
@@ -3819,7 +4004,7 @@ options mautosource minoperator ;
 
 
 /*** temp code for censoring ****/
-%if &intno = 0 /*** AND %bquote(&censor) ^= ****/ %then %do;
+%if &intno = 0   %then %do;
 	data interv&intno ;
 	merge interv&intno surv_tmp&intno  %if &outctype = binsurv %then (keep = surv1 - surv&timepoints );;
 	array surv{&timepoints } ;
@@ -3836,6 +4021,7 @@ options mautosource minoperator ;
 		%end;
      end;
 	 drop j ;
+	 %if &outctype = cateofu %then drop surv1 - surv&timepoints ;;
      run;
 %end;
 
@@ -3856,6 +4042,11 @@ options mautosource minoperator ;
                             s&outc.&j
                         %end;
                      %end;
+					 %else %if &outctype = cateofu %then %do;
+					    %do j = 1 %to &outclev ;
+							s&outc._&j
+						 %end;
+					 %end;
                     %else s&outc ;
                   intervened averinterv 
                   
@@ -3880,6 +4071,9 @@ options mautosource minoperator ;
                         s&outc.&j._max
                     %end;
                   %end;
+				  %else %if &outctype = cateofu %then %do;
+				  	/* there is no max calculated, should be maximum level */
+				  %end;
                  %else s&outc._max ;
                  intervened_max averinterv_max 
  
@@ -3905,6 +4099,9 @@ options mautosource minoperator ;
                         s&outc.&j._min
                     %end;
                  %end;
+				  %else %if &outctype = cateofu %then %do;
+				  	/* no minimum level calculated for categorical outcome */
+				  %end;
                 %else s&outc._min ;
              intervened_min averinterv_min 
              %if &outctype=binsurv %then %do;
@@ -4773,9 +4970,9 @@ intusermacro7=,
                quit;
 
           %end; /* binsurv */
-          %else %do; /* for all other outcome types  */
+          %else %do; /* for all other outcome types, must be eof type outcome  */
                data _obsoutcmean_ &observed_surv ;
-               set &covmeanname (keep = _sample_ &time &outc );
+               set &covmeanname (keep = _sample_ &time &outc ); *** change for cateofu ;;
                if &time = &timepoints -1  ;  
                run;
  
@@ -4983,8 +5180,13 @@ intusermacro7=,
      data _ref_;
      set interv&refint._all; /*change jgy*/
      %if &outctype=binsurv %then   pDref=pD;
+     %else %if &outctype = cateofu %then %do ;
+          %do i = 1 %to &outclev ;
+		      pDref_&i = s&outc._&i ;
+          %end;
+     %end ;
      %else pDref=s&outc ;;
-     keep _sample_ pDref;
+     keep _sample_ pDref: ;
      run;
 
 
@@ -4998,16 +5200,27 @@ intusermacro7=,
           %*Comparing intervention to reference;
                  
           %let pd = pd ;
-          %if &outctype ^= binsurv %then %let pd = s&outc ;
+          %if &outctype ^= binsurv and &outctype ne cateofu %then %let pd = s&outc ;
 
           data interv&i; 
           merge interv&i._all _ref_;
           by _sample_; 
-          if pDref^=0 then rr=&pd /pDref;
-          if pDref^=0 then rd=&pd - pDref;
-          if rd^=. and rd>0 then nnt = 1/rd;
+		  %if &outctype ^= cateofu %then %do;
+          	if pDref^=0 then rr=&pd /pDref;
+          	if pDref^=0 then rd=&pd - pDref;
+          	if rd^=. and rd>0 then nnt = 1/rd;
+		  %end ;
+		  %else %do ;
+			 %do ii = 1 %to &outclev ;
+				if pDref_&ii^=0 then rr_&ii=s&outc._&ii /pDref_&ii;
+          	    if pDref_&ii^=0 then rd_&ii=s&outc._&ii - pDref_&ii;
+          	    if rd_&ii^=. and rd_&ii>0 then nnt_&ii = 1/rd_&ii;
+			 %end;
+		  %end;
           *logrr=log(rr); /* commented out since this was the only occurrance of this variable */
           run;
+
+ 
 
 
           %*Appending intervention datasets;
@@ -5022,12 +5235,35 @@ intusermacro7=,
           %*Calculating bootstrap mean, variance and confidence intervals;
           proc univariate data=interv&i noprint;
           where _sample_ ne 0;
-          var &pd rr rd nnt;
-          output out = temp&i
-          mean = &pd._mean RR_mean RD_mean NNT_mean
-          std =  &pd._std  RR_std  RD_std  NNT_std
-          pctlpre = &pd._  RR_     RD_     NNT_
-          pctlname = llim95 ulim95  pctlpts = 2.5 97.5;
+		  %if &outctype ne cateofu %then %do;
+          	var &pd rr rd nnt;
+
+          	output out = temp&i
+          	mean = &pd._mean RR_mean RD_mean NNT_mean
+          	std =  &pd._std  RR_std  RD_std  NNT_std
+          	pctlpre = &pd._  RR_     RD_     NNT_
+
+          	pctlname = llim95 ulim95  pctlpts = 2.5 97.5;
+		  %end;
+		  %else %do;
+		    	var %do ii = 1 %to &outclev ;
+			        s&outc._&ii rr_&ii rd_&ii nnt_&ii 
+                %end; ;
+          	output out = temp&i
+
+          		mean =  %do ii = 1 %to &outclev ;
+                     s&outc._&ii._mean RR_&ii._mean RD_&ii._mean NNT_&ii._mean 
+				  %end;
+          		std =   %do ii = 1 %to &outclev ;
+                    s&outc._&ii._std  RR_&ii._std  RD_&ii._std  NNT_&ii._std
+				  %end;
+          		pctlpre =  %do ii = 1 %to &outclev ;
+                        s&outc._&ii._  RR_&ii._     RD_&ii._     NNT_&ii._
+                     %end;
+          		pctlname = llim95 ulim95  pctlpts = 2.5 97.5;
+
+		  %end;
+
           run;
 
           data temp&i;
@@ -5039,8 +5275,9 @@ intusermacro7=,
           merge fin temp&i;
           by int;
           run;
-
-
+title 'printing fin data set ';
+proc print data = fin ;
+run;
 
 
           %*Deleting no longer needed datasets;
@@ -5079,8 +5316,11 @@ intusermacro7=,
      %rescaleround; /* RESCALE AND ROUND OFF THE OUTPUT */
      %labels;       /* LABEL THE OUTPUT */
      run;
+title 'print finfin ';
+proc print data=finfin ;
+run;
 
-
+%return ;
 
      %*Outputting results dataset;
      %if %bquote(&resultsdata)^= %then %do;
@@ -5134,18 +5374,21 @@ intusermacro7=,
      title8 "Number of bootstrap samples= &nsamples";
      title9 "Reference intervention is &refint";
 
-     proc print data=finfin noobs label double; 
-     var int &pd &pd._llim95 &pd._ulim95 rr rr_llim95 rr_ulim95 &pd._mean &pd._std intervened averinterv; 
-     run;
+	 %if &outctype ne cateofu %then %do;
+	     proc print data=finfin noobs label double; 
+	     var int &pd &pd._llim95 &pd._ulim95 rr rr_llim95 rr_ulim95 &pd._mean &pd._std intervened averinterv; 
+	     run;
 
-     proc print data=finfin noobs label double; 
-     %if &outctype=binsurv or &outctype=bineofu %then %do;
-          var int &pd &pd._llim95 &pd._ulim95 rd rd_llim95 rd_ulim95 nnt nnt_llim95 nnt_ulim95;
-     %end;
-     %else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 or &outctype = cateofu %then %do;
-          var int s&outc s&outc._llim95 s&outc._ulim95 rd rd_llim95 rd_ulim95 ;    
-     %end;
-     run;
+	     proc print data=finfin noobs label double; 
+	     %if &outctype=binsurv or &outctype=bineofu %then %do;
+	          var int &pd &pd._llim95 &pd._ulim95 rd rd_llim95 rd_ulim95 nnt nnt_llim95 nnt_ulim95;
+	     %end;
+	     %else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 or &outctype = cateofu %then %do;
+	          var int s&outc s&outc._llim95 s&outc._ulim95 rd rd_llim95 rd_ulim95 ;    
+	     %end;
+	     run;
+
+	 %end;
 
 	 data roger; set finfin ; run ;
 
@@ -7804,7 +8047,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
     %*Generate random numbers for standard errors;
    %local i  lev;
    %if &outctype = conteofu4 %then U&outc = rand('uniform');;
-   %if &outctype = multinomeofu %then %do;
+   %if &outctype = cateofu %then %do;
        %do lev = 1 %to %eval(&outclev - 1);
                 Uoutc_&lev=rand('uniform');
        %end;
