@@ -1157,12 +1157,6 @@ options mautosource minoperator ;
                 proc append base = interv&int._all data = interv&int;
                 run;
 
-
-data roger_interv&int ;
-set interv&int._all ;
-run;
-
-
             %end;
         %end;
 
@@ -1271,7 +1265,10 @@ run;
     %end;
     proc datasets library = work memtype = (data view)  nolist ;
     delete tmpids _calchazard_ %if &runnc = 1 %then simulated0 ;
-            %do i = 1 %to &numint ; simulated&i %end; ;
+            %do i = 1 %to &numint ; simulated&i %end;
+            %if  &outctype = bineofu or &outctype=conteofu or &outctype=conteofu2 or 
+                   &outctype = conteofu3 or &outctype = conteofu4 or &outctype = cateofu %then &data ;
+         ;
     quit;
 
    /* clean up any global variables created in interaction macros */
@@ -1494,7 +1491,12 @@ run;
 
 
     data _orig_ (keep= _sample_ newid &id);
-        merge indiv cuminc  end=_end_;
+	   %if &outctype ne cateofu %then %do;
+        	merge indiv cuminc  end=_end_;
+	   %end;
+	   %else %do;
+	   	  set indiv end= _end_ ;
+	   %end;
 
         newid=_n_;
         _sample_=0;
@@ -1520,7 +1522,7 @@ run;
                     
              %end;
                         
-            call symput('obsp',trim(left(cuminc)));
+            %if &outctype ne cateofu %then call symput('obsp',trim(left(cuminc)));;
             
         end;
       
@@ -2828,6 +2830,9 @@ run;
             by _sample_;
             run;
 
+			proc datasets library = work nolist ;
+    		delete param2 %do lev = 1 %to %eval(&outclev - 1); outc_&lev %end; ;
+    		quit;
 
 		%end;
 
@@ -2942,21 +2947,37 @@ run;
 
 
 
+            %if &outctype ne cateofu %then %do;
+				proc means data = _censor_   ;
+				class &time ;
+				var &outc  %if %bquote(&compevent) ^= AND &compevent_cens = 0 %then &compevent ;;
+				types &time ;
+				weight _wt_ ;
+				%if &outctype=binsurv %then %do ;
+					output out = forwtY (keep = &time meanoutc %if %bquote(&compevent) ^= AND &compevent_cens = 0 %then meancompevent ;) 
+	                        mean( &outc %if %bquote(&compevent) ^= AND &compevent_cens = 0 %then &compevent ;) = 
+	       				meanoutc %if %bquote(&compevent) ^= AND &compevent_cens = 0 %then meancompevent ; ;
+				%end;
+				%else %do ;
+					output out = forwtY (keep = &time &outc )   mean( &outc ) = &outc  ;
+				%end;
+				run;
+			%end;
+			%else %do;
+				proc freq data = _censor_ (where = (&time = %eval(&timepoints - 1))) noprint ;
+				tables &outc / out= proportions (keep = &outc percent rename = (percent = proportion) ) nocum ;
+				weight _wt_ ;
+				run;
 
-			proc means data = _censor_   ;
-			class &time ;
-			var &outc  %if %bquote(&compevent) ^= AND &compevent_cens = 0 %then &compevent ;;
-			types &time ;
-			weight _wt_ ;
-			%if &outctype=binsurv %then %do ;
-				output out = forwtY (keep = &time meanoutc %if %bquote(&compevent) ^= AND &compevent_cens = 0 %then meancompevent ;) 
-                        mean( &outc %if %bquote(&compevent) ^= AND &compevent_cens = 0 %then &compevent ;) = 
-       				meanoutc %if %bquote(&compevent) ^= AND &compevent_cens = 0 %then meancompevent ; ;
+				
+				data proportions ;
+				set proportions ;
+				label &outc="&outc level" proportion="Proportion (%)";
+				proportion = round(proportion,0.01);
+				sample = &bsample ;
+				run;
+			 
 			%end;
-			%else %do ;
-				output out = forwtY (keep = &time &outc )   mean( &outc ) = &outc  ;
-			%end;
-			run;
 			*calculate E[L_k * (1-Y_k) &W_{k-1} ] / E[(1-Y_k)*W_{k-1}]
 			 If there is a L_k then it must be that Y_k = 0 , Same as E[L_k * W_{k-1}]/E[W_{k-1}] ;
 			proc means data = _censor_    ;
@@ -2989,11 +3010,18 @@ run;
 	        		run;
 			   %end ;
 			   %else %do;
+			       %if &outctype ne cateofu %then %do;
 					data cuminc ;
 					set forwtY ;
 					if _N_ = &timepoints then call symput('obsp',trim(left(&outc)));
 					run;
 
+				  %end;
+				  %else %do ;
+				  	data proportions0 ;
+					set proportions ;
+				    run;
+				  %end;
 			   %end;
           %end;
     %end;
@@ -3466,7 +3494,7 @@ run;
 			%end;
 			%else %do;
 				merge  &dataholder 
-                       forwtY (keep = &time &outc  )   
+                     %if &outctype ne cateofu %then  forwtY (keep = &time &outc  )   ;
                        forwtCov (keep = &time &covlisttmp )  ;
 			%end;
 			by &time ;
@@ -3761,14 +3789,20 @@ run;
 	  set mytest (keep = &outc._level freq ) ;
 	  s&outc = round(freq *100/&nsimul ,0.01) ;
 	  run ;
+
 	  proc transpose data = mytest3 out = mytest4 (drop = _name_ ) prefix = s&outc._ ;
 	  var s&outc ;
 	  id &outc._level ;
 	  run;
 
+	 
 	  data stats_holder  ;
 	  merge mytest4 mytest2 ;
 	  run;
+
+	  proc datasets library = work nolist ;
+	  delete mytest mytest2 mytest3 mytest4 ;
+	  quit;
 			               
 			             
 			            
@@ -3962,7 +3996,7 @@ run;
               ;
            dataname = "&data";
            ssize = &ssize ;
-           obsp = &obsp ;
+           %if &outctype ne cateofu %then obsp = &obsp ;;
            run;
    
            %if &outctype = binsurv %then %do;
@@ -5209,12 +5243,14 @@ intusermacro7=,
           	if pDref^=0 then rr=&pd /pDref;
           	if pDref^=0 then rd=&pd - pDref;
           	if rd^=. and rd>0 then nnt = 1/rd;
+			else nnt = . ; * rwl added 09Sep2024 ;
 		  %end ;
 		  %else %do ;
 			 %do ii = 1 %to &outclev ;
 				if pDref_&ii^=0 then rr_&ii=s&outc._&ii /pDref_&ii;
           	    if pDref_&ii^=0 then rd_&ii=s&outc._&ii - pDref_&ii;
           	    if rd_&ii^=. and rd_&ii>0 then nnt_&ii = 1/rd_&ii;
+				else nnt_&ii = . ; * rwl added 09Sep2024;
 			 %end;
 		  %end;
           *logrr=log(rr); /* commented out since this was the only occurrance of this variable */
@@ -5236,29 +5272,29 @@ intusermacro7=,
           proc univariate data=interv&i noprint;
           where _sample_ ne 0;
 		  %if &outctype ne cateofu %then %do;
-          	var &pd rr rd nnt;
+          	var &pd rr rd  ; * nnt;
 
           	output out = temp&i
-          	mean = &pd._mean RR_mean RD_mean NNT_mean
-          	std =  &pd._std  RR_std  RD_std  NNT_std
-          	pctlpre = &pd._  RR_     RD_     NNT_
+          	mean = &pd._mean RR_mean RD_mean /* NNT_mean */ 
+          	std =  &pd._std  RR_std  RD_std  /* NNT_std */
+           	pctlpre = &pd._  RR_     RD_    /* NNT_ */
 
           	pctlname = llim95 ulim95  pctlpts = 2.5 97.5;
 		  %end;
 		  %else %do;
 		    	var %do ii = 1 %to &outclev ;
-			        s&outc._&ii rr_&ii rd_&ii nnt_&ii 
+			        s&outc._&ii rr_&ii rd_&ii /* nnt_&ii */ 
                 %end; ;
           	output out = temp&i
 
           		mean =  %do ii = 1 %to &outclev ;
-                     s&outc._&ii._mean RR_&ii._mean RD_&ii._mean NNT_&ii._mean 
+                     s&outc._&ii._mean RR_&ii._mean RD_&ii._mean /* NNT_&ii._mean  */
 				  %end;
           		std =   %do ii = 1 %to &outclev ;
-                    s&outc._&ii._std  RR_&ii._std  RD_&ii._std  NNT_&ii._std
+                    s&outc._&ii._std  RR_&ii._std  RD_&ii._std /* NNT_&ii._std */
 				  %end;
           		pctlpre =  %do ii = 1 %to &outclev ;
-                        s&outc._&ii._  RR_&ii._     RD_&ii._     NNT_&ii._
+                        s&outc._&ii._  RR_&ii._     RD_&ii._    /* NNT_&ii._ */
                      %end;
           		pctlname = llim95 ulim95  pctlpts = 2.5 97.5;
 
@@ -5268,16 +5304,45 @@ intusermacro7=,
 
           data temp&i;
           set temp&i;
-          int = &i;
+          int = &i;		  
           run;
 
           data fin;
           merge fin temp&i;
           by int;
+		  %if &outctype ne cateofu %then %do;
+		  	if nnt ne . then do;
+			   nnt_mean = 1/rd_mean ;
+			   nnt_llim95 = 1/rd_llim95 ;
+			   nnt_ulim95 = 1/rd_ulim95 ;
+			end;
+			else do ;
+			   nnt_mean = . ;
+			   nnt_llim95 = . ;
+			   nnt_ulim95 = . ;
+			end;
+			if nnt_llim95 < 0 then nnt_llim95 = . ;
+			if nnt_ulim95 < 0 then nnt_ulim95 = . ;
+		  %end;
+		  %else %do;
+		  	%do ii = 1 %to &outclev ;
+				if nnt_&ii ne . then do;
+					nnt_&ii._mean = 1/rd_&ii._mean ;
+					nnt_&ii._llim95 = 1/rd_&ii._ulim95 ;
+					nnt_&ii._ulim95 = 1/rd_&ii._llim95 ;
+			    end;
+				else do ;
+					nnt_&ii.mean = . ;
+					nnt_&ii._llim95 = . ;
+					nnt_&ii.ulim95 = . ;
+				end;
+				if nnt_&ii._llim95 < 0 then nnt_&ii._llim95 = . ;
+				if nnt_&ii._ulim95 < 0 then nnt_&ii._ulim95 = . ;
+
+			 %end;
+		   %end;
           run;
-title 'printing fin data set ';
-proc print data = fin ;
-run;
+;
 
 
           %*Deleting no longer needed datasets;
@@ -5314,13 +5379,59 @@ run;
      data finfin;
      set fin;      
      %rescaleround; /* RESCALE AND ROUND OFF THE OUTPUT */
-     %labels;       /* LABEL THE OUTPUT */
+	 %if &outctype ne cateofu %then %do;
+     	%labels;       /* LABEL THE OUTPUT */
+	 %end
      run;
-title 'print finfin ';
-proc print data=finfin ;
-run;
 
-%return ;
+	 %if &outctype = cateofu %then %do;
+
+	 	%let pd = s&outc ;
+
+		data finfin(keep = int int2 &outc &pd &pd._llim95 &pd._ulim95 rd rd_llim95 rd_ulim95 nnt nnt_llim95 nnt_ulim95 
+	                     rr rr_llim95 rr_ulim95 &pd._mean &pd._std intervened averinterv)  ;
+		set finfin;
+		label &pd ="Proportion (%)"  &outc = "&outc level"
+	         &pd._llim95= "Lower limit 95% CI"
+			 &pd._ulim95= "Upper limit 95% CI"
+			 &pd._mean="Proportion mean"
+			 &pd._std= "Proportion SE"
+
+		;
+    	 
+   		*label s&outc._std    = 'Bootstrap Porportion SE';
+   		*label s&outc._mean   = 'Bootstrap Proportion Mean';
+   		label rr        = 'Ratio of Proportions';
+   		label RD        = 'Difference of Proportions';
+        label rr_llim95= "Lower limit 95% CI"
+			  rr_ulim95= "Upper limit 95% CI"
+			  rd_llim95= "Lower limit 95% CI"
+			  rd_ulim95= "Upper limit 95% CI" ;
+		label NNT       = '# Needed to Treat';
+   		label NNT_ulim95 = 'Upper limit 95% CI';
+   		label NNT_llim95 = 'Lower limit 95% CI';
+
+		%do ii = 1 %to &outclev ;
+		     &outc = &ii ;
+		     &pd = &pd._&ii ;
+			 &pd._mean = &pd._&ii._mean ;
+			 &pd._std = &pd._&ii._std ;
+			 &pd._llim95 = &pd._&ii._llim95 ;
+			 &pd._ulim95 = &pd._&ii._ulim95 ;
+			 rd = rd_&ii ;
+			 rd_llim95 = rd_&ii._llim95 ;
+			 rd_ulim95 = rd_&ii._ulim95 ;
+			 rr = rr_&ii ;
+			 rr_llim95 = rr_&ii._llim95 ;
+			 rr_ulim95 = rr_&ii._ulim95 ;
+			 nnt = nnt_&ii ;
+			 nnt_llim95 = nnt_&ii._llim95 ;
+			 nnt_ulim95 = nnt_&ii._ulim95 ;
+		     output ;
+		%end;
+		run;
+	 %end;
+
 
      %*Outputting results dataset;
      %if %bquote(&resultsdata)^= %then %do;
@@ -5359,14 +5470,30 @@ run;
              title6 "Observed risk= %sysevalf(&obspm) % &additional_text ";
 		 %end;
      %end;    
-	%else %if  &outctype=bineofu or &outctype = cateofu  %then %do; /*** EM edited ***/
+	%else %if  &outctype=bineofu %then %do; /*** EM edited ***/
 	     %if %bquote(&censor) ^= %then %do ;
 		     title6 "IP-weighted natural course proportion= %sysevalf(&obspm) % &additional_text "; 	
 		 %end;
 		 %else %do;
              title6 "Observed proportion= %sysevalf(&obspm) % &additional_text ";
 		 %end;
-     %end;     
+     %end;  
+     %else %if  &outctype =  cateofu  %then %do; /*** EM edited ***/
+	     %if %bquote(&censor) ^= %then %do ;
+		     title6 "IP-weighted natural course proportion  &additional_text "; 
+             proc print data = proportions0 noobs label ;
+			 var &outc proportion ;
+			 run ;
+		 
+	
+		 %end;
+		 %else %do;
+             title6 "Observed proportion  &additional_text ";
+			  proc print data = proportions0 noobs label ;
+			 var &outc proportion ;
+			 run ;
+		 %end;
+     %end;   
      %else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 %then %do;
           title6 "Observed mean= %sysevalf(&obspm) ";
      %end;
@@ -5374,9 +5501,9 @@ run;
      title8 "Number of bootstrap samples= &nsamples";
      title9 "Reference intervention is &refint";
 
-	 %if &outctype ne cateofu %then %do;
+	  
 	     proc print data=finfin noobs label double; 
-	     var int &pd &pd._llim95 &pd._ulim95 rr rr_llim95 rr_ulim95 &pd._mean &pd._std intervened averinterv; 
+	     var int %if &outctype = cateofu %then &outc ; &pd &pd._llim95 &pd._ulim95 rr rr_llim95 rr_ulim95 &pd._mean &pd._std intervened averinterv; 
 	     run;
 
 	     proc print data=finfin noobs label double; 
@@ -5384,13 +5511,12 @@ run;
 	          var int &pd &pd._llim95 &pd._ulim95 rd rd_llim95 rd_ulim95 nnt nnt_llim95 nnt_ulim95;
 	     %end;
 	     %else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 or &outctype = cateofu %then %do;
-	          var int s&outc s&outc._llim95 s&outc._ulim95 rd rd_llim95 rd_ulim95 ;    
+	          var int   %if &outctype = cateofu %then &outc ; s&outc s&outc._llim95 s&outc._ulim95 rd rd_llim95 rd_ulim95 
+                         %if &outctype = cateofu %then nnt nnt_llim95 nnt_ulim95 ; ;    
 	     %end;
 	     run;
 
-	 %end;
-
-	 data roger; set finfin ; run ;
+	  
 
      %if &outctype=binsurv %then %do ;
           data ausc (keep = _sample_ int ausc&timepoints ) ;
@@ -5494,6 +5620,7 @@ run;
      proc datasets library=work nolist; 
      delete    _paramdata_  _simuldata_ _inputd_ _beta_  _ref_ fin finfin
      %if &outctype = binsurv %then ausc drmst drmst_stat rmst_stat drmst_out  ;
+	 %if &outctype = cateofu %then proportions0 ;
      %if &check_cov_models %then _diff_mean  _cov_std2 
      %do ii = 0 %to &ncov ; _mean_&ii %if &&usevisitp&ii = 1 %then _mean_vp&ii ; %end ;
      ;        
@@ -8433,7 +8560,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
     proc sort data=&data(keep=&time &outc /* &compevent   */) out=limit;
         by &time;
     run;
-
+    %if &outctype ne cateofu %then %do;
     data summed;
         set limit;
         by &time;
@@ -8463,10 +8590,24 @@ not the time-varying covariates, which are handled below in %interactionsb*/
        end;
     run;
 
-    
-    proc datasets library=work nolist;
+	 proc datasets library=work nolist;
         delete limit summed;
     run;
+    %end;
+	%else %do;
+	   /* this code assumes there is no correction for ipw censoring variable */
+		proc sql noprint  ;
+		create table summed0 as 
+		select &outc, count(*) as proportion  from limit where &time = %eval(&timepoints - 1)  group by &outc ;
+		select sum(proportion) as nn into :total_num from summed0 ;
+		create table proportions0 as select &outc label="&outc level" , round(proportion * (100/&total_num), 0.01) label="Proportion (%)" as proportion from summed0 ;
+		quit  ;
+        	
+        proc datasets library=work nolist;
+        delete limit summed0 ;
+        quit ;
+	%end;
+   
 
     %mend;
 
@@ -8514,12 +8655,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
 
     run;
 
-/*
-    %if %eval(&bsample) = 0 and &intno = 0 %then %do;
-        proc print;
-        run;
-        %end;
-*/
+ 
         
     data cuminc;
         set summed;
@@ -8585,7 +8721,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
    
    
 %end;
-%else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4 or &outctype = cateofu %then %do;
+%else %if &outctype=conteofu or &outctype=conteofu2 or &outctype = conteofu3 or &outctype=conteofu4  %then %do;
    
    obsp= round(&obsp*100)/100;
    call symput('obspm',obsp);
@@ -8659,15 +8795,7 @@ not the time-varying covariates, which are handled below in %interactionsb*/
    label NNT_llim95 = 'Lower limit 95% CI';
    %end;
 
-%else %if &outctype=conteofu %then %do;
- label s&outc._ulim95 = 'Upper limit 95% CI';
-   label s&outc._llim95 = 'Lower limit 95% CI';
-   label s&outc        = 'Mean';
-   label s&outc._std    = 'Bootstrap Mean SE';
-   label s&outc._mean   = 'Bootstrap Mean Mean';
-   label rr        = 'Ratio of means';
-   label RD        = 'Difference of Means';
-   %end;
+
    
 %mend labels;
 
@@ -9039,84 +9167,80 @@ set _cont  ( where = ( substr(name,1,1)='s'
 
     %end ; /* end of binsurv */
     %else %do; /* all other outcome types, may not work for all types */
-       * data _simoutcmean_;
-       * set interv&refint._all; /*change jgy*/
-       * ncmean=pD;
-       * keep _sample_ ncmean;
-       * run;
-
-	 
-        data _both1_ ;
-        merge &obssurv &simsurv ; * for continuous at eof type outcome which use the mean ;
-        by _sample_ ;
-        **mean_diff = &outcome - ncmean ;
-		mean_diff = &outcome - s&outcome  ;
-        run;
-
-        data _both10_ ;
-        set _both1_ (where = (_sample_ = 0 and int = 0));
-        run;
-
-        %if &frombootstrap = 1 %then %do ;
-            proc univariate data = _both1_ (where = (_sample_ > 0 ))  noprint  ;
-            var  mean_diff  ;
-            output out = _meanstd  pctlpre =  meandiff  
-                pctlname = _pct025 _pct975 
-                pctlpts = 2.5 97.5 ;
-            run;
-
-            data _graph2 ;
-            merge _both10_   _meanstd ;
-            lb = meandiff_pct025 ;
-            ub = meandiff_pct975 ;
-            run;
-
-            data _null_ ;
-            set _graph2 ;
-            call symput('lb',trim(left(round(lb,0.001))));
-            call symput('ub',trim(left(round(ub,0.001))));
-            call symput('meandiff',trim(left(round(mean_diff,0.001))));
-            run;
-
-
-            proc gslide name="mdiff";         
-            note height=3
-            justify=right 
-            color="black" 
-            "Mean difference &meandiff (&lb , &ub )" ;        
-            run;
-            quit;
- 
-       %end;
-
- 
-       data _null_ ;
-       set _both10_ ;
-       call symput('obsmean',trim(left(round(&outcome,0.001))));
-       call symput('simmean',trim(left(round(s&outcome,0.001))));
-       run;
-
- /* IP-weighted natrual course estimates (solid line), parameteric g-formula estimated natural  */
-
-	   %local titletmp ;
-
-	    %if %bquote(&censor)= %then %let titletmp = Observed nc ; 
-		%else %let titletmp = Observed IP-weighted nc ;
-
-       proc gslide name="mean";   
-       note height=3
-       justify=left 
-       color="black" 
-       "&titletmp &outcome : &obsmean"  ;
-	   note height = 3 color="black"
-       justify=left 
-       "Parametric g-formula estimated nc &outcome : &simmean";
-       run;
-       quit;
- 
-
        
 
+	    %if &outctype ne cateofu %then %do;
+	        data _both1_ ;
+	        merge &obssurv &simsurv ; * for continuous at eof type outcome which use the mean ;
+	        by _sample_ ;
+	        **mean_diff = &outcome - ncmean ;
+			mean_diff = &outcome - s&outcome  ;
+	        run;
+
+	        data _both10_ ;
+	        set _both1_ (where = (_sample_ = 0 and int = 0));
+	        run;
+
+	        %if &frombootstrap = 1 %then %do ;
+	            proc univariate data = _both1_ (where = (_sample_ > 0 ))  noprint  ;
+	            var  mean_diff  ;
+	            output out = _meanstd  pctlpre =  meandiff  
+	                pctlname = _pct025 _pct975 
+	                pctlpts = 2.5 97.5 ;
+	            run;
+
+	            data _graph2 ;
+	            merge _both10_   _meanstd ;
+	            lb = meandiff_pct025 ;
+	            ub = meandiff_pct975 ;
+	            run;
+
+	            data _null_ ;
+	            set _graph2 ;
+	            call symput('lb',trim(left(round(lb,0.001))));
+	            call symput('ub',trim(left(round(ub,0.001))));
+	            call symput('meandiff',trim(left(round(mean_diff,0.001))));
+	            run;
+
+
+	            proc gslide name="mdiff";         
+	            note height=3
+	            justify=right 
+	            color="black" 
+	            "Mean difference &meandiff (&lb , &ub )" ;        
+	            run;
+	            quit;
+	 
+	       %end;
+
+ 
+	       data _null_ ;
+	       set _both10_ ;
+	       call symput('obsmean',trim(left(round(&outcome,0.001))));
+	       call symput('simmean',trim(left(round(s&outcome,0.001))));
+	       run;
+
+	 /* IP-weighted natrual course estimates (solid line), parameteric g-formula estimated natural  */
+
+		   %local titletmp ;
+
+		    %if %bquote(&censor)= %then %let titletmp = Observed nc ; 
+			%else %let titletmp = Observed IP-weighted nc ;
+
+	       proc gslide name="mean";   
+	       note height=3
+	       justify=left 
+	       color="black" 
+	       "&titletmp &outcome : &obsmean"  ;
+		   note height = 3 color="black"
+	       justify=left 
+	       "Parametric g-formula estimated nc &outcome : &simmean";
+	       run;
+	       quit;
+	 
+
+       
+  	   %end ;
         
 
 
