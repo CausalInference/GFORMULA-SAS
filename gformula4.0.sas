@@ -3965,7 +3965,7 @@ options mautosource minoperator ;
             length int2 $70 ;
             int=&intno;
             int2=&intlabel;
-            n=_FREQ_;
+            n= &nsimul /*_FREQ_ */;
             keep int int2 _sample_ n %if &outctype=binsurv %then %do;
                                         pd 
                                         %do j = 1 %to %eval(&timepoints);
@@ -3992,8 +3992,9 @@ options mautosource minoperator ;
                         %end;
                     %end; 
                 %end;
-                dataname ssize obsp 
-              ;
+                dataname ssize  
+                        %if &outctype ne cateofu %then obsp ; 
+                ;
            dataname = "&data";
            ssize = &ssize ;
            %if &outctype ne cateofu %then obsp = &obsp ;;
