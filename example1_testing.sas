@@ -157,20 +157,20 @@ data= sample,
 id=id,
 time=time,
 timepoints = 6,
-outc=conteof ,
-outctype= conteofu  ,
+outc=mybinom ,
+outctype=cateofu  ,
 compevent= ,
 compevent_cens  = 0   ,
-censor =/* censor */ ,
+censor =   censor  ,
 
-usehistory_eof = 1,
+usehistory_eof = 0,
 /* usespline = 0 , */
 
 fixedcov = baseage,
 timeptype= concat, 
 timeknots = 1 2 3 4 5,
 
-ncov=1,
+ncov=2,
 cov1  = hbp, cov1otype  = 2, cov1ptype = tsswitch1   ,  cov1knots =  ,                              cov1etype = tsswitch1  all , cov1eknots =  ,  cov1interact= ,
 cov2  = act, cov2otype  = 3, cov2ptype = lag2cumavg   , cov2knots  =   16 24.70833 33.5   ,         cov2etype = cumavg  all  ,   cov2eknots =   16 24.70833 33.5   ,     cov2interact = ,
 cov3  = x ,  cov3otype = 3 , cov3ptype = lag2spl ,      cov3knots =  -1.30411 0.011829 1.383502   , cov3etype = cumavgcat all  , cov3eknots =   -1.30411 0.011829 1.383502    , cov3interact =  ,
@@ -178,13 +178,15 @@ cov4 = z ,   cov4otype = 5 , cov4ptype = lag1cat ,      cov4knots =  ,          
 
 hazardratio = 0 ,
 intcomp = 0 1 ,
-seed= 9458, nsamples = 0, numint=0 ,
-rungraphs = 0 ,
-
+seed= 9458, nsamples = 10, numint=1 ,
+rungraphs = 1 ,
+simuldata = /* mysim */ ,
 testing = no ,
-simuldata =  ,
 savelib = work ,
-printlogstats = 1 
+print_stats = 1 ,
+printlogstats = 1 ,
+minimalistic = no ,
+sim_trunc = 0 
 );
 
 
