@@ -5,9 +5,9 @@ GFORMULA SAS MACRO
 Authors: Roger W. Logan, Jessica  G. Young, Sarah L. Taubman, Yu-Han Chiu,  Emma McGee , Sally Picciotto, Goodarz Danaei, Miguel A. Hernán
 
 *** EM edited ***
-Version June 2024. This version includes additions and fixes for (i) the parametric outcome models available for end of follow-up 
-outcomes, (ii) the functional forms of covariate histories allowed in these models, and (iii) the options for carrying forward
-covariates during skipped times (i.e., when no measurement of a covariate occurs).
+Version September 2024. This version includes additions and fixes for (i) the parametric outcome models available for end of follow-up 
+outcomes, (ii) the functional forms of covariate histories allowed in these models, (iii) restricted cubic spline variables, and 
+(iv) options for carrying forward covariates during skipped times (i.e., when no measurement of a covariate occurs).
 
 Version April 2022. This version includes additions and fixes for the inclusion of censoring in the calculation of the natural 
 course risks and means of covariates under the simulation of the natural course.
@@ -1733,13 +1733,14 @@ options mautosource minoperator ;
 
 		            %let numberofknots&i = &&cov&i.knots ;
 				/*	%let numberofknots&i = 4 ; */ /* temporarily hard code to use 4 percentiles as originally coded */
+                /*** EM edited ***/
                     proc univariate data = _inputd_ (where = (&&cov&i = 1))  noprint  ;
                     var ts&&cov&i.._inter ;
                     output out = tsscov_pct   
                          pctlpre =  tsscov  
                          %if &&numberofknots&i = 3 %then 
-                            pctlname =  _pct25 _pct50 _pct75 
-                             pctlpts =   25 50 75 ;
+                            pctlname =  _pct10 _pct50 _pct90 
+                             pctlpts =   10 50 90 ;
                           %else %if &&numberofknots&i = 4 %then
                                  pctlname = _pct5 _pct25 _pct75 _pct95 
                                  pctlpts =  5 25 75 95 ;
@@ -1764,14 +1765,15 @@ options mautosource minoperator ;
 
 		            %let numberofknots&i = &&cov&i.knots ;
 				/*	%let numberofknots&i = 4 ; */ /* temporarily hard code to use 4 percentiles as originally coded */
+                    /*** EM edited ***/
                     proc univariate data = _inputd_   noprint  ;
 					%if &&cov&i.ptype = skpspl %then where &time not in (&&cov&i.skip) ;;
                     var &&cov&i ;
                     output out = &&cov&i.._pct   
                          pctlpre =  &&cov&i  
                          %if &&numberofknots&i = 3 %then 
-                            pctlname =  _pct25 _pct50 _pct75 
-                             pctlpts =   25 50 75 ;
+                            pctlname =  _pct10 _pct50 _pct90 
+                             pctlpts =   10 50 90 ;
                           %else %if &&numberofknots&i = 4 %then
                                  pctlname = _pct5 _pct25 _pct75 _pct95 
                                  pctlpts =  5 25 75 95 ;
@@ -1806,14 +1808,15 @@ options mautosource minoperator ;
                                               
 
                     %if &numberofknots > 0  %then %do;  
+                    /*** EM edited ***/
                     proc univariate data = _inputd_   %if &&cov&i.otype = 4  %then (where = (&&cov&i > 0)) ; noprint  ;
                     var %if %upcase(&&cov&i.ptype) ne CUMAVG  %then &&cov&i   ;
                         %else  &&cov&i.._cumavg ; ;
                     output out = &&cov&i.._pct   
                          pctlpre =  &&cov&i  
                          %if &numberofknots = 3 %then 
-                            pctlname =  _pct25 _pct50 _pct75 
-                             pctlpts =   25 50 75 ;
+                            pctlname =  _pct10 _pct50 _pct90 
+                             pctlpts =   10 50 90 ;
                           %else %if &numberofknots = 4 %then
                                  pctlname = _pct5 _pct25 _pct75 _pct95 
                                  pctlpts =  5 25 75 95 ;
@@ -1831,14 +1834,15 @@ options mautosource minoperator ;
                      quit ;
                     %if &printlogstats = 1 %then %put knots for &&cov&i  = &&cov&i.knots ;
    
+                    /*** EM edited ***/
                     %if %upcase(&&cov&i.ptype) ne CUMAVG  %then %do;
                         proc univariate data = _inputd_  &cumavgwhere   noprint  ;
                         var  &cumavgvar ;
                         output out = cumavg_l1_pct   
                              pctlpre =  cumavg_l1
                               %if &numberofknots = 3 %then 
-                                pctlname =  _pct25 _pct50 _pct75 
-                                 pctlpts =   25 50 75 ;
+                                pctlname =  _pct10 _pct50 _pct90
+                                pctlpts =   10 50 90 ;
                               %else %if &numberofknots = 4 %then
                                      pctlname = _pct5 _pct25 _pct75 _pct95 
                                      pctlpts =  5 25 75 95 ;
@@ -1903,14 +1907,15 @@ options mautosource minoperator ;
 
 		            %let numberofeknots&i = &&cov&i.eknots ;
 				/*	%let numberofknots&i = 4 ; */ /* temporarily hard code to use 4 percentiles as originally coded */
+                    /*** EM edited ***/
                     proc univariate data = _inputd_   noprint  ;
 					%if &&cov&i.etype = skpspl %then where &time not in (&&cov&i.skip) ;;
                     var &&cov&i ;
                     output out = &&cov&i.._pct   
                          pctlpre =  &&cov&i  
                          %if &&numberofeknots&i = 3 %then 
-                            pctlname =  _pct25 _pct50 _pct75 
-                             pctlpts =   25 50 75 ;
+                            pctlname =  _pct10 _pct50 _pct90
+                             pctlpts =   10 50 90 ;
                           %else %if &&numberofeknots&i = 4 %then
                                  pctlname = _pct5 _pct25 _pct75 _pct95 
                                  pctlpts =  5 25 75 95 ;
@@ -1940,14 +1945,15 @@ options mautosource minoperator ;
                       %let numberofeknots&i = &&cov&i.eknots ;   
  
                     %if &&numberofeknots&i > 0  %then %do;  
-	                    proc univariate data = _inputd_   (where = (&time = (%eval(&timepoints - 1))))  noprint  ;
+	                    /*** EM edited ***/
+                        proc univariate data = _inputd_   (where = (&time = (%eval(&timepoints - 1))))  noprint  ;
 	                    var %if &&cov&i.etype in cumsum cumsumnew cumsumcat cumsumcatnew  %then &&cov&i.._cumsum_&timeindex._eof   ;
 	                        %else                                                               &&cov&i.._cumavg_&timeindex._eof  ; ;
 	                    output out = &&cov&i.._pct   
 	                         pctlpre =  &&cov&i  
 	                         %if &&numberofeknots&i = 3 %then 
-	                            pctlname =  _pct25 _pct50 _pct75 
-	                             pctlpts =   25 50 75 ;
+	                            pctlname =  _pct10 _pct50 _pct90 
+                                pctlpts =   10 50 90 ;
 	                          %else %if &&numberofeknots&i = 4 %then
 	                                 pctlname = _pct5 _pct25 _pct75 _pct95 
 	                                 pctlpts =  5 25 75 95 ;
@@ -2398,8 +2404,6 @@ options mautosource minoperator ;
                 
                 if _end_ then do; 
 
-                    * for truncated normal model we will extend the bounds based on the oringal sample (rwl 7/2013) ; 
-                  
                       
 
                     call symput("cov&i.min", trim(left(&&cov&i.._min))); 
