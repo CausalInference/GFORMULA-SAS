@@ -1,0 +1,8 @@
+{
+  "bundle": "t001_example1_create_sample",
+  "source_file": "example1.sas",
+  "source_blob_sha": "fccf7389f674de334381212cec3d696132485ded",
+  "source_commit": "f1eec00793f142b723fa98f563b9a6dfc1aeda3e",
+  "tier": "real_data",
+  "notes": "The %create_sample data-generation macro from example1.sas (array-based simulation with call streaminit/rand, nested DO with macro-variable UNTIL condition, missing-value recoding) plus its PROC MEANS. The %include of gformula4.0.sas and the trailing %gformula() call are omitted so the bundle exercises just the self-contained sample construction. Deterministic via seed 5027; obs=100 cap applied."
+}

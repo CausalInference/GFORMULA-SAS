@@ -1,0 +1,38 @@
+Jenner 0.1.0 (Unlicensed - limited to 100 observations)
+Get a license at https://jenneranalytics.com/license
+
+NOTE: Option OBS changed to 100.
+NOTE: Option LINESIZE changed to 88.
+NOTE: Option PAGESIZE changed to 54.
+NOTE: DATA sample
+
+NOTE: Unlicensed mode - output limited to 100 observations.
+
+NOTE: Wrote sample (100 rows, 18 columns).
+NOTE: DATA elapsed:
+  wall  0.10 seconds
+  cpu   0.10 seconds
+NOTE: DATA sample
+
+
+NOTE: Read 100 rows from sample.
+NOTE: Wrote sample (100 rows, 18 columns).
+NOTE: DATA elapsed:
+  wall  0.00 seconds
+  cpu   0.00 seconds
+NOTE: PROC MEANS
+NOTE: PROC MEANS statement used.
+NOTE: PROC FREQ
+NOTE: ODS plot written: freq_time.spec.json
+NOTE: PROC FREQ statement used.
+NOTE: DATA sample
+
+
+NOTE: Read 100 rows from sample.
+NOTE: Wrote sample (100 rows, 23 columns).
+NOTE: DATA elapsed:
+  wall  0.00 seconds
+  cpu   0.00 seconds
+NOTE: PROC DATASETS library=WORK
+
+NOTE: NOTE: SAVE kept 1 dataset(s), deleted 0 others.

@@ -1,0 +1,21 @@
+{
+  "_captured_at": "2026-06-17T18:03:34.238150+00:00",
+  "_captured_run_id": "r_019ed6c0b2fa7371aa9c8395938409fb",
+  "status": "ok",
+  "exit_code": 0,
+  "log_contains": [
+    "NOTE: DATA sample",
+    "NOTE: Wrote sample (100 rows, 12 columns).",
+    "NOTE: Read 100 rows from sample.",
+    "NOTE: PROC MEANS",
+    "NOTE: PROC MEANS statement used."
+  ],
+  "log_does_not_contain": [
+    "ERROR:",
+    "[JENNER-ERROR"
+  ],
+  "diagnostics": {
+    "parse_warnings": [],
+    "runtime_warnings": []
+  }
+}

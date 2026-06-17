@@ -1,0 +1,8 @@
+{
+  "bundle": "t004_example2_create_sample_event",
+  "source_file": "example2.sas",
+  "source_blob_sha": "1895e1d386a8278abf77ceb58182af5514169f40",
+  "source_commit": "f1eec00793f142b723fa98f563b9a6dfc1aeda3e",
+  "tier": "real_data",
+  "notes": "From example2.sas: the parameterized %create_sample(event=) macro invoked as %create_sample(event=dia). Exercises conditional macro code generation (%if %upcase(&event) ... %then / %else) producing different DO-UNTIL stop conditions and post-DATA-step recoding per outcome type, 12-period covariate arrays, round() and rand('normal'). PROC MEANS shows the result. %include and %gformula() call omitted. Deterministic via seed 5027; obs=100 cap."
+}

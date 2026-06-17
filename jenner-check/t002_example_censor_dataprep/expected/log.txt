@@ -1,0 +1,27 @@
+Jenner 0.1.0 (Unlicensed - limited to 100 observations)
+Get a license at https://jenneranalytics.com/license
+
+NOTE: Option OBS changed to 100.
+NOTE: Option LINESIZE changed to 88.
+NOTE: Option PAGESIZE changed to 54.
+NOTE: PROC IMPORT datafile=input/surv4_sample.csv out=want
+
+NOTE: Imported 45 rows from input/surv4_sample.csv.
+NOTE: DATA want1
+
+
+NOTE: Read 45 rows from want.
+NOTE: Wrote want1 (45 rows, 12 columns).
+NOTE: DATA elapsed:
+  wall  0.00 seconds
+  cpu   0.00 seconds
+NOTE: DATA bytimes
+
+
+NOTE: Read 45 rows from want1.
+NOTE: Wrote bytimes (45 rows, 12 columns).
+NOTE: DATA elapsed:
+  wall  0.00 seconds
+  cpu   0.00 seconds
+NOTE: PROC MEANS
+NOTE: PROC MEANS statement used.

@@ -1,0 +1,8 @@
+{
+  "bundle": "t003_example1_testing_freq",
+  "source_file": "example1_testing.sas",
+  "source_blob_sha": "e1fe1b620977c64ee075a5bb4b30748bd2f9806e",
+  "source_commit": "f1eec00793f142b723fa98f563b9a6dfc1aeda3e",
+  "tier": "real_data",
+  "notes": "From example1_testing.sas: the extended %create_sample (adds x/z covariate arrays via rand('normal')/rand('binomial')) + PROC FREQ on time + a second DATA step adding end-of-followup variables (rand('bernoulli'), rand('binomial'), conditional time logic) + PROC DATASETS SAVE. %include and %gformula() call omitted. Deterministic via seeds 5027 and 1234321; obs=100 cap."
+}

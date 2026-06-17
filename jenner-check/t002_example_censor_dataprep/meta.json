@@ -1,0 +1,8 @@
+{
+  "bundle": "t002_example_censor_dataprep",
+  "source_file": "example_censor.sas",
+  "source_blob_sha": "3e866fd85357e6b9a5c713457345e962d806d53b",
+  "source_commit": "f1eec00793f142b723fa98f563b9a6dfc1aeda3e",
+  "tier": "real_data",
+  "notes": "The longitudinal data-prep from example_censor.sas: PROC IMPORT of the survival CSV, lag()/lag2() lagging, first.id baseline carry-forward, NA->missing recoding, INPUT() char-to-numeric conversion. Reads a 45-row real sample of surv4_MAR_D.csv (8 subjects, columns unchanged, NA values preserved) shipped under input/ in place of the 36MB full file. The %include and %gformula() call are omitted. PROC MEANS shows the prepared dataset."
+}
