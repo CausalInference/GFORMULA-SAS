@@ -1,0 +1,21 @@
+{
+  "_captured_at": "2026-06-17T18:03:56.138966+00:00",
+  "_captured_run_id": "r_019ed6c109ac7743bae8e08c259d51d4",
+  "status": "ok",
+  "exit_code": 0,
+  "log_contains": [
+    "NOTE: PROC IMPORT datafile=input/surv4_sample.csv out=want",
+    "NOTE: DATA want1",
+    "NOTE: Read 45 rows from want.",
+    "NOTE: Wrote want1 (45 rows, 12 columns).",
+    "NOTE: DATA bytimes"
+  ],
+  "log_does_not_contain": [
+    "ERROR:",
+    "[JENNER-ERROR"
+  ],
+  "diagnostics": {
+    "parse_warnings": [],
+    "runtime_warnings": []
+  }
+}
